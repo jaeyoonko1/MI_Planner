@@ -3,6 +3,7 @@ import { chipGroup } from "./chips.js";
 import { renderTree } from "./tree.js";
 import { renderJournal } from "./journal.js";
 import { renderHtmlPage } from "./htmlpage.js";
+import { flushNote, renderNote } from "./note.js";
 import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
 
@@ -41,6 +42,7 @@ function showScreen(name) {
 }
 
 async function route() {
+  await flushNote(); // save a pending note edit before the view is replaced
   const path = currentPath();
   paintTree();
   const screen = location.hash.replace(/^#\//, "");
@@ -88,6 +90,11 @@ function showPage(page) {
     el("div", "meta", `${typeLabel} · ${page.path}`),
     body,
   );
+  if (page.meta.type === "note") {
+    body.className = "note-host";
+    renderNote(body, page);
+    return;
+  }
   if (page.meta.type === "html") {
     body.className = "html-host";
     renderHtmlPage(body, page).catch((e) => body.replaceChildren(el("p", "error", e.message)));

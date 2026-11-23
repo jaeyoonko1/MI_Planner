@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P3-01 + P3-02
+- 한 일: **P3-01** 편집기 결정 = 직접 만든 contenteditable + 마크다운 변환기(D-20, 외부 라이브러리 없음). **P3-02** note 페이지 열기·편집·자동 저장(0.7초 지연, 포커스 이탈·페이지 이동·pagehide 시 즉시 저장, 실패 시 다음 입력에서 재시도), 본문/제목1~3/목록/번호/체크/B·I·U·S 버튼, 단축키(Ctrl+Alt+0~3, Ctrl+-), 체크박스 클릭 토글, 이미지 붙여넣기·드래그 → `files/img-날짜.png` 저장 후 `![](files/…)`로 기록
+- 바뀐 파일: web/js/mdconv.js·note.js·main.js, web/css/note.css, web/test/mdconv.html(신규), app/vault.py·routers/pages.py(이미지 업로드·조회), tests/test_note_files.py, docs/DECISIONS.md(D-20), docs/SPEC.md, project_flow.html. (일부 파일은 다른 세션 커밋 3cd0372에 함께 들어감)
+- 테스트: pytest 44 passed(+이미지 업로드 4). 브라우저: web/test/mdconv.html 왕복 11/11 PASS, 실제 노트에서 입력·체크 토글·이미지 붙여넣기(합성 이벤트)→파일 저장 확인, 입력 직후 페이지 이동해도 저장됨
+- 다음에 할 것 / 막힌 것:
+  - 실제 키보드·마우스(드래그 선택, 실제 Ctrl+V 스크린샷)는 사람이 한 번 확인 필요
+  - 이미지가 커서 위치(문단 끝)에 인라인으로 들어감 — 별도 줄로 넣는 개선 여지
+  - **P3-04**: 서식 툴바(크기·글자색·형광펜·프리셋·Ctrl+Alt+H 등)만 얹으면 됨. 저장·읽기(변환기)는 이미 크기/색/형광펜을 처리하고 프리셋 밖 값은 제거. 프로토타입은 prototypes/p3-04_toolbar.html
+  - 중첩 목록·링크·서식 붙여넣기는 미지원(D-20 한계)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-04 + P2-05 + P2-06
 - 한 일: 할일 화면(#/todos: 상태·우선순위·납기·요청자 토글 칩, 검색, 빠른 추가, 상태/우선순위 클릭 순환, 제목·납기·요청자 인라인 수정, 삭제, 단축키 N). 일지 자동 표시(설정 `journal_auto_show`, 칸 아래 납기 할일 읽기 전용, 켬/끔 칩) + 체크박스 줄 → 할일 승격(`POST /api/todos/from-line`, 줄에 `→ 할일 #id` 링크). '오늘' 화면(#/today: 오늘 일지, 오늘 하기로 한 일, 납기 임박 3일, 지남, 평가 자리만)
 - 바뀐 파일: app/routers/settings.py·dashboard.py(신규), routers/journal.py·tasks.py, app/journal.py, app/main.py, web/js/todos.js·today.js(신규), main.js, journal.js, api.js, web/index.html, css/style.css, tests/test_p2_extras.py, docs/SPEC.md, project_flow.html

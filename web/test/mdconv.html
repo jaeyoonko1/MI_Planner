@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8"><title>mdconv tests</title>
+<!-- Open http://127.0.0.1:8765/test/mdconv.html — every line should start with PASS. -->
+<pre id="out">running…</pre>
+<script type="module">
+import { mdToHtml, htmlToMd } from "/js/mdconv.js";
+const rt = (md) => { const d = document.createElement("div"); d.innerHTML = mdToHtml(md); return htmlToMd(d); };
+const cases = {
+  "heading+para": "# 제목\n\n본문 한 줄\n",
+  "inline": "**굵게** *기울임* ~~취소~~ `code`\n",
+  "allowed html": '<u>밑줄</u> <mark style="background:#fff176">형광</mark> <span style="color:#d93025;font-size:22px">색크기</span>\n',
+  "lists": "- a\n- b\n\n1. x\n2. y\n\n- [ ] 할일\n- [x] 완료\n",
+  "image": "![](files/img-20261124-101010.png)\n",
+  "escapes": "별표 \\*가 \\* 그대로 \\<script> 와 EQ_A01\n",
+  "line start": "\\# 해시로 시작\n\n\\- 대시로 시작\n\n1\\. 숫자로 시작\n",
+  "multi-line para": "첫줄\n둘째줄\n",
+  "bold italic": "***둘다***\n",
+};
+const res = [];
+for (const [name, md] of Object.entries(cases)) {
+  const once = rt(md), twice = rt(once);
+  res.push(`${once === md && twice === md ? "PASS" : "FAIL"} ${name}` + (once === md ? "" : `\n  in : ${JSON.stringify(md)}\n  out: ${JSON.stringify(once)}`));
+}
+const d = document.createElement("div");
+d.innerHTML = '<div><span style="color:#123456;font-size:20px">x</span><font face="a">y</font><a href="http://e.com">z</a></div>';
+const dropped = htmlToMd(d);
+res.push(`${dropped === "xyz\n" ? "PASS" : "FAIL"} disallowed style/tags dropped -> ${JSON.stringify(dropped)}`);
+const h = mdToHtml('<scr' + 'ipt>alert(1)</scr' + 'ipt> <img src=x onerror=1> <span style="color:red;x:y">q</span>');
+const probe = document.createElement("div");
+probe.innerHTML = h;
+const bad = probe.querySelector("script,img") || [...probe.querySelectorAll("*")].find((e) => [...e.attributes].some((a) => /^on/i.test(a.name)));
+res.push(`${bad ? "FAIL" : "PASS"} reader neutralises raw html`);
+document.getElementById("out").textContent = res.join("\n");
+</script>
