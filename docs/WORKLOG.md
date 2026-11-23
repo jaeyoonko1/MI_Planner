@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Opus) · P3-01 (재검토)
+- 한 일: Final 디자인(DESIGN.md·prototype_final)과 P2B 편집기(lineeditor·note.js `mountEditor`·mdconv·D-29) 기준으로 D-20 재검토. **결론: 직접 만든 contenteditable + mdconv 유지**(라이브러리 교체로 해결되는 문제 없음, 오프라인·무의존 유지). 단 변환기가 블록 수준에서 원문을 바꾸는 결함 3개 확인 → D-20에 재검토 메모·후속 제약 8개 기록, 보강 작업 P3-02R 추가. 코드 변경 없음.
+- 증거: `web/test/mdconv.html` 12/12 PASS, `run_memo.mjs`·`run_lineeditor.mjs` PASS. 브라우저 추가 왕복: 한글 서식·`[!]`·` → 할일 #12`·표·`[[링크]]`·인용·`####` 원문 보존 / 중첩 목록 평탄화, `- [*]`→`- [\*]`, 코드 펜스 이스케이프는 원문 변경(제목 한 단어 편집만으로 파일 전체에 반영). note.js는 Tab 차단·표시 순환 없음·IME `keyCode 229` 가드 없음.
+- 바뀐 파일: docs/DECISIONS.md(D-20 재검토), project_flow.html(P3-01 메모, P3-02R 추가), docs/WORKLOG.md.
+- 테스트: pytest 134 passed.
+- 다음에 할 것 / 막힌 것:
+  - P3-02R(변환기 무손실화 + 노트 편집기 줄 동작 정합)을 P3-03/P3-06보다 먼저. 그 전에는 LLM이 쓴 코드 펜스·중첩 목록이 있는 페이지를 앱에서 편집하면 형식이 바뀜.
+  - P3-05 제목 접기는 D-29에서 이미 구현됨 — 확인 후 완료 처리만. P3-06 Tabulator는 vendor 안 되어 있음(자체 구현 우선 검토).
+  - 실제 한글 IME 조합 중 단축키 충돌은 회사 Edge에서 확인(점검표 6장).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-06
 - 한 일: **통합 검증**. 자동 시나리오 `tests/test_integration_e2e.py`(입력 줄→승격→분류 변경·자유 배치 이동·복사→페이지 확장(두 번째는 기존 페이지)→메모·이미지→앱 재시작 두 번→전부 유지), 001 DB(기존 데이터)에 마이그레이션 전부 적용 호환, `web/`(디자인·테스트 페이지 제외)에 외부 URL·`@import`·프로토콜 상대 링크 없음, `index.html`은 로컬 자산만, `run.bat` 127.0.0.1 전용. **브라우저 점검**(격리 DB·vault, 1024·1280px × 다크·라이트 × 컴팩트·기본·여유 × 오늘/할일/주간/구조/분류 관리): 가로 넘침 없음, 버튼·입력 이름 누락 없음, Tab 포커스 링 표시, 구조 모달 Esc 닫힘+열기 버튼으로 포커스 복귀·`aria-labelledby`. **수정**: 라이트 테마 보조 글자색(`--dim` 3.2~3.8:1→#5f6b82)·노랑(`--yellow` 4.05:1→#8a5800)을 4.5:1 이상으로, 할일 제목 Shift+Enter=상세(키보드만으로 상세를 열 수 없던 문제, 제목 `role=button`), **위치 규칙 탭 저장 안 한 변경 경고**(`leaveguard.js`: 화면 이동 확인 창·"취소"면 이전 주소 복원, 새로고침·닫기는 beforeunload), **이슈 삭제 시 `.issue-files/<id>`를 `.trash/`로 이동**(id 재사용 시 이전 이미지 상속 방지). 회사 PC 점검표 `docs/COMPANY_PC_CHECKLIST.md` 작성.
 - 바뀐 파일: tests/test_integration_e2e.py(신규), web/(js/leaveguard.js 신규, main.js, rules.js, taskrow.js, todos.js, css/theme.css), app/(vault.py, routers/tasks.py), docs/(COMPANY_PC_CHECKLIST.md 신규, WORKLOG), project_flow.html.
