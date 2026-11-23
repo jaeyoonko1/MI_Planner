@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P3-07
+- 한 일: html 페이지를 sandbox iframe(+CSP 주입)으로 표시, 외부 요청 감지 시 경고 배지, 페이지별 상태 API(`_state.json`) + iframe↔부모 postMessage 브리지
+- 바뀐 파일: app/html_page.py, app/routers/html_pages.py, app/main.py(라우터 등록), web/js/htmlpage.js, api.js, main.js, css/style.css, tests/test_html_page.py, docs/SPEC.md, project_flow.html
+- 테스트: pytest 29 passed. 브라우저 화면 확인은 안 함(사람이 HTML 페이지 하나 열어 배지·상태 저장 확인 필요)
+- 다음에 할 것 / 막힌 것:
+  - 상태 API는 id가 아닌 `?path=` 방식(기존 pages API와 동일)
+  - 외부 요청 감지는 정규식 기반이라 동적으로 조립된 URL은 못 잡음(CSP가 실제 차단)
+  - `_state.json`을 페이지 이동/삭제 시 함께 가는지(폴더째 이동이라 문제 없을 것) 확인 필요
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-02b (편집)
 - 한 일: 월 안의 칸 클릭 → textarea 편집, 입력 후 0.7초 뒤 자동 저장(PUT), 포커스를 잃으면 즉시 저장 후 보기로 복귀(Esc도 동일). 저장은 순서대로 한 줄로 실행, 상태 표시(저장 중/저장됨/실패). 내용을 비우면 서버가 섹션을 지움
 - 바뀐 파일: web/js/journal.js, web/js/api.js, web/css/style.css, project_flow.html(P2-02 done)

@@ -62,3 +62,7 @@ body { display: flex; font: 14px/1.5 "Malgun Gothic", "Segoe UI", sans-serif; co
 .jline { white-space: pre-wrap; word-break: break-word; }
 .jbox { margin-right: 4px; color: var(--muted); }
 .jdone { text-decoration: line-through; color: var(--muted); }
+
+/* html-type page (P3-07) */
+.html-frame { width: 100%; height: 75vh; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+.warn-badge { display: inline-block; margin-bottom: 8px; padding: 4px 10px; border-radius: 12px; background: #fff3cd; color: #7a5a00; border: 1px solid #e6c85c; font-size: 13px; }

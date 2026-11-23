@@ -158,7 +158,10 @@ vault/
 **HTML 페이지 (html 타입)**
 - `index.html`을 앱 안 iframe(sandbox)으로 표시. 강의·로드맵·계산기 등.
 - 오프라인 규칙: 외부 CDN을 쓰는 HTML은 경고 표시 (LLM 스킬에도 같은 규칙).
-- 상태 저장이 필요한 HTML(체크리스트 등)은 앱이 제공하는 작은 저장 API를 쓴다 `[가정: P3에서 결정]`.
+- 상태 저장이 필요한 HTML(체크리스트 등)은 앱이 제공하는 작은 저장 API를 쓴다 (P3-07 확정).
+  - `GET/PUT /api/pages/state?path=` — 페이지 폴더의 `_state.json`(JSON 객체, 최대 1MB). html 타입만 허용.
+  - `GET /api/pages/external-refs?path=` — index.html의 외부 URL(src/href/url()/@import/fetch 등) 목록 → 프론트가 경고 배지 표시.
+  - 표시: `<iframe sandbox="allow-scripts">`(same-origin 없음) + srcdoc에 CSP(`connect-src 'none'` 등)를 주입해 외부 요청을 차단. iframe 안에서는 `parent.postMessage({miPlanner:"state-get"|"state-set", id, state}, "*")`로 요청하고 `{miPlanner:"reply", id, state|error}` 응답을 받는다.
 
 ### 4.2 월간 일지 · 할일 (P2)
 
