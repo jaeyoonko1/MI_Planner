@@ -2,6 +2,14 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P3-04
+- 한 일: 노트 편집기에 서식 툴바 추가 — 글자 크기 6단계 칩, 글자색 7, 형광펜 5 + 없음, 서식 지우기. 단축키 Ctrl+Alt+H(형광펜 켜고 끄기), Ctrl+Shift+. / ,(크기 한 단계 키우기·줄이기), Ctrl+Space(서식 지우기). 기존 Ctrl+B/I/U, Ctrl+-, Ctrl+Alt+0~3 유지. 저장은 프리셋 값만, 그 밖은 제거(mdconv.js, P3-02에서 구현)
+- 바뀐 파일: web/js/note.js, web/css/note.css, project_flow.html
+- 테스트: pytest 44 passed. 브라우저에서 크기·글자색+굵게·형광펜 적용 → 파일에 `<span style=…>`/`<mark>`/`**` 로 저장, 다시 열어도 유지, Ctrl+Shift+> 크기 단계 이동, Ctrl+Space 서식 지우기 확인(키 이벤트는 합성). 실제 마우스 드래그 선택·실제 키 입력은 사람이 확인 필요
+- 다음에 할 것 / 막힌 것:
+  - 글자색 기본(첫 칩)은 저장 시 생략됨(기본색과 같음)
+  - 다음: P3-03(단·열 너비, L 크기 — 쪼개서), P3-05, P3-06 등
+
 ## 2026-11-24 · Claude Code(Sonnet) · P3-01 + P3-02
 - 한 일: **P3-01** 편집기 결정 = 직접 만든 contenteditable + 마크다운 변환기(D-20, 외부 라이브러리 없음). **P3-02** note 페이지 열기·편집·자동 저장(0.7초 지연, 포커스 이탈·페이지 이동·pagehide 시 즉시 저장, 실패 시 다음 입력에서 재시도), 본문/제목1~3/목록/번호/체크/B·I·U·S 버튼, 단축키(Ctrl+Alt+0~3, Ctrl+-), 체크박스 클릭 토글, 이미지 붙여넣기·드래그 → `files/img-날짜.png` 저장 후 `![](files/…)`로 기록
 - 바뀐 파일: web/js/mdconv.js·note.js·main.js, web/css/note.css, web/test/mdconv.html(신규), app/vault.py·routers/pages.py(이미지 업로드·조회), tests/test_note_files.py, docs/DECISIONS.md(D-20), docs/SPEC.md, project_flow.html. (일부 파일은 다른 세션 커밋 3cd0372에 함께 들어감)
@@ -11,6 +19,12 @@
   - 이미지가 커서 위치(문단 끝)에 인라인으로 들어감 — 별도 줄로 넣는 개선 여지
   - **P3-04**: 서식 툴바(크기·글자색·형광펜·프리셋·Ctrl+Alt+H 등)만 얹으면 됨. 저장·읽기(변환기)는 이미 크기/색/형광펜을 처리하고 프리셋 밖 값은 제거. 프로토타입은 prototypes/p3-04_toolbar.html
   - 중첩 목록·링크·서식 붙여넣기는 미지원(D-20 한계)
+
+## 2026-11-24 · Claude Code(Sonnet) · P2B-01 (설계, 승인 대기)
+- 한 일: flow에 P2B(UI 리디자인) 단계 추가. 디자인 원칙·토큰·컴포넌트·화면 명세 `docs/DESIGN.md`, 오늘·할일·월간 일지 정적 프로토타입 `web/design/prototype.html`
+- 바뀐 파일: project_flow.html, docs/DESIGN.md, web/design/prototype.html (app/·web/js 변경 없음)
+- 테스트: pytest 44 passed (코드 변경 없음). 프로토타입은 브라우저로 3개 화면 확인
+- 다음에 할 것 / 막힌 것: **사용자가 프로토타입 승인 → P2B-01 done 처리 → P2B-02 시작**. DESIGN.md 8장 열린 질문 3개 확정 필요. 작업 트리의 web/js/main.js 수정·web/test/는 이번 작업과 무관(손대지 않음)
 
 ## 2026-11-24 · Claude Code(Sonnet) · P2-04 + P2-05 + P2-06
 - 한 일: 할일 화면(#/todos: 상태·우선순위·납기·요청자 토글 칩, 검색, 빠른 추가, 상태/우선순위 클릭 순환, 제목·납기·요청자 인라인 수정, 삭제, 단축키 N). 일지 자동 표시(설정 `journal_auto_show`, 칸 아래 납기 할일 읽기 전용, 켬/끔 칩) + 체크박스 줄 → 할일 승격(`POST /api/todos/from-line`, 줄에 `→ 할일 #id` 링크). '오늘' 화면(#/today: 오늘 일지, 오늘 하기로 한 일, 납기 임박 3일, 지남, 평가 자리만)

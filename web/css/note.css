@@ -14,3 +14,7 @@
 .note-editor ul.cl > li::before { content: "☐"; position: absolute; left: 0; cursor: pointer; color: var(--muted); }
 .note-editor ul.cl > li[data-chk="1"]::before { content: "☑"; color: var(--accent); }
 .note-editor ul.cl > li[data-chk="1"] { color: var(--muted); text-decoration: line-through; }
+.note-bar .grp { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
+.note-bar .lab { font-size: 11px; color: var(--muted); margin-right: 2px; }
+.note-bar .chip.sw { width: 20px; height: 20px; padding: 0; min-width: 20px; border-radius: 50%; }
+.note-bar .chip.sw.none { background: linear-gradient(135deg, #fff 45%, #d33 45%, #d33 55%, #fff 55%); }

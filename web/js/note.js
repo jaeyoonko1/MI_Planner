@@ -1,6 +1,8 @@
 // Note page editor (P3-02): contenteditable + markdown file, autosave, image paste.
 // Format conversion lives in mdconv.js. Size/color/highlight toolbar comes in P3-04.
-import { htmlToMd, mdToHtml } from "./mdconv.js";
+import { BASE_PX, COLORS, HLS, SIZES, htmlToMd, mdToHtml } from "./mdconv.js";
+
+const SIZE_LABELS = ["극소", "소", "보통", "중", "대", "특대"];
 
 const SAVE_DELAY_MS = 700;
 const IMG_EXT = { "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif", "image/webp": ".webp", "image/bmp": ".bmp" };
@@ -54,6 +56,7 @@ export function renderNote(host, page) {
   ed.spellcheck = false;
   ed.innerHTML = mdToHtml(page.content || "", fileUrl);
   document.execCommand("defaultParagraphSeparator", false, "div");
+  document.execCommand("styleWithCSS", false, true);
 
   // ---- autosave: one save at a time, retried on the next edit after a failure
   let last = htmlToMd(ed);
@@ -109,6 +112,41 @@ export function renderNote(host, page) {
     }
   };
 
+  // size: apply the browser's largest size, then rewrite it to a preset px value
+  const setSize = (px) => {
+    run("fontSize", 7);
+    ed.querySelectorAll('span[style*="xxx-large"], font[size="7"]').forEach((node) => {
+      let t = node;
+      if (node.tagName === "FONT") {
+        t = document.createElement("span");
+        t.innerHTML = node.innerHTML;
+        node.replaceWith(t);
+      }
+      t.style.fontSize = px === BASE_PX ? "" : px + "px";
+      if (!t.getAttribute("style")) t.removeAttribute("style");
+    });
+  };
+  const stepSize = (dir) => {
+    const n = getSelection().anchorNode;
+    const e = n && (n.nodeType === 3 ? n.parentElement : n);
+    if (!e || !ed.contains(e)) return;
+    const cur = parseFloat(getComputedStyle(e).fontSize);
+    let i = SIZES.findIndex((z) => z >= cur - 0.5);
+    if (i < 0) i = SIZES.length - 1;
+    setSize(SIZES[Math.max(0, Math.min(SIZES.length - 1, i + dir))]);
+  };
+  const toggleHighlight = () => {
+    const n = getSelection().anchorNode;
+    const e = n && (n.nodeType === 3 ? n.parentElement : n);
+    const bg = e ? getComputedStyle(e).backgroundColor : "";
+    const has = bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+    run("hiliteColor", has ? "transparent" : HLS[0]);
+  };
+  const clearFormat = () => {
+    run("removeFormat");
+    run("hiliteColor", "transparent");
+  };
+
   const BTN = [
     ["본문", () => run("formatBlock", "div"), "Ctrl+Alt+0"],
     ["제목1", () => setBlock("h1"), "Ctrl+Alt+1"],
@@ -122,17 +160,34 @@ export function renderNote(host, page) {
     ["U", () => run("underline"), "Ctrl+U"],
     ["S", () => run("strikeThrough"), "Ctrl+-"],
   ];
-  for (const [label, fn, tip] of BTN) {
-    const b = el("button", "chip", label);
+  const addChip = (parent, label, fn, tip, color) => {
+    const b = el("button", color === undefined ? "chip" : "chip sw", label);
     if (tip) b.title = tip;
+    if (color) b.style.background = color;
+    else if (color === null) b.classList.add("none");
     b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection
     b.addEventListener("click", () => {
       ed.focus();
       fn();
       schedule();
     });
-    bar.append(b);
-  }
+    parent.append(b);
+  };
+  const group = (name) => {
+    const g = el("span", "grp");
+    g.append(el("span", "lab", name));
+    bar.append(g);
+    return g;
+  };
+  for (const [label, fn, tip] of BTN) addChip(bar, label, fn, tip);
+  const gs = group("크기");
+  SIZES.forEach((px, i) => addChip(gs, SIZE_LABELS[i], () => setSize(px), `${px}px · Ctrl+Shift+. / ,`));
+  const gc = group("글자색");
+  COLORS.forEach((c) => addChip(gc, "", () => run("foreColor", c), c, c));
+  const gh = group("형광펜");
+  addChip(gh, "", () => run("hiliteColor", "transparent"), "형광펜 없음", null);
+  HLS.forEach((c, i) => addChip(gh, "", () => run("hiliteColor", c), i ? c : `${c} · Ctrl+Alt+H`, c));
+  addChip(bar, "서식 지우기", clearFormat, "Ctrl+Space");
   bar.append(status);
 
   // ---- images: upload, then insert <img data-file="files/…">
@@ -193,7 +248,20 @@ export function renderNote(host, page) {
     }
     if (e.key === "Tab") e.preventDefault(); // nested lists are not supported yet
     if (!(e.ctrlKey || e.metaKey)) return;
-    if (e.altKey && /^[0-3]$/.test(e.key)) {
+    const k = e.key.toLowerCase();
+    if (e.altKey && k === "h") {
+      e.preventDefault();
+      toggleHighlight();
+      schedule();
+    } else if (e.shiftKey && !e.altKey && (e.key === "." || e.key === ">" || e.key === "," || e.key === "<")) {
+      e.preventDefault();
+      stepSize(e.key === "." || e.key === ">" ? 1 : -1);
+      schedule();
+    } else if (!e.altKey && !e.shiftKey && e.key === " ") {
+      e.preventDefault();
+      clearFormat();
+      schedule();
+    } else if (e.altKey && /^[0-3]$/.test(e.key)) {
       e.preventDefault();
       if (e.key === "0") run("formatBlock", "div");
       else setBlock("h" + e.key);
