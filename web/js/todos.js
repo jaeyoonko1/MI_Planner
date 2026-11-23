@@ -1,6 +1,7 @@
 // Todo screen: quick add with detail chips, toggle-chip filters (D-12), shared rows. P2B-05.
 import { api } from "./api.js";
 import { hub } from "./hub.js";
+import { newTaskPage } from "./pagedialog.js";
 import { mountQuickAdd } from "./quickadd.js";
 import { taskRow } from "./taskrow.js";
 import { debounce, el, emptyState, errorState, skeleton, svg } from "./ui.js";
@@ -46,7 +47,12 @@ export async function renderTodos(container) {
     const lead = el("p", "lead");
     lead.append("일지의 ☐ 줄, 여기서 추가한 할일, 상세 패널이 ", el("b", "", "모두 같은 목록"), "이에요.");
     grow.append(lead);
-    hero.replaceChildren(grow);
+    const pageBtn = el("button", "btn");
+    pageBtn.type = "button";
+    pageBtn.title = "이슈와 페이지를 한 번에 만들어요 (Alt+N)";
+    pageBtn.append(svg("doc", "i s"), "할일 페이지 추가", el("kbd", "", "Alt+N"));
+    pageBtn.addEventListener("click", () => newTaskPage());
+    hero.replaceChildren(grow, pageBtn);
   }
 
   function paintFilters() {

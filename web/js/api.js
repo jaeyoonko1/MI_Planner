@@ -46,6 +46,13 @@ export const api = {
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
   promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
   today: () => request("GET", "/api/dashboard/today"),
+  pagePreview: (body) => request("POST", "/api/todos/page-preview", body),
+  expandPage: (id, override) => request("POST", `/api/todos/${id}/page`, { override }),
+  createWithPage: (body) => request("POST", "/api/todos/with-page", body),
+  relocatePage: (id, override) => request("POST", `/api/todos/${id}/page/relocate`, { override }),
+  pageRules: () => request("GET", "/api/todos/page-rules"),
+  savePageRules: (rules, fallback) => request("PUT", "/api/todos/page-rules", { rules, fallback }),
+  rulesOverview: (rules, fallback) => request("POST", "/api/todos/page-rules/overview", rules ? { rules, fallback } : {}),
   movePage: (path, data) => request("PATCH", `/api/pages${q(path)}`, data),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
 };

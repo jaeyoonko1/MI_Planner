@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app import db, placement
 from app.vault import Vault
 
 router = APIRouter(prefix="/api/pages")
@@ -29,6 +30,15 @@ class PageUpdate(BaseModel):
 
 class PageContent(BaseModel):
     content: str
+
+
+def _relink(request: Request, fn) -> None:
+    conn = db.connect(request.app.state.db_path)
+    try:
+        fn(conn)
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @router.get("/tree")
@@ -64,9 +74,14 @@ def create_page(request: Request, body: PageCreate) -> dict:
 
 @router.patch("")
 def update_page(request: Request, path: str, body: PageUpdate) -> dict:
-    return _vault(request).update(path, title=body.title, parent=body.parent, order=body.order)
+    page = _vault(request).update(path, title=body.title, parent=body.parent, order=body.order)
+    if page["path"] != path:  # issue links follow the folder (their page identity is task_id anyway)
+        _relink(request, lambda c: placement.repoint(c, path, page["path"]))
+    return page
 
 
 @router.delete("")
 def delete_page(request: Request, path: str) -> dict:
-    return {"trashed": _vault(request).delete(path)}
+    trashed = _vault(request).delete(path)
+    _relink(request, lambda c: placement.unlink(c, path))
+    return {"trashed": trashed}

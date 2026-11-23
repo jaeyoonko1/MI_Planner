@@ -89,6 +89,8 @@ class Vault:
                 "type": meta.get("type", "note"),
                 "order": meta.get("order", 0),
                 "icon": meta.get("icon"),
+                "task_id": meta.get("task_id"),
+                "auto": bool(meta.get("auto")),
                 "children": self.tree(d),
             })
         return out
@@ -101,8 +103,9 @@ class Vault:
         return True
 
     def create(self, parent: str, title: str, page_type: str = "note",
-               folder_name: str | None = None) -> dict[str, Any]:
-        """Create a page. folder_name pins the folder (used for stable journal paths)."""
+               folder_name: str | None = None, extra_meta: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create a page. folder_name pins the folder (used for stable journal paths);
+        extra_meta adds keys (e.g. task_id for an issue page) to the very first _page.json write."""
         if page_type not in PAGE_TYPES:
             raise VaultError("알 수 없는 페이지 종류입니다.")
         parent_dir = self._dir(parent)
@@ -111,10 +114,51 @@ class Vault:
         siblings = [self._read_meta(d).get("order", 0) for d in self._children(parent_dir) if d != folder]
         now = _now()
         meta = {"type": page_type, "title": title.strip(), "order": max(siblings, default=-1) + 1,
-                "created": now}
+                "created": now, **(extra_meta or {})}
         self._write_meta(folder, meta)
         (folder / _content_file(page_type)).write_text("", encoding="utf-8")
         return self.read(self._rel(folder))
+
+    # ---- issue pages / placement support (P2B-09) ---------------------------
+    def unique_name(self, parent: str, name: str) -> str:
+        """The folder name a new page called `name` would get under `parent` (parent may not exist yet)."""
+        base = self.root.joinpath(*[p for p in parent.split("/") if p])
+        if not base.exists():
+            return name
+        return self._unique_dir(base, name).name
+
+    def find_by_task(self, task_id: int) -> str | None:
+        """Path of the page whose _page.json says it belongs to this issue (the stable identity)."""
+        stack = [self.root]
+        while stack:
+            for d in self._children(stack.pop()):
+                try:
+                    if self._read_meta(d).get("task_id") == task_id:
+                        return self._rel(d)
+                except (OSError, ValueError):
+                    continue
+                stack.append(d)
+        return None
+
+    def discard_created(self, rels: list[str]) -> None:
+        """Roll back pages this very operation created (deepest first). A folder that has meanwhile
+        gained child pages is kept. User data is never touched: callers pass only their own creations."""
+        for rel in sorted(rels, key=lambda r: r.count("/"), reverse=True):
+            try:
+                page = self._dir(rel)
+            except VaultError:
+                continue
+            if page == self.root or self._children(page):
+                continue
+            shutil.rmtree(page, ignore_errors=True)
+
+    def rollback_move(self, moved_rel: str, original_rel: str, meta: dict[str, Any]) -> None:
+        """Undo Vault.update(parent=...): put the folder back exactly where it was, with its old meta."""
+        src = self._dir(moved_rel)
+        dest = self.root.joinpath(*original_rel.split("/"))
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dest))
+        (dest / META).write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     @staticmethod
     def _unique_dir(parent: Path, name: str) -> Path:

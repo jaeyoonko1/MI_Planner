@@ -383,6 +383,14 @@ vault/
 - 필터: 기존 필터는 그대로, 추가로 `?field_<key>=a,b`(한 항목 안에서는 OR, 항목끼리 AND; multi는 하나라도 포함). 없는 항목은 404.
 - 위치 규칙: `GET/PUT /api/todos/page-rules` `{rules:[{conditions:[{field,op,value?}],path}]}` → `settings.page_rules`(JSON). op는 `is`·`not`·`set`·`empty`. 저장 시 항목·선택지·템플릿 변수(`{연}` `{월}` `{에픽위치}` 또는 항목 key·이름)가 실제로 있는지 검증한다.
 
+**이슈 페이지·위치 규칙 (P2B-09, 마이그레이션 없음 — `tasks.page_path` 재사용)**
+- 페이지 = `note` 폴더 + `_page.json`의 `task_id`(이슈 ID). 자동 폴더는 `auto: true`. `GET /api/pages/tree` 노드에 `task_id`·`auto` 추가. `PATCH /api/pages`로 페이지를 옮기면 `tasks.page_path`가 따라가고 `DELETE`(휴지통)하면 비워진다.
+- `POST /api/todos/page-preview` `{task_id, relocate?, override?}` 또는 `{draft:{title,props,planned_date,…}, override?}` → `{folder, by, kind(rule|default|journal|folder), rule, title, page_path, new_folders[], journal}`. 이미 페이지가 있으면 `{exists:true, path}`(`relocate:true`면 `current`와 계획도 함께). 아무것도 쓰지 않는다. override = `{kind:"journal"}` | `{kind:"folder", path}` | 생략/`auto`.
+- `POST /api/todos/{id}/page` `{override?}` → `{created, path, page, placement, task}`. 두 번째부터 `created:false`(기존 페이지, 내용·위치 불변). `POST /api/todos/with-page` = `POST /api/todos` 본문 + `override?` → 201 `{created, path, page, placement, task(+journal_days)}`. `POST /api/todos/{id}/page/relocate` `{override?}` → `{moved, path, from?}`(페이지 없으면 409, 자기 하위 400).
+- `GET/PUT /api/todos/page-rules` 응답·본문에 `fallback`(`journal`·`type`·`inbox`) 추가. PUT은 규칙·기본값을 모두 검증한 뒤에 저장한다. `POST /api/todos/page-rules/overview` `{rules?, fallback?}` → `{rules:[{index, matches, example:{id,title,folder}}], pages:[{task_id, title, path, folder, rule_folder, by, differs}], fallback, fallbacks}` (저장하지 않은 초안도 계산).
+- 템플릿: `{연}{월}`은 하기로 한 날(없으면 생성일), `{에픽위치}`는 에픽 이름과 같은 제목의 첫 페이지 경로(없으면 `미분류`) `[가정]`, 항목 값은 계층이면 경로(`HBM/HBM-A`), 없으면 `미분류`. 값 안의 금지 문자는 제거. 기본 위치: 일지 `일지/{연}/{연}-{월}`, 유형별 `MI 공정업무/{유형}`, 할일 폴더 `MI 공정업무/할일`(최상위 7번째 트리를 만들지 않으려 SPEC 초안 `할일`에서 변경).
+- 화면: 이슈 상세의 '페이지' 행(확장/열기/위치 변경), 할일 화면 '할일 페이지 추가'(Alt+N, Ctrl+N), 구조 › '페이지 위치 규칙' 탭(조건 칩 편집, 순서 ↑↓, 변수 칩, 해당 이슈 수·예시, 기본 위치 칩, 페이지별 현재 위치 vs 규칙 위치와 '옮기기').
+
 **구조 보기·분류 관리 (P2B-07, 마이그레이션 `004_structure_defaults.sql`)**
 - 004: 기본 분류 `epic`(에픽)·`type`(유형)을 일반 `choice` 항목(builtin=0)으로 시드 — 이름 변경·보관·삭제 가능. 초기 보기는 에픽 → 유형 → 이슈.
 - 보기 설정은 `settings.structure_view`(JSON `{mode:"fields"|"free", levels:[key…], styles:{key:{icon,color}}}`)에 저장되고 재시작 후 복원된다. 이슈의 분류 값(`tasks.props`)과 완전히 별개다. 계층 후보는 단일값 항목(`choice`·`person`, 보관 안 됨)뿐.

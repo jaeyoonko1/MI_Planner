@@ -2,6 +2,7 @@
 // journal line. Every edit goes through the hub, so lists and journal lines update at once.
 import { api } from "./api.js";
 import { hub } from "./hub.js";
+import { openPageSheet } from "./pagedialog.js";
 import { toast } from "./toast.js";
 import { chipRow, dateChoices, debounce, el, fmtMD, svg } from "./ui.js";
 
@@ -103,6 +104,26 @@ function dateRow(label, iconId, key, current, kind) {
   return row(label, iconId, chips, input);
 }
 
+// 페이지: an issue is complete without one. "페이지로 확장" links exactly one page to this same issue id.
+function pageRow(t) {
+  const done = (res) => { hub.putTask(res.task); hub.emit({ kind: "task", id: t.id }); };
+  if (t.page_path) {
+    const a = el("a", "pg-link");
+    a.href = "#/page/" + t.page_path.split("/").map(encodeURIComponent).join("/");
+    a.append(svg("doc", "i s"), el("span", "", t.page_path));
+    a.title = t.page_path;
+    const move = el("button", "btn quiet sm", "위치 변경");
+    move.type = "button";
+    move.addEventListener("click", () => openPageSheet({ task: t, relocate: true, onDone: done }));
+    return row("페이지", "doc", a, move);
+  }
+  const b = el("button", "btn sm", "페이지로 확장");
+  b.type = "button";
+  b.prepend(svg("plus", "i s"));
+  b.addEventListener("click", () => openPageSheet({ task: t, onDone: done }));
+  return row("페이지", "doc", b, el("span", "chip-note", "이슈만으로 충분하면 그대로 두세요"));
+}
+
 function paint(focusTitle) {
   const t = hub.task(openId);
   if (!t) return;
@@ -154,6 +175,7 @@ function paint(focusTitle) {
     row("요청자", "user",
       chipRow([[null, "없음"], ...who.map((w) => [w, w])], t.requester ?? null, (v) => write({ requester: v })), reqInput),
   );
+  props.append(pageRow(t));
   for (const f of fields || []) {
     if (f.builtin || f.archived || !["choice", "multi"].includes(f.type)) continue;
     const cur = t.props?.[f.key];

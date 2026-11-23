@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from app import placement
 from app.repositories import task_fields as repo
 from app.routers.tasks import get_conn
 
@@ -51,9 +52,15 @@ def delete_field(key: str, purge: bool = False, conn=Depends(get_conn)) -> dict:
 
 @router.get("/page-rules")
 def get_rules(conn=Depends(get_conn)) -> dict:
-    return {"rules": repo.get_rules(conn)}
+    return {"rules": repo.get_rules(conn), "fallback": placement.get_fallback(conn)}
 
 
 @router.put("/page-rules")
 def put_rules(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
-    return {"rules": repo.set_rules(conn, body.get("rules"))}
+    rules = repo.validate_rules(conn, body.get("rules"))  # validate everything before writing anything
+    if "fallback" in body and body["fallback"] not in placement.FALLBACKS:
+        raise repo.TaskError("기본 위치를 알 수 없어요.")
+    saved = repo.set_rules(conn, rules)
+    if "fallback" in body:
+        placement.set_fallback(conn, body["fallback"])
+    return {"rules": saved, "fallback": placement.get_fallback(conn)}

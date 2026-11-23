@@ -9,7 +9,8 @@ import { renderToday } from "./today.js";
 import { renderWeek } from "./week.js";
 import { renderStructure } from "./structure.js";
 import { hub } from "./hub.js";
-import { closeInspector } from "./inspector.js";
+import { newTaskPage } from "./pagedialog.js";
+import { closeInspector, openInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
 import { flash, initShell, setCrumb } from "./shell.js";
 
@@ -117,16 +118,16 @@ async function route() {
     return openMonth(todayISO().slice(0, 7));
   }
   const isMonth = path && MONTH_PAGE.test(path);
-  const struct = screen.match(/^structure(?:\/(classes))?$/);
+  const struct = screen.match(/^structure(?:\/(classes|rules))?$/);
   const name = screen === "todos" || screen === "today" ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
   showScreen(name);
-  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : struct ? ["구조", ...(struct[1] ? ["분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : struct ? ["구조", ...(struct[1] ? [struct[1] === "rules" ? "페이지 위치 규칙" : "분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
   const fail = (e) => viewEl.replaceChildren(errorState(e.message, route));
   if (screen === "today") {
     return renderToday(viewEl).catch(fail);
   }
   if (struct) {
-    return renderStructure(viewEl, struct[1] ? "classes" : "tree").catch(fail);
+    return renderStructure(viewEl, struct[1] || "tree").catch(fail);
   }
   if (week) {
     return renderWeek(viewEl, week[1], (d) => { location.hash = `#/week/${d}`; }).catch(fail);
@@ -166,11 +167,14 @@ function showHome() {
 function showPage(page) {
   const typeLabel = TYPES.find((t) => t.value === page.meta.type)?.label ?? page.meta.type;
   const body = el("div", "content", page.content || "(내용 없음)");
-  viewEl.replaceChildren(
-    el("h2", "page-title", page.meta.title),
-    el("div", "meta", `${typeLabel} · ${page.path}`),
-    body,
-  );
+  const meta = el("div", "meta", `${typeLabel} · ${page.path}`);
+  if (page.meta.task_id) {
+    const b = el("button", "linkbtn", `이슈 #${page.meta.task_id} 상세`);
+    b.type = "button";
+    b.addEventListener("click", () => openInspector(page.meta.task_id));
+    meta.append(" · ", b);
+  }
+  viewEl.replaceChildren(el("h2", "page-title", page.meta.title), meta, body);
   if (page.meta.type === "note") {
     body.className = "note-host";
     renderNote(body, page);
@@ -238,6 +242,14 @@ document.addEventListener("keydown", (e) => {
 initShell();
 document.getElementById("btn-new-root").addEventListener("click", () => showAddForm(""));
 document.addEventListener("tree-changed", paintTree);
+document.addEventListener("tree-reload", () => refreshTree().catch((e) => flash(false, e.message)));
+// Alt+N (Ctrl+N where the browser lets it through) = 할일 페이지 추가: issue + page, with the path previewed.
+document.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() !== "n" || !(e.altKey || e.ctrlKey) || e.shiftKey || e.metaKey) return;
+  if (document.querySelector("dialog[open]")) return;
+  e.preventDefault();
+  newTaskPage();
+});
 window.addEventListener("hashchange", route);
 
 refreshTree().then(route).catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));

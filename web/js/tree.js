@@ -118,9 +118,13 @@ function buildNode(n, level, opts, spec) {
 
   const tw = span("tw" + (isOpen ? " open" : ""), hasKids ? icon("chev") : null);
   tw.addEventListener("click", (e) => { e.stopPropagation(); toggle(n.path, hasKids); });
-  const ty = span("ty", icon(spec ? spec.icon : TYPE_ICON[n.type] ?? "note"));
+  const ty = span("ty", icon(spec ? spec.icon : n.task_id ? "todo" : TYPE_ICON[n.type] ?? "note"));
   ty.style.color = spec ? spec.color : "var(--dim)";
-  row.append(tw, ty, span("label", n.title), plusButton("하위 페이지 추가", () => opts.onAdd(n.path)));
+  const tags = [];
+  if (n.task_id) tags.push(span("tag", "#" + n.task_id));
+  if (n.auto) tags.push(span("tag auto", "자동"));
+  tags.forEach((x) => { x.title = n.task_id && x === tags[0] ? "이슈 페이지" : "규칙이 자동으로 만든 폴더"; });
+  row.append(tw, ty, span("label", n.title), ...tags, plusButton("하위 페이지 추가", () => opts.onAdd(n.path)));
   row.addEventListener("click", () => { location.hash = toHash(n.path); });
   attachDrag(row, n, spec, opts);
   li.append(row);

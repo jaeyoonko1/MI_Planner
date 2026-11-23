@@ -4,6 +4,7 @@
 //  - free layout: groups move with their children (cycles rejected); positions are stored apart from the page tree
 import { api } from "./api.js";
 import { renderClasses } from "./classes.js";
+import { renderRules } from "./rules.js";
 import { hub } from "./hub.js";
 import { openInspector } from "./inspector.js";
 import { openLevelEditor } from "./leveldialog.js";
@@ -607,7 +608,7 @@ export async function renderStructure(container, tab = "tree") {
   const tabs = el("div", "chips tabsw");
   tabs.setAttribute("role", "group");
   tabs.setAttribute("aria-label", "구조 화면");
-  for (const [k, label, href] of [["tree", "이슈 구조", "#/structure"], ["classes", "분류 관리", "#/structure/classes"]]) {
+  for (const [k, label, href] of [["tree", "이슈 구조", "#/structure"], ["classes", "분류 관리", "#/structure/classes"], ["rules", "페이지 위치 규칙", "#/structure/rules"]]) {
     const b = el("button", "chip", label);
     b.type = "button";
     b.setAttribute("aria-pressed", String(tab === k));
@@ -624,6 +625,7 @@ export async function renderStructure(container, tab = "tree") {
   const load = async () => {
     try {
       if (tab === "classes") await renderClasses(host, { reload: load });
+      else if (tab === "rules") await renderRules(host, { reload: load });
       else {
         const view = await api.structureView();
         await renderTree(host, view, load);
