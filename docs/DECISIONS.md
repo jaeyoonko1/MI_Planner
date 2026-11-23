@@ -5,11 +5,11 @@
 ## 결정
 
 ### D-01 기술 스택 — 확정 (2026-11-24)
-Python 3.11+ / FastAPI / uvicorn / sqlite3 + 빌드 없는 vanilla JS, 표는 Tabulator. (캘린더 FullCalendar는 v0.2에서 제외 — 월간 일지 그리드가 대신함)
+Python 3.11+ / FastAPI / uvicorn / sqlite3 + 빌드 없는 vanilla JS. 월간 일지는 내장 그리드를 사용한다.
 - 이유: 회사 PC에서 Node 빌드 체인 없이 돌아가고, 사용자가 Python을 이미 씀. FastAPI는 AI 모델들이 안정적으로 다루는 스택.
 - 2026-11-24: 회사 PC에 Python 있음, pip은 사내 프록시 경유로 대부분 가능 → `install.bat`이 프록시 설정을 받아 설치. 막힌 패키지만 wheel로.
 - 추가 예정 패키지(모두 순수 Python 또는 공식 wheel 제공): openpyxl(엑셀 가져오기·내보내기), python-pptx(DOI PPT 가져오기).
-- 노트 편집기 라이브러리는 P3-01에서 결정 (빌드 없이 vendor 가능한 것만).
+- 노트 편집기와 P3-06의 GFM 표는 D-20에 따라 브라우저 기본 기능을 사용한다. P1-05에서는 가짜 시드와 로컬 자산을 확인했다. 이후 다른 화면에 라이브러리가 필요하면 해당 작업에서 채택을 검토한다.
 
 ### D-02 앱 형태: 로컬 웹앱 — 확정
 로컬 서버(127.0.0.1) + 브라우저 UI. Electron/Tauri는 쓰지 않는다.

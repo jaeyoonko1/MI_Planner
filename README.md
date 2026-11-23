@@ -22,3 +22,5 @@ project_flow.html에서 다음 작업 P1-01 진행해줘. AGENTS.md 규칙 따�
 
 ## 실행 (P1 이후)
 `run.bat` 더블클릭 → 브라우저에서 `http://127.0.0.1:8765`
+
+별도 경로에 가짜 샘플 vault를 만들려면 저장소 루트에서 `python scripts/seed_sample.py --vault "C:\Temp\MI_Planner_sample"`을 실행한다. 같은 경로로 다시 실행하면 이미 있는 페이지는 유지하고 빠진 샘플 페이지만 추가한다.

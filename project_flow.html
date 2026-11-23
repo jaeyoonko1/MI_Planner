@@ -36,8 +36,8 @@ const FLOW = {
         desc: "app/vault.py: 트리 읽기, 페이지 생성·이름 변경·이동·순서·휴지통. 경로 탈출 방지 테스트 필수" },
       { id: "P1-04", title: "프론트 셸: 사이드바 트리 + 라우팅 + 칩 버튼 컴포넌트", tool: "Sonnet", size: "M", done: true,
         desc: "트리 접기·하위 페이지 추가·드래그 이동, 해시 라우팅, 공통 토글 칩(D-12)" },
-      { id: "P1-05", title: "vendor 배치 + 샘플 vault 시드", tool: "Codex", size: "S", done: false,
-        desc: "Tabulator를 web/vendor/에. scripts/seed_sample.py로 원노트 구조 흉내 낸 가짜 페이지 생성" },
+      { id: "P1-05", title: "로컬 자산 검증 + 샘플 vault 시드", tool: "Codex", size: "S", done: true,
+        desc: "scripts/seed_sample.py로 가짜 계층 페이지 15개 생성과 재실행 보존 확인. 노트 표는 D-20의 브라우저 기본 기능 사용, 적용된 정적 자산은 모두 로컬" },
     ]},
     { id: "P2", name: "일지 · 할일 (1순위)", goal: "원노트 일지를 이걸로 대체 — 실사용 시작", tasks: [
       { id: "P2-01", title: "일지 파일 형식 + 파서/저장", tool: "Sonnet", size: "S", done: true,

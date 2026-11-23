@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P1-05
+- 한 일: 격리 vault에서 가짜 계층 페이지 시드를 실제 CLI로 검증했다. P3-06은 D-20에 따른 브라우저 기본 기능으로 구현하기로 했으므로 P1-05의 vendor 계획을 로컬 자산 검증으로 정리했다.
+- 바뀐 파일: AGENTS, DECISIONS, README, FLOW, WORKLOG.
+- 테스트: pytest 159 passed. 격리 vault의 첫 실행 15개, 재실행 0개, 기존 편집 파일 바이트 동일을 확인했다. 앱 정적 자산의 로컬 참조 검사도 통과했다.
+- 다음에 할 것 / 막힌 것: P3-06에서 셀 편집·정렬·클립보드 동작을 검증한다. 회사 PC 오프라인 설치와 1주 실사용은 P2-07에 남아 있다.
+
 ## 2026-11-24 · Codex · P3-08
 - 한 일: 로컬 페이지 제목·본문과 이슈 제목·메모 검색, 명령 팔레트(Ctrl+K·/), 페이지 링크 자동 완성과 백링크를 구현했다. 동명 제목은 경로로 구분한다. 링크 스타일은 본문 DOM 밖의 CSS 강조로 적용하며 위키링크와 줄바꿈 저장 형태를 유지한다.
 - 바뀐 파일: app/search.py, app/routers/search.py, app/main.py, web/js/(search-palette,wikilinks,main,mdconv,note,api).js, web/css/search.css, web/index.html, tests/test_search.py, web/test/mdconv.html, SPEC, FLOW, WORKLOG.

@@ -41,7 +41,7 @@
 ## 4. 기술 스택 (D-01, 잠정 — DECISIONS.md 참고)
 - Backend: Python 3.11+, FastAPI, uvicorn, 표준 `sqlite3` (ORM 없이 얇은 repository 계층)
 - Frontend: 빌드 도구 없는 vanilla JS(ES modules) + HTML/CSS
-  - 표: Tabulator (`web/vendor/`에 로컬 파일로). 노트 편집기는 P3-01에서 결정.
+  - 노트 편집기와 노트 표는 브라우저 기본 기능으로 구현한다(D-20). 외부 라이브러리 채택이 결정되면 `web/vendor/`에 로컬 파일로 넣는다.
 - 테스트: pytest
 - 실행: `run.bat` → `http://127.0.0.1:8765` 자동으로 브라우저 열기
 
