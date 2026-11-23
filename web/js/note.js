@@ -516,7 +516,7 @@ export function mountEditor(cfg) {
     toggleFold(heading);
   });
   ed.addEventListener("keydown", (e) => {
-    if (e.isComposing) return;
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Escape" && !ib.hidden) { hideBar(true); return; }
     if (e.key === "Enter" && closest("ul.cl")) {
       setTimeout(() => {
