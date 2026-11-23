@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<title>P4-01 평가 현황판 렌더 시험</title>
+<style>
+  html { color-scheme: dark; }
+  body { background: #02040a; color: #edf4ff; font: 14px system-ui; }
+  .board { overflow: auto; height: min(560px, 80vh); border: 1px solid #293750; }
+  table { table-layout: fixed; border-collapse: separate; border-spacing: 2px; width: 1100px; }
+  th, td { padding: 4px 6px; height: 24px; text-align: left; font-size: 12px; }
+  thead th { position: sticky; top: 0; background: #111a2a; }
+  td { background: #111a2a; border-left: 3px solid var(--stage); white-space: nowrap; }
+  .stage-0 { --stage: #8f9bb5; }
+  .stage-1 { --stage: #729eff; }
+  .stage-2 { --stage: #2de6ff; }
+  .stage-3 { --stage: #8a5cff; }
+  .stage-4 { --stage: #ffd15c; }
+  .stage-5 { --stage: #39e58c; }
+</style>
+<h1>평가 현황판 5,000칸 렌더 시험</h1>
+<div class="board"></div>
+<pre id="result" aria-live="polite">측정 중…</pre>
+<script type="module">
+  const board = document.querySelector(".board");
+  const labels = ["검사대기", "검사완료", "리뷰대기", "분류대기", "분류완료", "정리완료"];
+  const equipment = Array.from({length: 10}, (_, i) => "EQ-A" + String(i + 1).padStart(2, "0"));
+  const rows = Array.from({length: 500}, (_, i) => ({
+    lot: "LOT-TEST-" + String(Math.floor(i / 25) + 1).padStart(3, "0"),
+    wafer: i % 25 + 1,
+    cells: equipment.map((_, j) => ({stage: (i + j) % labels.length, minutes: 10 + (i + j) % 20})),
+  }));
+  const nextFrame = () => new Promise(requestAnimationFrame);
+  const measure = async (update) => {
+    await nextFrame();
+    const start = performance.now();
+    update();
+    board.getBoundingClientRect();
+    // Wait past the rendering opportunity for the DOM change before reading the clock.
+    await nextFrame();
+    await nextFrame();
+    return Math.round(performance.now() - start);
+  };
+  const render = () => {
+    const header = equipment.map(name => `<th scope="col">${name}</th>`).join("");
+    const body = rows.map(row => {
+      const cells = row.cells.map(cell =>
+        `<td class="stage-${cell.stage}">${labels[cell.stage]} · ${cell.minutes}분</td>`
+      ).join("");
+      return `<tr><th scope="row">${row.lot} / ${row.wafer}</th>${cells}</tr>`;
+    }).join("");
+    board.innerHTML = `<table aria-label="합성 평가 현황판"><thead><tr><th scope="col">Lot / 웨이퍼</th>${header}</tr></thead><tbody>${body}</tbody></table>`;
+  };
+  const renders = [];
+  const updates = [];
+  for (let i = 0; i < 10; i++) {
+    renders.push(await measure(render));
+    const cells = [...board.querySelectorAll("td")];
+    if (cells.length !== 5000) throw new Error("Expected a full board of 5,000 cells");
+    updates.push(await measure(() => {
+      for (const cell of cells.slice(0, 250)) {
+        cell.className = "stage-5";
+        cell.textContent = labels[5] + " · 20분";
+      }
+    }));
+  }
+  document.querySelector("#result").textContent = JSON.stringify({
+    viewport: innerWidth, cells: 5000, rendersMs: renders, updates250Ms: updates,
+  }, null, 2);
+</script>
+</html>
