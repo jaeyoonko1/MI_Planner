@@ -152,6 +152,12 @@ ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")]
      "Alt+Down moves a plain parent with its child");
   editor.remove();
 }
+{
+  const md = "# 왼쪽\r\n\r\n<!-- column -->\n\n```md\n<!-- column -->\n```\n\n오른쪽\n";
+  const editor = load(md);
+  editor.querySelector("h1").append(" 수정");
+  ok(htmlToMd(editor) === md.replace("왼쪽", "왼쪽 수정"), "column boundary and fenced example survive edits");
+}
 const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");
 </script>

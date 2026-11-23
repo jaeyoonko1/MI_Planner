@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from app import db, memo, placement
 from app.vault import Vault
@@ -30,6 +30,20 @@ class PageUpdate(BaseModel):
 
 class PageContent(BaseModel):
     content: str
+
+
+Percent = Annotated[int, Field(strict=True, gt=0, le=100)]
+
+
+class NoteLayout(BaseModel):
+    mode: Literal["fit", "scroll"]
+    widths: Annotated[list[Percent], Field(min_length=2, max_length=4)] | None = None
+
+    @model_validator(mode="after")
+    def check_total(self) -> NoteLayout:
+        if self.widths is not None and sum(self.widths) != 100:
+            raise ValueError("단 너비 비율의 합은 100이어야 합니다.")
+        return self
 
 
 def _relink(request: Request, fn) -> None:
@@ -69,6 +83,13 @@ def write_page(request: Request, path: str, body: PageContent) -> dict:
     if holder[0] is not None:  # issue page: keep the issue's mirrored memo identical
         _relink(request, lambda c: memo.after_page_write(c, holder[0], body.content))
     return page
+
+
+@router.put("/layout")
+def write_note_layout(request: Request, path: str, body: NoteLayout) -> dict:
+    layout = body.model_dump(exclude_none=True)
+    _vault(request).set_note_layout(path, layout)
+    return {"note_layout": layout}
 
 
 @router.post("/files")

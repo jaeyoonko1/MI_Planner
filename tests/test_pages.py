@@ -52,6 +52,43 @@ def test_note_preserves_mixed_line_endings(client) -> None:
     assert stored.read_bytes() == updated.encode("utf-8")
 
 
+def test_note_layout_round_trip_without_rewriting_markdown(client) -> None:
+    path = {"path": "columns"}
+    client.post("/api/pages", json={"title": "columns"})
+    content = "# 왼쪽\r\n\r\n<!-- column -->\r\n\r\n# 오른쪽\r\n"
+    client.put("/api/pages", params=path, json={"content": content})
+    assert "note_layout" not in client.get("/api/pages", params=path).json()["meta"]
+    layout = {"mode": "scroll", "widths": [30, 70]}
+    saved = client.put("/api/pages/layout", params=path, json=layout)
+    assert saved.json() == {"note_layout": layout}
+    assert (client.vault_dir / "columns" / "index.md").read_bytes() == content.encode("utf-8")
+    client.put("/api/pages", params=path, json={"content": content.replace("오른쪽", "수정")})
+    page = client.patch("/api/pages", params=path, json={"title": "renamed"}).json()
+    assert client.get("/api/pages", params={"path": page["path"]}).json()["meta"]["note_layout"] == layout
+
+
+@pytest.mark.parametrize("layout", [
+    {"mode": "invalid", "widths": [50, 50]},
+    {"mode": "fit", "widths": [30, 60]},
+    {"mode": "fit", "widths": [0, 100]},
+    {"mode": "fit", "widths": [100]},
+    {"mode": "fit", "widths": [20, 20, 20, 20, 20]},
+    {"mode": "fit", "widths": ["50", 50]},
+])
+def test_note_layout_rejects_invalid_values(client, layout) -> None:
+    client.post("/api/pages", json={"title": "columns"})
+    path = {"path": "columns"}
+    assert client.put("/api/pages/layout", params=path, json=layout).status_code == 422
+    assert "note_layout" not in client.get("/api/pages", params=path).json()["meta"]
+
+
+def test_note_layout_rejects_other_page_types(client) -> None:
+    client.post("/api/pages", json={"title": "html", "type": "html"})
+    layout = {"mode": "fit"}
+    assert client.put("/api/pages/layout", params={"path": "html"}, json=layout).status_code == 400
+    assert client.put("/api/pages/layout", params={"path": "missing"}, json=layout).status_code == 404
+
+
 def test_rename_move_order(client) -> None:
     client.post("/api/pages", json={"title": "a"})
     client.post("/api/pages", json={"title": "b"})

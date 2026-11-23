@@ -5,6 +5,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,6 +44,7 @@ class Vault:
     def __init__(self, root: Path = DEFAULT_VAULT_PATH) -> None:
         self.root = root
         self.trash = root / ".trash"
+        self._page_lock = RLock()
         root.mkdir(parents=True, exist_ok=True)
 
     # ---- path handling -------------------------------------------------
@@ -59,16 +61,16 @@ class Vault:
     def _rel(self, path: Path) -> str:
         return path.relative_to(self.root).as_posix()
 
-    @staticmethod
-    def _read_meta(page_dir: Path) -> dict[str, Any]:
-        return json.loads((page_dir / META).read_text(encoding="utf-8"))
+    def _read_meta(self, page_dir: Path) -> dict[str, Any]:
+        with self._page_lock:
+            return json.loads((page_dir / META).read_text(encoding="utf-8"))
 
-    @staticmethod
-    def _write_meta(page_dir: Path, meta: dict[str, Any]) -> None:
-        meta["updated"] = _now()
-        (page_dir / META).write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+    def _write_meta(self, page_dir: Path, meta: dict[str, Any]) -> None:
+        with self._page_lock:
+            meta["updated"] = _now()
+            (page_dir / META).write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
 
     def _children(self, parent: Path) -> list[Path]:
         kids = [
@@ -177,11 +179,12 @@ class Vault:
         return {"path": self._rel(page), "meta": meta, "content": content}
 
     def write(self, rel: str, content: str) -> dict[str, Any]:
-        page = self._dir(rel)
-        meta = self._read_meta(page)
-        (page / _content_file(meta.get("type", "note"))).write_bytes(content.encode("utf-8"))
-        self._write_meta(page, meta)
-        return self.read(rel)
+        with self._page_lock:
+            page = self._dir(rel)
+            meta = self._read_meta(page)
+            (page / _content_file(meta.get("type", "note"))).write_bytes(content.encode("utf-8"))
+            self._write_meta(page, meta)
+            return self.read(rel)
 
     # ---- attachments (pasted images) -------------------------------------
     @staticmethod
@@ -270,43 +273,57 @@ class Vault:
                     dest.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(f, dest / f.name)
 
+    def set_note_layout(self, rel: str, layout: dict[str, Any]) -> None:
+        with self._page_lock:
+            page = self._dir(rel)
+            if page == self.root:
+                raise VaultError("루트는 바꿀 수 없습니다.")
+            meta = self._read_meta(page)
+            if meta.get("type") != "note":
+                raise VaultError("단 배치는 노트 페이지에만 적용할 수 있습니다.")
+            meta["note_layout"] = layout
+            self._write_meta(page, meta)
+
     def set_meta(self, rel: str, **values: Any) -> None:
         """Add/replace keys in _page.json (used for the memo-unification stamp)."""
-        page = self._dir(rel)
-        meta = self._read_meta(page)
-        meta.update(values)
-        self._write_meta(page, meta)
+        with self._page_lock:
+            page = self._dir(rel)
+            meta = self._read_meta(page)
+            meta.update(values)
+            self._write_meta(page, meta)
 
     def update(self, rel: str, *, title: str | None = None, parent: str | None = None,
                order: int | None = None) -> dict[str, Any]:
-        page = self._dir(rel)
-        if page == self.root:
-            raise VaultError("루트는 바꿀 수 없습니다.")
-        meta = self._read_meta(page)
-        target_parent = page.parent
-        if parent is not None:
-            target_parent = self._dir(parent)
-            if target_parent == page or page in target_parent.parents:
-                raise VaultError("자기 하위로 옮길 수 없습니다.")
-        name = page.name
-        if title is not None:
-            name = _safe_name(title)
-            meta["title"] = title.strip()
-        if order is not None:
-            meta["order"] = order
-        dest = page
-        if target_parent != page.parent or name != page.name:
-            dest = self._unique_dir(target_parent, name)
-            shutil.move(str(page), str(dest))
-        self._write_meta(dest, meta)
-        return self.read(self._rel(dest))
+        with self._page_lock:
+            page = self._dir(rel)
+            if page == self.root:
+                raise VaultError("루트는 바꿀 수 없습니다.")
+            meta = self._read_meta(page)
+            target_parent = page.parent
+            if parent is not None:
+                target_parent = self._dir(parent)
+                if target_parent == page or page in target_parent.parents:
+                    raise VaultError("자기 하위로 옮길 수 없습니다.")
+            name = page.name
+            if title is not None:
+                name = _safe_name(title)
+                meta["title"] = title.strip()
+            if order is not None:
+                meta["order"] = order
+            dest = page
+            if target_parent != page.parent or name != page.name:
+                dest = self._unique_dir(target_parent, name)
+                shutil.move(str(page), str(dest))
+            self._write_meta(dest, meta)
+            return self.read(self._rel(dest))
 
     def delete(self, rel: str) -> str:
-        page = self._dir(rel)
-        if page == self.root:
-            raise VaultError("루트는 삭제할 수 없습니다.")
-        self.trash.mkdir(exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        dest = self._unique_dir(self.trash, f"{stamp}_{page.name}")
-        shutil.move(str(page), str(dest))
+        with self._page_lock:
+            page = self._dir(rel)
+            if page == self.root:
+                raise VaultError("루트는 삭제할 수 없습니다.")
+            self.trash.mkdir(exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            dest = self._unique_dir(self.trash, f"{stamp}_{page.name}")
+            shutil.move(str(page), str(dest))
         return dest.relative_to(self.root).as_posix()
