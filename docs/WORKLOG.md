@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-06
+- 한 일: **통합 검증**. 자동 시나리오 `tests/test_integration_e2e.py`(입력 줄→승격→분류 변경·자유 배치 이동·복사→페이지 확장(두 번째는 기존 페이지)→메모·이미지→앱 재시작 두 번→전부 유지), 001 DB(기존 데이터)에 마이그레이션 전부 적용 호환, `web/`(디자인·테스트 페이지 제외)에 외부 URL·`@import`·프로토콜 상대 링크 없음, `index.html`은 로컬 자산만, `run.bat` 127.0.0.1 전용. **브라우저 점검**(격리 DB·vault, 1024·1280px × 다크·라이트 × 컴팩트·기본·여유 × 오늘/할일/주간/구조/분류 관리): 가로 넘침 없음, 버튼·입력 이름 누락 없음, Tab 포커스 링 표시, 구조 모달 Esc 닫힘+열기 버튼으로 포커스 복귀·`aria-labelledby`. **수정**: 라이트 테마 보조 글자색(`--dim` 3.2~3.8:1→#5f6b82)·노랑(`--yellow` 4.05:1→#8a5800)을 4.5:1 이상으로, 할일 제목 Shift+Enter=상세(키보드만으로 상세를 열 수 없던 문제, 제목 `role=button`), **위치 규칙 탭 저장 안 한 변경 경고**(`leaveguard.js`: 화면 이동 확인 창·"취소"면 이전 주소 복원, 새로고침·닫기는 beforeunload), **이슈 삭제 시 `.issue-files/<id>`를 `.trash/`로 이동**(id 재사용 시 이전 이미지 상속 방지). 회사 PC 점검표 `docs/COMPANY_PC_CHECKLIST.md` 작성.
+- 바뀐 파일: tests/test_integration_e2e.py(신규), web/(js/leaveguard.js 신규, main.js, rules.js, taskrow.js, todos.js, css/theme.css), app/(vault.py, routers/tasks.py), docs/(COMPANY_PC_CHECKLIST.md 신규, WORKLOG), project_flow.html.
+- 테스트: pytest 134 passed(신규 6). 브라우저에서 규칙 초안→이동 시 확인 창·Esc로 복귀·"저장하지 않고 이동" 동작, Shift+Enter 상세 열림 확인. 대비는 스크립트로 계산(글자 대 배경 4.5:1 / 큰 글자 3:1, 수정 후 라이트·다크 전 화면 위반 0).
+- 다음에 할 것 / 막힌 것:
+  - **회사에서만 확인 가능**: 실제 Edge/웨일 단축키 가로채기·클립보드 붙여넣기·마우스 끌기·IME 조합·배율 125%·백신/프록시·오프라인 `pip install` (점검표 6장).
+  - 이미지 삽입의 Ctrl+Z 한 번 되돌리기는 미해결(DOM 직접 삽입, 범위 밖으로 남김). 두 화면 동시 편집 충돌 감지, 이슈 삭제 시 페이지 고아(`task_id`만 남음), 규칙 순서 끌기, 자유 배치 이동 되돌리기, 이슈 제목 변경 시 페이지 제목 미갱신은 그대로.
+  - 일지 줄 편집기의 작은 클릭 대상(체크 17px·접기 16px)은 밀도 설계상 유지. 스크린리더 실사용 확인 안 함. 미리보기 캡처가 모달을 크롭해 모달 확인은 DOM 상태(modal·focus)로 함.
+  - 다음 flow 작업: P2-07(회사 PC 1주일 실사용, 사람이 직접)과 이후 P3/P4.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-10
 - 한 일: **메모 = 페이지 본문 (D-29)** — 페이지가 있는 이슈는 `index.md`가 유일한 원본, `tasks.note`는 거울(`app/memo.py`: 읽기 `GET /api/todos/{id}`·쓰기 `PATCH note`·`PUT /api/pages`가 서로 맞춤, 앱 밖 파일 수정은 다음 읽기에서 반영). **기존 어긋난 메모/본문**은 서버 시작 시·첫 읽기·쓰기 직전에 한 번 병합(한쪽 비었거나 포함이면 그대로, 다르면 `## 통합 전 이슈 메모`로 이어 붙이고 원문은 `_page.json.memo_before_merge`; `memo_unified` 표시), 상세 패널을 열 때 토스트로 알림. **편집기 공용화**: `note.js`를 `mountEditor`(페이지·상세 메모 겸용)로 분리 — 상세 패널의 textarea를 같은 위지윅으로 교체(포커스 때만 서식 툴바가 펼쳐짐, 저장 상태·재시도 토스트, 열려 있는 두 화면은 한쪽 저장 후 다른 쪽이 바쁘지 않으면 자동 갱신). **이미지**: 붙여넣기/끌어놓기 → 자기 블록으로 삽입, 호버·클릭·키보드 선택 시 크기 바(자동·소형·480·720·원본 칩 + px 입력 + 원본 해상도 + 모서리 끌기 핸들), 저장은 `![](files/x.png){size=small|orig}` / `{width=480}`(자동은 접미사 없음, 본문 폭 초과 시 본문 폭으로 제한). 페이지 없는 이슈의 이미지는 `vault/.issue-files/<id>/`, 페이지가 생기면 `files/`로 이동(참조 불변). **접힘**: 제목 아래 섹션을 화살표·"모두 접기"·Ctrl+Shift+[ / ]로 접고, 상태는 `settings.memo_folds`(`t:<이슈id>`; 이슈 메모와 이슈 페이지가 같은 범위)에만 저장 — 파일·`_page.json`은 안 건드림. 이슈 복사 시 이미지도 복사.
 - 바뀐 파일: app/(memo.py 신규, vault.py, placement.py, main.py, routers/tasks·task_pages·pages·structure·settings.py), web/(js/memocore.js·foldstore.js 신규, note.js 재작성, mdconv.js, inspector.js, api.js, css/note.css·screens.css), web/test/(run_memo.mjs 신규, mdconv.html), tests/(test_memo_unify.py 신규, test_lineeditor_js.py, test_issue_pages.py 기대값 1줄: 메모=본문), docs/(SPEC, DECISIONS D-29), project_flow.html.

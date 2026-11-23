@@ -230,6 +230,17 @@ class Vault:
     def issue_file_path(self, task_id: int, name: str) -> Path:
         return self._image(self._issue_dir(task_id), name)
 
+    def trash_issue_files(self, task_id: int) -> str | None:
+        """The issue is gone: move its leftover image folder to .trash/ (never deleted outright)."""
+        src = self._issue_dir(task_id)
+        if not src.is_dir():
+            return None
+        self.trash.mkdir(exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        dest = self._unique_dir(self.trash, f"{stamp}_issue-files-{int(task_id)}")
+        shutil.move(str(src), str(dest))
+        return dest.relative_to(self.root).as_posix()
+
     def adopt_issue_files(self, task_id: int, page_rel: str) -> None:
         """The issue got a page: its images move into <page>/files/ (markdown refs `files/x` stay valid)."""
         src = self._issue_dir(task_id)

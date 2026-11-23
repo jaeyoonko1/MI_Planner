@@ -3,6 +3,7 @@
 // Choices are buttons and chips (D-12). Per-rule match counts / examples come from the server, computed
 // from the unsaved draft, so the effect is visible before saving. Saved rules never move existing pages.
 import { api } from "./api.js";
+import { setLeaveGuard } from "./leaveguard.js";
 import { openPageSheet } from "./pagedialog.js";
 import { button } from "./sheet.js";
 import { toast } from "./toast.js";
@@ -31,6 +32,7 @@ export async function renderRules(host, { reload }) {
   let fallback = saved.fallback;
   const baseline = () => JSON.stringify([saved.rules, saved.fallback]);
   const dirty = () => JSON.stringify([rules, fallback]) !== baseline();
+  setLeaveGuard(dirty); // leaving with an unsaved draft asks first (cleared by main.js on route change)
   let overview = await api.rulesOverview().catch(() => ({ rules: [], pages: [], fallbacks: [] }));
   let tray = null; // { r, c, part }
   let busy = false;

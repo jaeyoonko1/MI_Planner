@@ -42,7 +42,8 @@ export function taskRow(t, opts = {}) {
   if (t.mark === "urgent") title.append(el("span", "tmark urgent", "!"));
   title.append(titleText);
   title.tabIndex = 0;
-  title.title = "클릭해서 이름 바꾸기 · 더블클릭하면 상세";
+  title.setAttribute("role", "button");
+  title.title = "클릭해서 이름 바꾸기 · 더블클릭 또는 Shift+Enter로 상세";
   const rename = () => {
     if (row.querySelector(".ttitle-edit")) return;
     const input = el("input", "ttitle-edit");
@@ -69,7 +70,12 @@ export function taskRow(t, opts = {}) {
     input.select();
   };
   title.addEventListener("click", (e) => { if (e.detail === 1) rename(); });
-  title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); rename(); } });
+  title.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    if (e.shiftKey) openInspector(t.id); // keyboard path to the detail panel (DESIGN: Shift+Enter = detail)
+    else rename();
+  });
   row.addEventListener("dblclick", (e) => {
     if (e.target.closest(".check")) return;
     row.querySelector(".ttitle-edit")?.blur(); // the first click of the double click started a rename

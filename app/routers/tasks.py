@@ -150,4 +150,8 @@ def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get
 def delete_todo(request: Request, task_id: int, conn=Depends(get_conn)) -> dict:
     before = repo.get(conn, task_id)
     repo.delete(conn, task_id)
+    try:  # leftover pre-page images go to .trash/ so a reused id never inherits them
+        request.app.state.vault.trash_issue_files(task_id)
+    except OSError:
+        pass
     return {"ok": True, "journal_days": journal_links.after_task_change(request.app.state.vault, before, None)}

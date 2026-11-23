@@ -9,6 +9,8 @@ import { renderToday } from "./today.js";
 import { renderWeek } from "./week.js";
 import { renderStructure } from "./structure.js";
 import { hub } from "./hub.js";
+import { hasUnsaved, setLeaveGuard } from "./leaveguard.js";
+import { confirmSheet } from "./sheet.js";
 import { newTaskPage } from "./pagedialog.js";
 import { closeInspector, openInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
@@ -107,6 +109,7 @@ async function openMonth(month) {
 }
 
 async function route() {
+  setLeaveGuard(null); // a screen with a draft registers itself again when it renders
   await flushNote(); // save a pending note edit before the view is replaced
   closeInspector();
   hub.reset(); // the previous view's editors and listeners are about to disappear
@@ -250,6 +253,22 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
   newTaskPage();
 });
-window.addEventListener("hashchange", route);
+// Leaving a screen with an unsaved draft (rules tab): ask first; "계속 편집" restores the previous address.
+let settledHash = location.hash;
+let restoring = false;
+window.addEventListener("hashchange", async () => {
+  if (restoring) { restoring = false; return; }
+  if (hasUnsaved()) {
+    const leave = await confirmSheet({
+      title: "저장하지 않은 변경이 있어요",
+      content: [el("p", "", "이 화면에서 고친 내용은 저장하지 않으면 사라져요.")],
+      confirmLabel: "저장하지 않고 이동",
+      danger: true,
+    });
+    if (!leave) { restoring = true; location.hash = settledHash; return; }
+  }
+  settledHash = location.hash;
+  route();
+});
 
 refreshTree().then(route).catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));

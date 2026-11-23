@@ -33,7 +33,7 @@ export async function renderTodos(container) {
   const listBox = el("div", "tlist");
   const panel = el("section", "panel");
   const foot = el("div", "panel-foot");
-  foot.append(el("span", "", "클릭 · 이름 바꾸기"), el("span", "", "더블클릭 · 상세"), el("span", "", "체크 → 일지 ☑"), el("span", "", "N · 새 할일"));
+  foot.append(el("span", "", "클릭 · 이름 바꾸기"), el("span", "", "더블클릭 · Shift+Enter · 상세"), el("span", "", "체크 → 일지 ☑"), el("span", "", "N · 새 할일"));
   panel.append(listBox, foot);
   const qa = await mountQuickAdd(container, { onAdded: () => load() });
   qa.el.remove();
