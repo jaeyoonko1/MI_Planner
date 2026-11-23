@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P4-03
+- 한 일: 평가 현황판 및 페이지 추가에서 4단계 평가 마법사를 연결했다. 템플릿 복사, 설비·Lot·웨이퍼 붙여넣기, 마우스·키보드 조합 제외, board 페이지 생성과 재열기를 구현했다. 새 칸은 단계 미배정으로 만들고 제외 칸도 보존한다.
+- 한 일: 007에서 요청 ID를 저장해 응답 유실 후 재시도와 동시 제출의 중복 생성을 막는다. 정상 오류 경로에서 DB 변경을 되돌리고 신규 파일은 휴지통으로만 옮긴다. 페이지 이동과 휴지통 처리 시 평가의 페이지 링크도 갱신한다.
+- 바뀐 파일: migrations/007_evaluation_requests.sql, app/(main, placement, vault).py, app/(repositories, routers)/evaluations.py, web/index.html, web/js/(api, main, evaluation-input, evaluations).js, web/css/evaluations.css, web/test/run_evaluation_input.mjs, tests/(test_evaluation_creation, test_db, test_task_fields).py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 167 passed. Edge 1024/1280px에서 기본·다른 템플릿, 마법사 입력 검증, 엑셀 두 열·공백/쉼표 붙여넣기, 제외 클릭·방향키·Space, 저장·새로고침, 페이지 추가·Esc 취소를 임시 데이터로 확인했다. DB 연결 실패·페이지 파일 쓰기 실패를 주입해 생성된 것만 정리되는 것도 확인했다.
+- 다음에 할 것 / 막힌 것: P4-04에서 `GET /api/evaluations/{id}/board`와 `renderEvaluationPage` 표·보기 버튼을 연결한다. P4-05에서 최초 단계 배정과 이력 추가를 함께 처리한다. OS 강제 종료 시점의 DB/파일 복구는 별도 운영 검증이 필요하다.
+
 ## 2026-11-24 · Codex · P1-05
 - 한 일: 격리 vault에서 가짜 계층 페이지 시드를 실제 CLI로 검증했다. P3-06은 D-20에 따른 브라우저 기본 기능으로 구현하기로 했으므로 P1-05의 vendor 계획을 로컬 자산 검증으로 정리했다.
 - 바뀐 파일: AGENTS, DECISIONS, README, FLOW, WORKLOG.

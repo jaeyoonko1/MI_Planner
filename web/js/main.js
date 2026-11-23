@@ -7,6 +7,7 @@ import { flushNote, renderNote } from "./note.js";
 import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
 import { renderWeek } from "./week.js";
+import { openEvaluationWizard, renderEvaluationPage, renderEvaluations } from "./evaluations.js";
 import { renderStructure } from "./structure.js";
 import { hub } from "./hub.js";
 import { hasUnsaved, setLeaveGuard } from "./leaveguard.js";
@@ -91,6 +92,15 @@ async function refreshTree() {
   paintTree();
 }
 
+function showEvaluationWizard(parent, name) {
+  return openEvaluationWizard({
+    parent, name, onCreated: (path) => {
+      location.hash = path ? toHash(path) : "#/evaluations";
+      refreshTree().catch((error) => flash(false, error.message));
+    },
+  });
+}
+
 function showScreen(name) {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.screen === name));
 }
@@ -123,12 +133,15 @@ async function route() {
   }
   const isMonth = path && MONTH_PAGE.test(path);
   const struct = screen.match(/^structure(?:\/(classes|rules))?$/);
-  const name = screen === "todos" || screen === "today" ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
+  const name = ["todos", "today", "evaluations"].includes(screen) ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
   showScreen(name);
-  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : struct ? ["구조", ...(struct[1] ? [struct[1] === "rules" ? "페이지 위치 규칙" : "분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : screen === "evaluations" ? ["평가 현황판"] : struct ? ["구조", ...(struct[1] ? [struct[1] === "rules" ? "페이지 위치 규칙" : "분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
   const fail = (e) => viewEl.replaceChildren(errorState(e.message, route));
   if (screen === "today") {
     return renderToday(viewEl).catch(fail);
+  }
+  if (screen === "evaluations") {
+    return renderEvaluations(viewEl, { onAdd: () => showEvaluationWizard(), pageHref: toHash }).catch(fail);
   }
   if (struct) {
     return renderStructure(viewEl, struct[1] || "tree").catch(fail);
@@ -192,6 +205,11 @@ function showPage(page) {
     renderHtmlPage(body, page).catch((e) => body.replaceChildren(el("p", "error", e.message)));
     return;
   }
+  if (page.meta.type === "board" && page.meta.eval_id) {
+    showScreen("evaluations");
+    renderEvaluationPage(body, page, route);
+    return;
+  }
   const month = page.path.split("/").pop();
   if (page.meta.type === "journal" && /^\d{4}-\d{2}$/.test(month)) {
     body.className = "journal";
@@ -217,6 +235,7 @@ function showAddForm(parent) {
   cancel.addEventListener("click", route);
   async function submit() {
     try {
+      if (types.getValue() === "board") return showEvaluationWizard(parent, input.value);
       const page = await api.create(parent, input.value, types.getValue());
       await refreshTree();
       location.hash = toHash(page.path);

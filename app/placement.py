@@ -383,18 +383,24 @@ def relocate(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dic
 # ---------- keeping links right when pages move / disappear through the page tree ----------
 
 def repoint(conn: sqlite3.Connection, old: str, new: str) -> None:
-    """A page (and everything below it) moved: update every issue link that pointed into it. No commit."""
+    """Update cached page paths for issues and evaluations in the moved subtree. No commit."""
     n = len(old)
-    conn.execute(
-        "UPDATE tasks SET page_path = ? || substr(page_path, ?) WHERE page_path = ? OR substr(page_path, 1, ?) = ?",
-        (new, n + 1, old, n + 1, old + "/"))
+    for table in ("tasks", "evaluations"):
+        conn.execute(
+            f"UPDATE {table} SET page_path = ? || substr(page_path, ?) "
+            "WHERE page_path = ? OR substr(page_path, 1, ?) = ?",
+            (new, n + 1, old, n + 1, old + "/"),
+        )
 
 
 def unlink(conn: sqlite3.Connection, old: str) -> None:
-    """A page (and below) went to the trash: those issues are back to 'no page'. No commit."""
+    """Clear cached page paths after the page subtree moves to trash. No commit."""
     n = len(old)
-    conn.execute("UPDATE tasks SET page_path = NULL WHERE page_path = ? OR substr(page_path, 1, ?) = ?",
-                 (old, n + 1, old + "/"))
+    for table in ("tasks", "evaluations"):
+        conn.execute(
+            f"UPDATE {table} SET page_path = NULL WHERE page_path = ? OR substr(page_path, 1, ?) = ?",
+            (old, n + 1, old + "/"),
+        )
 
 
 # ---------- overview for the rule editor ----------

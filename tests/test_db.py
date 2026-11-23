@@ -7,7 +7,7 @@ from app import db
 
 def test_init_creates_tables_and_is_idempotent(tmp_path: Path) -> None:
     path = tmp_path / "t.db"
-    assert db.init_db(path) == ["001_init.sql", "002_task_fields.sql", "003_task_mark.sql", "004_structure_defaults.sql", "005_structure_free.sql", "006_evaluations.sql"]
+    assert db.init_db(path) == ["001_init.sql", "002_task_fields.sql", "003_task_mark.sql", "004_structure_defaults.sql", "005_structure_free.sql", "006_evaluations.sql", "007_evaluation_requests.sql"]
     assert db.init_db(path) == []
     conn = db.connect(path)
     names = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}

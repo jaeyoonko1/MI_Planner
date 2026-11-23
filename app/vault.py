@@ -111,16 +111,24 @@ class Vault:
         extra_meta adds keys (e.g. task_id for an issue page) to the very first _page.json write."""
         if page_type not in PAGE_TYPES:
             raise VaultError("알 수 없는 페이지 종류입니다.")
-        parent_dir = self._dir(parent)
-        folder = self._unique_dir(parent_dir, _safe_name(folder_name or title))
-        folder.mkdir()
-        siblings = [self._read_meta(d).get("order", 0) for d in self._children(parent_dir) if d != folder]
-        now = _now()
-        meta = {"type": page_type, "title": title.strip(), "order": max(siblings, default=-1) + 1,
-                "created": now, **(extra_meta or {})}
-        self._write_meta(folder, meta)
-        (folder / _content_file(page_type)).write_text("", encoding="utf-8")
-        return self.read(self._rel(folder))
+        with self._page_lock:
+            parent_dir = self._dir(parent)
+            folder = self._unique_dir(parent_dir, _safe_name(folder_name or title))
+            folder.mkdir()
+            try:
+                siblings = [self._read_meta(d).get("order", 0) for d in self._children(parent_dir) if d != folder]
+                now = _now()
+                meta = {"type": page_type, "title": title.strip(), "order": max(siblings, default=-1) + 1,
+                        "created": now, **(extra_meta or {})}
+                self._write_meta(folder, meta)
+                (folder / _content_file(page_type)).write_text("", encoding="utf-8")
+                return self.read(self._rel(folder))
+            except Exception as error:
+                try:
+                    self._move_to_trash(folder)
+                except OSError as cleanup_error:
+                    error.add_note(f"Could not move the incomplete page to trash: {cleanup_error}")
+                raise
 
     # ---- issue pages / placement support (P2B-09) ---------------------------
     def unique_name(self, parent: str, name: str) -> str:
@@ -317,13 +325,20 @@ class Vault:
             self._write_meta(dest, meta)
             return self.read(self._rel(dest))
 
-    def delete(self, rel: str) -> str:
+    def delete(self, rel: str, *, expected_meta: dict[str, Any] | None = None) -> str:
         with self._page_lock:
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 삭제할 수 없습니다.")
-            self.trash.mkdir(exist_ok=True)
-            stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            dest = self._unique_dir(self.trash, f"{stamp}_{page.name}")
-            shutil.move(str(page), str(dest))
-        return dest.relative_to(self.root).as_posix()
+            if expected_meta is not None:
+                meta = self._read_meta(page)
+                if any(meta.get(key) != value for key, value in expected_meta.items()):
+                    raise VaultError("원래 페이지와 일치하지 않습니다.", 409)
+            return self._rel(self._move_to_trash(page))
+
+    def _move_to_trash(self, page: Path) -> Path:
+        self.trash.mkdir(exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        dest = self._unique_dir(self.trash, f"{stamp}_{page.name}")
+        shutil.move(str(page), str(dest))
+        return dest

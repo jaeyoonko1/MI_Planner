@@ -1,0 +1,34 @@
+.sheet:has(.eval-steps) .sheet-b { display: grid; gap: 10px; }
+.sheet:has(.eval-steps) .sheet-b h3, .sheet:has(.eval-steps) .sheet-b p { margin: 0; }
+.eval-hero .eyebrow { color: var(--violet); }
+.eval-list { display: grid; gap: 8px; }
+.eval-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.eval-row a { color: var(--text); font-weight: 700; text-underline-offset: 4px; }
+.eval-row a:hover { color: var(--cyan); }
+.eval-row p, .eval-board-summary p { margin: 4px 0 0; }
+.eval-steps { display: flex; gap: 6px; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; }
+.eval-steps li { padding: 5px 8px; border-radius: 7px; font-size: 12px; color: var(--muted); }
+.eval-steps li[aria-current] { background: var(--vio-bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--vio-bd); }
+.eval-field { display: grid; gap: 6px; min-width: 0; }
+.eval-field small, .eval-template-preview small { display: block; line-height: 1.5; }
+.eval-field input, .eval-field textarea {
+  width: 100%; min-width: 0; font: inherit; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid var(--line-2); color: var(--text); background: var(--panel-2);
+}
+.eval-field textarea { font-family: var(--mono); resize: vertical; }
+.eval-template-preview { display: grid; gap: 7px; }
+.eval-template-preview ol { margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; list-style: none; }
+.eval-template-preview li {
+  padding: 4px 8px; font-size: 12px; border: 1px solid var(--line); border-left: 3px solid var(--stage-color);
+  background: var(--panel-2); border-radius: 6px;
+}
+.eval-count { margin: 0; font-weight: 650; }
+.eval-error:empty { display: none; }
+.eval-matrix { max-height: min(42vh, 360px); overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.eval-matrix table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
+.eval-matrix td, .eval-matrix th { padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.eval-matrix thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; color: var(--text); }
+.eval-matrix tbody th { font-weight: 500; white-space: nowrap; text-align: left; }
+.eval-matrix td { text-align: center; }
+.eval-matrix input { width: 18px; height: 18px; accent-color: var(--blue); }
+.eval-matrix input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
