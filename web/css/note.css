@@ -1,0 +1,16 @@
+/* note editor (P3-02). Loaded by note.js on first use. */
+.note-host { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.note-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: -24px; background: var(--panel); border-radius: 8px 8px 0 0; z-index: 1; }
+.note-bar .chip { border-radius: 6px; padding: 2px 10px; }
+.note-editor { padding: 14px 18px; min-height: 360px; outline: none; line-height: 1.7; }
+.note-editor h1 { font-size: 24px; margin: 14px 0 6px; }
+.note-editor h2 { font-size: 20px; margin: 12px 0 6px; }
+.note-editor h3 { font-size: 17px; margin: 10px 0 4px; }
+.note-editor img { max-width: 100%; border-radius: 4px; }
+.note-editor code { background: var(--bg); border-radius: 4px; padding: 0 4px; font-family: Consolas, monospace; }
+.note-editor ul, .note-editor ol { margin: 4px 0; padding-left: 24px; }
+.note-editor ul.cl { list-style: none; padding-left: 4px; }
+.note-editor ul.cl > li { position: relative; padding-left: 26px; }
+.note-editor ul.cl > li::before { content: "☐"; position: absolute; left: 0; cursor: pointer; color: var(--muted); }
+.note-editor ul.cl > li[data-chk="1"]::before { content: "☑"; color: var(--accent); }
+.note-editor ul.cl > li[data-chk="1"] { color: var(--muted); text-decoration: line-through; }

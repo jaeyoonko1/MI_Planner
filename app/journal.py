@@ -92,6 +92,38 @@ def get_month(vault: Vault, month: str) -> dict:
     return {"month": month, "path": path, "days": days}
 
 
+_CHECKBOX = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s?)(.*)$")
+LINK_MARK = "→ 할일 #"
+
+
+def promote_line(vault: Vault, day: str, line_index: int, create_task) -> dict:
+    """Turn a checkbox line of `day` into a task and leave a link on the line.
+
+    `create_task(title) -> task dict` is injected so this module stays DB-free.
+    """
+    try:
+        d = date.fromisoformat(day)
+    except ValueError:
+        raise VaultError("날짜 형식은 YYYY-MM-DD 이어야 합니다.") from None
+    month = f"{d.year:04d}-{d.month:02d}"
+    path = ensure_month(vault, month)
+    text = vault.read(path)["content"]
+    _, days = parse(text)
+    lines = days.get(day, "").split("\n")
+    if not 0 <= line_index < len(lines):
+        raise VaultError("해당 줄을 찾을 수 없습니다. 화면을 새로고침하세요.", 404)
+    m = _CHECKBOX.match(lines[line_index])
+    if not m or not m.group(4).strip():
+        raise VaultError("체크박스 줄(- [ ] 내용)만 할일로 만들 수 있습니다.")
+    if LINK_MARK in m.group(4):
+        raise VaultError("이미 할일로 만든 줄입니다.")
+    title = m.group(4).strip()
+    task = create_task(title)
+    lines[line_index] = f"{m.group(1)}{m.group(2)}{m.group(3)}{title} {LINK_MARK}{task['id']}"
+    vault.write(path, set_day(text, day, "\n".join(lines)))
+    return {"task": task, **get_month(vault, month)}
+
+
 def put_day(vault: Vault, month: str, dd: int, content: str) -> dict:
     year, mm = _split_month(month)
     if not 1 <= dd <= calendar.monthrange(year, mm)[1]:

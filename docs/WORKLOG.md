@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2-04 + P2-05 + P2-06
+- 한 일: 할일 화면(#/todos: 상태·우선순위·납기·요청자 토글 칩, 검색, 빠른 추가, 상태/우선순위 클릭 순환, 제목·납기·요청자 인라인 수정, 삭제, 단축키 N). 일지 자동 표시(설정 `journal_auto_show`, 칸 아래 납기 할일 읽기 전용, 켬/끔 칩) + 체크박스 줄 → 할일 승격(`POST /api/todos/from-line`, 줄에 `→ 할일 #id` 링크). '오늘' 화면(#/today: 오늘 일지, 오늘 하기로 한 일, 납기 임박 3일, 지남, 평가 자리만)
+- 바뀐 파일: app/routers/settings.py·dashboard.py(신규), routers/journal.py·tasks.py, app/journal.py, app/main.py, web/js/todos.js·today.js(신규), main.js, journal.js, api.js, web/index.html, css/style.css, tests/test_p2_extras.py, docs/SPEC.md, project_flow.html
+- 테스트: pytest 44 passed. 브라우저에서 #/todos·#/today·월간 일지 로드와 콘솔 오류 없음 확인. 승격 버튼 클릭·인라인 수정 클릭은 사람이 확인 필요
+- 다음에 할 것 / 막힌 것:
+  - **P2-07(회사 PC 시험 설치 + 1주일 실사용)은 직접 해야 함** → P2 완료 조건
+  - 승격은 `- [ ]` 줄만, 한 번만 가능. 할일 완료 시 일지 줄 체크는 자동 반영 안 됨
+  - 평가 진행 칸·밀린 단계 요약은 P4-08/P4에서 채움
+  - app/repositories/tasks.py의 open_conn 미사용(정리 가능)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-03
 - 한 일: /api/todos CRUD + 필터(상태·우선순위 다중, 요청자, 납기 임박/지남, 하기로 한 날, 연결, 하위, 검색). 하위 할일 순환 방지. 검증 오류(422)도 {"error"} 형식으로 통일. 스키마 변경 없음(001의 tasks 사용)
 - 바뀐 파일: app/repositories/tasks.py(+__init__), app/routers/tasks.py, app/main.py(라우터·오류 핸들러), tests/test_todos.py, docs/SPEC.md, project_flow.html

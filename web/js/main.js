@@ -3,6 +3,8 @@ import { chipGroup } from "./chips.js";
 import { renderTree } from "./tree.js";
 import { renderJournal } from "./journal.js";
 import { renderHtmlPage } from "./htmlpage.js";
+import { renderTodos } from "./todos.js";
+import { renderToday } from "./today.js";
 
 const treeEl = document.getElementById("tree");
 const viewEl = document.getElementById("view");
@@ -23,6 +25,7 @@ function currentPath() {
 }
 
 let treeData = [];
+let quickInput = null;
 
 function paintTree() {
   renderTree(treeEl, treeData, { activePath: currentPath(), onAdd: showAddForm });
@@ -33,9 +36,24 @@ async function refreshTree() {
   paintTree();
 }
 
+function showScreen(name) {
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.screen === name));
+}
+
 async function route() {
   const path = currentPath();
   paintTree();
+  const screen = location.hash.replace(/^#\//, "");
+  showScreen(screen === "todos" || screen === "today" ? screen : "");
+  if (screen === "today") {
+    return renderToday(viewEl).catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));
+  }
+  if (screen === "todos") {
+    quickInput = null;
+    return renderTodos(viewEl)
+      .then((q) => { quickInput = q; })
+      .catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));
+  }
   if (!path) return showHome();
   try {
     showPage(await api.page(path));
@@ -114,6 +132,18 @@ function showAddForm(parent) {
   viewEl.replaceChildren(box);
   input.focus();
 }
+
+// N = new todo (jump to the todo screen's quick-add box)
+document.addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() !== "n" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  e.preventDefault();
+  if (location.hash === "#/todos" && quickInput) quickInput.focus();
+  else {
+    location.hash = "#/todos";
+    setTimeout(() => quickInput?.focus(), 150);
+  }
+});
 
 document.getElementById("btn-new-root").addEventListener("click", () => showAddForm(""));
 document.addEventListener("tree-changed", paintTree);

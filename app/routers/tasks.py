@@ -5,7 +5,7 @@ from typing import Iterator
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
-from app import db
+from app import db, journal
 from app.repositories import tasks as repo
 
 router = APIRouter(prefix="/api/todos")
@@ -81,6 +81,20 @@ def list_todos(
 def create_todo(body: TodoIn, conn=Depends(get_conn)) -> dict:
     data = body.model_dump(exclude_none=True)
     return repo.create(conn, data)
+
+
+class FromLine(BaseModel):
+    date: str  # journal day, YYYY-MM-DD
+    line_index: int  # 0-based line within that day's body
+
+
+@router.post("/from-line", status_code=201)
+def promote_line(request: Request, body: FromLine, conn=Depends(get_conn)) -> dict:
+    """Journal checkbox line -> task (planned_date = that day); the line keeps a link."""
+    def make(title: str) -> dict:
+        return repo.create(conn, {"title": title, "planned_date": body.date})
+
+    return journal.promote_line(request.app.state.vault, body.date, body.line_index, make)
 
 
 @router.get("/{task_id}")

@@ -11,7 +11,9 @@ from app import db
 from fastapi.exceptions import RequestValidationError
 
 from app.repositories.tasks import TaskError
+from app.routers import dashboard as dashboard_router
 from app.routers import html_pages
+from app.routers import settings as settings_router
 from app.routers import journal as journal_router
 from app.routers import pages
 from app.routers import tasks as tasks_router
@@ -36,6 +38,8 @@ def create_app(
     app.include_router(pages.router)
     app.include_router(journal_router.router)
     app.include_router(tasks_router.router)
+    app.include_router(settings_router.router)
+    app.include_router(dashboard_router.router)
 
     @app.get("/api/health")
     def health() -> dict:

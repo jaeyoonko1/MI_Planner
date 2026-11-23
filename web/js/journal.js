@@ -33,25 +33,35 @@ function weeksOf(month) {
   return weeks;
 }
 
-function bodyLines(text) {
+const LINK_MARK = "→ 할일 #";
+
+// onPromote(lineIndex) is offered for unchecked checkbox lines not yet linked to a todo.
+function bodyLines(text, onPromote) {
   const box = el("div", "jcell-body");
-  for (const line of text.split("\n")) {
+  text.split("\n").forEach((line, idx) => {
     const row = el("div", "jline");
     const m = line.match(/^\s*[-*]\s+\[([ xX])\]\s?(.*)$/);
     if (m) {
       const done = m[1] !== " ";
       row.append(el("span", "jbox", done ? "☑" : "☐"), el("span", done ? "jdone" : "", m[2]));
+      if (!done && m[2].trim() && !m[2].includes(LINK_MARK) && onPromote) {
+        const b = el("button", "jpromote", "→할일");
+        b.title = "이 줄을 할일로 만들기";
+        b.addEventListener("click", (e) => { e.stopPropagation(); onPromote(idx); });
+        row.append(b);
+      }
     } else {
       row.textContent = line;
     }
     box.append(row);
-  }
+  });
   return box;
 }
 
 export async function renderJournal(container, month) {
-  const data = await api.journal(month);
+  const [data, autoData] = await Promise.all([api.journal(month), api.journalAuto(month)]);
   const days = data.days || {};
+  let auto = autoData;
   const today = iso(new Date());
   const [y, m] = month.split("-").map(Number);
   let showWeekend = false;
@@ -65,7 +75,21 @@ export async function renderJournal(container, month) {
     "hide",
     (v) => { showWeekend = v === "show"; paintGrid(); },
   );
-  head.append(prev, el("strong", "jtitle", `${y}년 ${m}월`), next, now, toggle);
+  const autoToggle = chipGroup(
+    [{ value: "on", label: "납기 할일 표시 켬" }, { value: "off", label: "끔" }],
+    auto.enabled ? "on" : "off",
+    async (v) => {
+      try {
+        await api.putSetting("journal_auto_show", v);
+        auto = await api.journalAuto(month);
+        paintGrid();
+      } catch (e) {
+        status.className = "jstatus error";
+        status.textContent = e.message;
+      }
+    },
+  );
+  head.append(prev, el("strong", "jtitle", `${y}년 ${m}월`), next, now, toggle, autoToggle);
   prev.addEventListener("click", () => renderJournal(container, shiftMonth(month, -1)).catch(showErr));
   next.addEventListener("click", () => renderJournal(container, shiftMonth(month, 1)).catch(showErr));
   now.addEventListener("click", () => {
@@ -96,10 +120,35 @@ export async function renderJournal(container, month) {
     return chain;
   }
 
+  async function promote(key, idx) {
+    try {
+      await chain; // let pending saves land first so line indexes match the file
+      const res = await api.promoteLine(key, idx);
+      Object.keys(days).forEach((k) => delete days[k]);
+      Object.assign(days, res.days);
+      auto = await api.journalAuto(month);
+      status.className = "jstatus";
+      status.textContent = `할일 #${res.task.id} 생성됨`;
+      paintGrid();
+    } catch (e) {
+      status.className = "jstatus error";
+      status.textContent = e.message;
+    }
+  }
+
+  function autoBox(key) {
+    const items = auto.days?.[key] || [];
+    if (!items.length) return null;
+    const box = el("div", "jauto");
+    for (const t of items) box.append(el("div", "jauto-item", `⏰ ${t.title}`));
+    box.title = "납기 할일 (자동 표시, 파일에는 저장되지 않음)";
+    return box;
+  }
+
   function makeEditable(cell, key, dd) {
     const view = el("div", "jcell-view");
     const paint = () => {
-      view.replaceChildren(days[key] ? bodyLines(days[key]) : el("div", "jempty", ""));
+      view.replaceChildren(days[key] ? bodyLines(days[key], (idx) => promote(key, idx)) : el("div", "jempty", ""));
     };
     paint();
     cell.append(view);
@@ -147,7 +196,11 @@ export async function renderJournal(container, month) {
         const inMonth = d.getMonth() === m - 1;
         const cell = el("div", "jcell" + (inMonth ? "" : " out") + (key === today ? " today" : "") + (r >= 5 ? " weekend" : ""));
         cell.append(el("div", "jdate", String(d.getDate())));
-        if (inMonth) makeEditable(cell, key, d.getDate());
+        if (inMonth) {
+          makeEditable(cell, key, d.getDate());
+          const a = autoBox(key);
+          if (a) cell.append(a);
+        }
         grid.append(cell);
       }
     }

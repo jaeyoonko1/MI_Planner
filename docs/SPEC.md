@@ -188,6 +188,11 @@ vault/
   - `GET /api/todos` → `{items, requesters}`. 필터(모두 선택, AND): `status`·`priority`(쉼표 구분 다중), `requester`, `due_within=N`(오늘~N일 뒤 납기, done 제외), `overdue=true`(납기 지남, done 제외), `planned_date`, `eval_id`, `page_path`, `parent_task_id`, `top_level=true`, `q`(제목·메모 검색). 정렬: 납기 오름차순(없으면 뒤), 우선순위, id.
   - `POST /api/todos`(title 필수, 201), `GET /{id}`, `PATCH /{id}`(보낸 필드만 수정, null로 비우기 가능), `DELETE /{id}` → `{ok:true}`. 상위 할일 삭제 시 하위는 최상위로 풀림. 순환·자기 참조 거부.
   - 오류: 검증 400, 없음 404, 요청 형식 오류 422 — 모두 `{"error": "..."}`.
+- **확정(P2-05/06) API**:
+  - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off, 기본 on).
+  - `GET /api/journal/{yyyy-mm}/auto` → `{month, enabled, days: {"YYYY-MM-DD": [{id,title,status,priority,due_date}]}}` (납기가 그날이고 done 아닌 할일, 읽기 전용·파일에 쓰지 않음).
+  - `POST /api/todos/from-line` `{date, line_index}` → 201 `{task, month, path, days}`. 체크박스 줄만, 할일 `planned_date`=그 날짜, 줄 끝에 ` → 할일 #id` 추가(이미 있으면 거부). (경로는 `/api/tasks`가 아니라 `/api/todos`)
+  - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations:[]}`.
 
 ### 4.3 평가 현황판 (board 타입, P4)
 

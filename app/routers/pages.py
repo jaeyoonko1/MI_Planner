@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.vault import Vault
@@ -43,6 +44,17 @@ def read_page(request: Request, path: str) -> dict:
 @router.put("")
 def write_page(request: Request, path: str, body: PageContent) -> dict:
     return _vault(request).write(path, body.content)
+
+
+@router.post("/files")
+async def upload_file(request: Request, path: str, name: str = "image.png") -> dict:
+    """Raw-body image upload (pasted screenshots). Returns the page-relative file path."""
+    return {"file": _vault(request).save_file(path, name, await request.body())}
+
+
+@router.get("/file")
+def get_file(request: Request, path: str, name: str) -> FileResponse:
+    return FileResponse(_vault(request).file_path(path, name))
 
 
 @router.post("")

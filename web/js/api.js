@@ -20,5 +20,17 @@ export const api = {
   putState: (path, state) => request("PUT", `/api/pages/state${q(path)}`, { state }),
   journal: (month) => request("GET", `/api/journal/${encodeURIComponent(month)}`),
   saveDay: (month, dd, content) => request("PUT", `/api/journal/${encodeURIComponent(month)}/${dd}`, { content }),
+  journalAuto: (month) => request("GET", `/api/journal/${encodeURIComponent(month)}/auto`),
+  settings: () => request("GET", "/api/settings").then((d) => d.settings),
+  putSetting: (key, value) => request("PUT", `/api/settings/${key}`, { value }).then((d) => d.settings),
+  todos: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null && v !== false));
+    return request("GET", `/api/todos?${qs}`);
+  },
+  addTodo: (data) => request("POST", "/api/todos", data),
+  patchTodo: (id, data) => request("PATCH", `/api/todos/${id}`, data),
+  deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
+  promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
+  today: () => request("GET", "/api/dashboard/today"),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
 };

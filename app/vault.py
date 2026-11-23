@@ -12,6 +12,8 @@ DEFAULT_VAULT_PATH = ROOT / "vault"
 PAGE_TYPES = {"note", "html", "journal", "board", "table"}
 META = "_page.json"
 RESERVED_DIRS = {"files"}  # attachments live here, never pages
+IMAGE_EXTS = {".png", ".jpg", ".gif", ".webp", ".bmp"}  # no svg: it can carry script
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 _BAD_CHARS = re.compile(r'[\/:*?"<>|\x00-\x1f]')
 
 
@@ -135,6 +137,38 @@ class Vault:
         (page / _content_file(meta.get("type", "note"))).write_text(content, encoding="utf-8")
         self._write_meta(page, meta)
         return self.read(rel)
+
+    # ---- attachments (pasted images) -------------------------------------
+    def save_file(self, rel: str, name: str, data: bytes) -> str:
+        """Store an image under <page>/files/ and return its page-relative path."""
+        page = self._dir(rel)
+        ext = Path(name or "").suffix.lower()
+        if ext == ".jpeg":
+            ext = ".jpg"
+        if ext not in IMAGE_EXTS:
+            raise VaultError("지원하지 않는 이미지 형식입니다.")
+        if not data:
+            raise VaultError("빈 파일입니다.")
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise VaultError("이미지가 너무 큽니다 (최대 20MB).")
+        folder = page / "files"
+        folder.mkdir(exist_ok=True)
+        stem = f"img-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        target, n = folder / f"{stem}{ext}", 2
+        while target.exists():
+            target = folder / f"{stem}-{n}{ext}"
+            n += 1
+        target.write_bytes(data)
+        return f"files/{target.name}"
+
+    def file_path(self, rel: str, name: str) -> Path:
+        page = self._dir(rel)
+        if not name or name != Path(name).name or name.startswith("."):
+            raise VaultError("잘못된 파일 이름입니다.")
+        target = page / "files" / name
+        if target.suffix.lower() not in IMAGE_EXTS or not target.is_file():
+            raise VaultError("파일을 찾을 수 없습니다.", 404)
+        return target
 
     def update(self, rel: str, *, title: str | None = None, parent: str | None = None,
                order: int | None = None) -> dict[str, Any]:
