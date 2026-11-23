@@ -27,6 +27,8 @@ export const api = {
     const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null && v !== false));
     return request("GET", `/api/todos?${qs}`);
   },
+  getTodo: (id) => request("GET", `/api/todos/${id}`),
+  todoFields: () => request("GET", "/api/todos/fields?include_archived=false").then((d) => d.items),
   addTodo: (data) => request("POST", "/api/todos", data),
   patchTodo: (id, data) => request("PATCH", `/api/todos/${id}`, data),
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),

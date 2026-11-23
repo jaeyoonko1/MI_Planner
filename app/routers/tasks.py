@@ -5,7 +5,7 @@ from typing import Iterator
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
-from app import db, journal
+from app import db, journal, journal_links
 from app.repositories import tasks as repo
 
 router = APIRouter(prefix="/api/todos")
@@ -23,6 +23,7 @@ class TodoIn(BaseModel):
     page_path: str | None = None
     note: str | None = None
     props: dict | None = None
+    mark: str | None = None
 
 
 class TodoPatch(BaseModel):
@@ -37,6 +38,7 @@ class TodoPatch(BaseModel):
     page_path: str | None = None
     note: str | None = None
     props: dict | None = None
+    mark: str | None = None
 
 
 def get_conn(request: Request) -> Iterator:
@@ -66,11 +68,23 @@ def list_todos(
     parent_task_id: int | None = None,
     top_level: bool = False,
     q: str | None = None,
+    ids: str | None = Query(None, description="comma-separated task ids"),
+    planned_from: str | None = None,
+    planned_to: str | None = None,
+    due_from: str | None = None,
+    due_to: str | None = None,
+    unplanned: bool = False,
+    marked: bool = False,
+    open_only: bool = False,
 ) -> dict:
     try:
         prios = [int(p) for p in _csv(priority)]
     except ValueError:
         raise repo.TaskError("priority는 쉼표로 구분한 숫자여야 합니다.") from None
+    try:
+        id_list = [int(i) for i in _csv(ids)] if ids is not None else None
+    except ValueError:
+        raise repo.TaskError("ids는 쉼표로 구분한 숫자여야 합니다.") from None
     # user-defined fields: ?field_<key>=a,b (OR within a field, AND across fields)
     ff = {k[6:]: _csv(v) for k, v in request.query_params.items() if k.startswith("field_")}
     items = repo.list_tasks(
@@ -78,14 +92,17 @@ def list_todos(
         due_within=due_within, overdue=overdue, planned_date=planned_date,
         eval_id=eval_id, page_path=page_path, parent_task_id=parent_task_id,
         top_level=top_level, q=q, field_filters=ff or None,
+        ids=id_list, planned_from=planned_from, planned_to=planned_to, due_from=due_from,
+        due_to=due_to, unplanned=unplanned, marked=marked, open_only=open_only,
     )
     return {"items": items, "requesters": repo.requesters(conn)}
 
 
 @router.post("", status_code=201)
-def create_todo(body: TodoIn, conn=Depends(get_conn)) -> dict:
+def create_todo(request: Request, body: TodoIn, conn=Depends(get_conn)) -> dict:
     data = body.model_dump(exclude_none=True)
-    return repo.create(conn, data)
+    task = repo.create(conn, data)
+    return {**task, "journal_days": journal_links.after_task_change(request.app.state.vault, None, task)}
 
 
 class FromLine(BaseModel):
@@ -96,10 +113,19 @@ class FromLine(BaseModel):
 @router.post("/from-line", status_code=201)
 def promote_line(request: Request, body: FromLine, conn=Depends(get_conn)) -> dict:
     """Journal checkbox line -> task (planned_date = that day); the line keeps a link."""
-    def make(title: str) -> dict:
-        return repo.create(conn, {"title": title, "planned_date": body.date})
+    def make(spec: dict) -> dict:
+        return repo.create(conn, spec)
 
-    return journal.promote_line(request.app.state.vault, body.date, body.line_index, make)
+    def existing(title: str, day: str) -> dict | None:
+        key = title.casefold()
+        for t in repo.list_tasks(conn, planned_date=day, open_only=True):
+            if t["title"].strip().casefold() == key:
+                return t
+        return None
+
+    res = journal.promote_line(request.app.state.vault, body.date, body.line_index, make, existing)
+    res["tasks"] = journal_links.task_map(conn, list(res["days"].values()))
+    return res
 
 
 @router.get("/{task_id}")
@@ -108,13 +134,17 @@ def get_todo(task_id: int, conn=Depends(get_conn)) -> dict:
 
 
 @router.patch("/{task_id}")
-def patch_todo(task_id: int, body: TodoPatch, conn=Depends(get_conn)) -> dict:
+def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get_conn)) -> dict:
     # fields_set lets clients clear a field by sending null explicitly
     data = {k: getattr(body, k) for k in body.model_fields_set}
-    return repo.update(conn, task_id, data)
+    before = repo.get(conn, task_id)
+    task = repo.update(conn, task_id, data)
+    # the linked journal line follows the task (title, check, mark, planned day)
+    return {**task, "journal_days": journal_links.after_task_change(request.app.state.vault, before, task)}
 
 
 @router.delete("/{task_id}")
-def delete_todo(task_id: int, conn=Depends(get_conn)) -> dict:
+def delete_todo(request: Request, task_id: int, conn=Depends(get_conn)) -> dict:
+    before = repo.get(conn, task_id)
     repo.delete(conn, task_id)
-    return {"ok": True}
+    return {"ok": True, "journal_days": journal_links.after_task_change(request.app.state.vault, before, None)}

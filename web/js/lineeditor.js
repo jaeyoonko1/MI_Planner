@@ -20,6 +20,7 @@ const SVG = {
   down: "M12 5v13M6.5 12.5L12 18l5.5-5.5",
   help: "M9.5 9a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.8M12 17h.01",
   hl: "M5 19h14M8 15l7-9 3 2.3-7 9H8z",
+  grip: "M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01",
 };
 function icon(name, filled) {
   const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -109,8 +110,30 @@ function openHelp() {
 }
 const ACTION_LABEL = { indent: "들여쓰기", outdent: "내어쓰기", bullet: "불렛", cycle: "표시 순환", done: "완료 전환", star: "별표", highlight: "형광펜", up: "위로 이동", down: "아래로 이동", enter: "새 줄", backspace: "표시 해제" };
 
+// A line linked to a task ends with " → 할일 #12" (P2B-05). The chip shows the live task info.
+const LINK_RE = /\s*→ 할일 #(\d+)\s*$/;
+const mdShort = (d) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+function taskChip(id, info) {
+  const chip = el("button", "le-tid");
+  chip.type = "button";
+  chip.dataset.act = "task";
+  chip.title = "이슈 상세 열기 (더블클릭)";
+  chip.append(el("span", "le-tid-id", `#${id}`));
+  if (info?.due_date && info.status !== "done") {
+    const n = Math.round((new Date(info.due_date + "T00:00:00") - new Date(new Date().toDateString())) / 864e5);
+    const late = n < 0, soon = n >= 0 && n <= 3;
+    chip.append(el("span", "le-tid-due" + (late ? " late" : soon ? " soon" : ""),
+      late ? `납기 ${-n}일 지남` : n === 0 ? "오늘 납기" : soon ? `D-${n}` : `${mdShort(info.due_date)} 납기`));
+  }
+  if (info?.requester) chip.append(el("span", "le-tid-req", info.requester));
+  return chip;
+}
+
 // ---- the editor -------------------------------------------------------------------------
-// opts: { value, save(text)->Promise, placeholder, toolbar, expand:{title}|null, foldKey, lineExtra(raw, idx)->Node|null,
+// opts: { value, save(text)->Promise<string|void> (a returned string replaces the text when the server normalized it),
+//         taskInfo(id)->task|undefined, onOpenTask(id), linkGrip,
+//         value, save(text)->Promise, placeholder, toolbar, expand:{title}|null, foldKey, lineExtra(raw, idx)->Node|null,
 //         onState(kind: "saving"|"saved"|"error", message), sheet }
 export function mountLineEditor(host, opts) {
   let value = opts.value || "";
@@ -128,16 +151,24 @@ export function mountLineEditor(host, opts) {
   host.replaceChildren(...(bar ? [bar, body] : [body]));
 
   // -- persistence (saves run one after another so an older PUT never overwrites a newer one)
+  let pending = 0;
   function persist(text) {
     value = text;
+    pending++;
     emit("saving", "저장 중…");
     chain = chain
       .then(() => opts.save(text))
-      .then(() => { if (value === text) emit("saved", "저장됨"); })
-      .catch((e) => { emit("error", `저장 실패: ${e.message}`); });
+      .then((normalized) => {
+        pending--;
+        if (value !== text) return;
+        if (typeof normalized === "string" && normalized !== text && !editing) { value = normalized; paintView(); }
+        emit("saved", "저장됨");
+      })
+      .catch((e) => { pending--; emit("error", `저장 실패: ${e.message}`); });
     return chain;
   }
   ctl.persist = persist;
+  ctl.isBusy = () => pending > 0 || !!editing || dirty;
 
   async function flush() {
     clearTimeout(timer);
@@ -148,6 +179,7 @@ export function mountLineEditor(host, opts) {
   ctl.getValue = () => (editing ? editing.value : value);
   ctl.setValue = (t) => { value = t; if (!editing) paintView(); };
   ctl.isEditing = () => !!editing;
+  ctl.expand = () => { if (opts.expand) openSheet(editing ? editing.selectionStart : value.length); };
 
   // -- view mode
   function paintView() {
@@ -167,6 +199,8 @@ export function mountLineEditor(host, opts) {
       const p = parseLine(raw);
       const row = el("div", "le-line");
       row.dataset.idx = String(i);
+      const link = p.text.match(LINK_RE);
+      if (link) { row.dataset.tid = link[1]; row.classList.add("linked"); }
       row.style.setProperty("--d", String(Math.floor(p.ind / 2)));
       if (!raw.trim()) { row.classList.add("blank"); view.append(row); continue; }
       const isFolded = kids[i] > 0 && folded.has(fkey(raw));
@@ -193,10 +227,29 @@ export function mountLineEditor(host, opts) {
         row.append(m);
       } else if (p.bullet) row.append(el("span", "le-dot"));
       const t = el("span", "le-text");
-      t.innerHTML = textToHtml(p.text) || "";
+      t.innerHTML = textToHtml(link ? p.text.slice(0, link.index) : p.text) || "";
       if (p.mark === "x") t.classList.add("done");
       row.append(t);
       if (isFolded) row.append(el("span", "le-pill", `⋯ ${kids[i]}줄`));
+      if (link) {
+        row.append(taskChip(link[1], opts.taskInfo?.(link[1])));
+        if (opts.linkGrip) {
+          const grip = el("span", "le-grip");
+          grip.draggable = true;
+          grip.title = "끌어서 다른 날짜로 옮기기";
+          grip.setAttribute("aria-label", "다른 날짜로 옮기기");
+          grip.append(icon("grip"));
+          grip.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("application/x-mi-task", link[1]);
+            e.dataTransfer.setData("text/plain", `#${link[1]}`);
+            e.dataTransfer.effectAllowed = "move";
+            row.classList.add("dragging");
+            requestAnimationFrame(() => document.body.classList.add("dragging-task"));
+          });
+          grip.addEventListener("dragend", () => { row.classList.remove("dragging"); document.body.classList.remove("dragging-task"); });
+          row.append(grip);
+        }
+      }
       const extra = opts.lineExtra?.(raw, i);
       if (extra) row.append(extra);
       view.append(row);
@@ -225,6 +278,7 @@ export function mountLineEditor(host, opts) {
       e.stopPropagation();
       const idx = +row.dataset.idx;
       if (act.dataset.act === "mark") rewriteLine(idx, toggleDoneRaw);
+      else if (act.dataset.act === "task") opts.onOpenTask?.(Number(row.dataset.tid));
       else {
         const k = `${opts.foldKey || ""}|${value.split("\n")[idx].trim()}`;
         folded.has(k) ? folded.delete(k) : folded.add(k);
@@ -249,6 +303,12 @@ export function mountLineEditor(host, opts) {
   }
 
   function onDblClick(e) {
+    const linked = e.target.closest(".le-line[data-tid]");
+    if (linked && opts.onOpenTask && !e.target.closest("[data-act=mark],[data-act=fold]")) {
+      e.preventDefault();
+      opts.onOpenTask(Number(linked.dataset.tid));
+      return;
+    }
     if (!opts.expand || e.target.closest("[data-act]")) return;
     e.preventDefault();
     openSheet(editing ? editing.selectionStart : value.length);

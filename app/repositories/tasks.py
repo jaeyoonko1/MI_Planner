@@ -11,8 +11,9 @@ from app import db
 STATUSES = ("todo", "doing", "done", "hold")
 FIELDS = (
     "title", "status", "priority", "requester", "due_date", "planned_date",
-    "parent_task_id", "eval_id", "page_path", "note",
+    "parent_task_id", "eval_id", "page_path", "note", "mark",
 )
+MARKS = (None, "star", "urgent")
 _DATE_FIELDS = ("due_date", "planned_date")
 # Legacy columns mirrored in tasks.props under the same key (D-22, migration 002).
 MIRRORED = ("priority", "requester", "due_date", "planned_date")
@@ -47,6 +48,8 @@ def _clean(data: dict[str, Any], *, creating: bool) -> dict[str, Any]:
         out["title"] = title
     if "status" in out and out["status"] not in STATUSES:
         raise TaskError(f"상태는 {', '.join(STATUSES)} 중 하나여야 합니다.")
+    if "mark" in out and out["mark"] not in MARKS:
+        raise TaskError("표시는 star·urgent 또는 비움이어야 합니다.")
     if "priority" in out and out["priority"] not in (1, 2, 3):
         raise TaskError("우선순위는 1~3이어야 합니다.")
     for f in _DATE_FIELDS:
@@ -180,6 +183,14 @@ def list_tasks(
     top_level: bool = False,
     q: str | None = None,
     field_filters: dict[str, list[str]] | None = None,
+    ids: list[int] | None = None,
+    planned_from: str | None = None,
+    planned_to: str | None = None,
+    due_from: str | None = None,
+    due_to: str | None = None,
+    unplanned: bool = False,
+    marked: bool = False,
+    open_only: bool = False,
     today: date | None = None,
 ) -> list[dict[str, Any]]:
     """Filter tasks. due_within=N: open tasks due today..today+N days. overdue: open and past due."""
@@ -208,6 +219,21 @@ def list_tasks(
         _check_date("planned_date", planned_date)
         where.append("planned_date = ?")
         args.append(planned_date)
+    if ids is not None:
+        where.append(f"id IN ({', '.join('?' * len(ids))})" if ids else "0")
+        args += ids
+    for col, lo, hi in (("planned_date", planned_from, planned_to), ("due_date", due_from, due_to)):
+        for bound, op in ((lo, ">="), (hi, "<=")):
+            if bound:
+                _check_date(col, bound)
+                where.append(f"{col} IS NOT NULL AND {col} {op} ?")
+                args.append(bound)
+    if unplanned:
+        where.append("planned_date IS NULL")
+    if marked:
+        where.append("mark IS NOT NULL")
+    if open_only:
+        where.append("status != 'done'")
     if eval_id is not None:
         where.append("eval_id = ?")
         args.append(eval_id)

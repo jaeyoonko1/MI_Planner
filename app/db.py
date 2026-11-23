@@ -13,9 +13,13 @@ _MIGRATION_NAME = re.compile(r"^(\d{3})_.+\.sql$")
 
 def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # FastAPI runs a sync dependency's setup and teardown on different threadpool threads,
+    # so a per-request connection is opened in one thread and closed in another. Each
+    # connection serves exactly one request at a time, so cross-thread use is safe.
+    conn = sqlite3.connect(db_path, timeout=15, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 15000")
     return conn
 
 

@@ -42,7 +42,7 @@ def test_migration_moves_existing_data_to_props(tmp_path: Path) -> None:
     )
     conn.execute("INSERT INTO tasks (title, created_at, updated_at) VALUES ('b', 'x', 'x')")
     conn.commit()
-    assert db.migrate(conn) == ["002_task_fields.sql"]
+    assert db.migrate(conn) == ["002_task_fields.sql", "003_task_mark.sql"]
     a, b = (dict(r) for r in conn.execute("SELECT * FROM tasks ORDER BY id"))
     assert json.loads(a["props"]) == {
         "priority": 1, "requester": "EQ-A01 담당", "due_date": "2026-12-01", "planned_date": "2026-11-30",

@@ -53,7 +53,7 @@ def test_patch_updates_and_clears(client) -> None:
 
 def test_delete(client) -> None:
     t = add(client, title="a")
-    assert client.delete(f"/api/todos/{t['id']}").json() == {"ok": True}
+    assert client.delete(f"/api/todos/{t['id']}").json()["ok"] is True
     assert client.get(f"/api/todos/{t['id']}").status_code == 404
     assert client.delete(f"/api/todos/{t['id']}").status_code == 404
 

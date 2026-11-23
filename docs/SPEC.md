@@ -276,7 +276,13 @@ vault/
   - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off 기본 on, `theme` system|light|dark 기본 system, `density` compact|normal|cozy 기본 normal. theme·density는 그 외 값이면 400). 정적 파일(비 `/api`)은 `Cache-Control: no-cache`로 서빙.
   - `GET /api/journal/{yyyy-mm}/auto` → `{month, enabled, days: {"YYYY-MM-DD": [{id,title,status,priority,due_date}]}}` (납기가 그날이고 done 아닌 할일, 읽기 전용·파일에 쓰지 않음).
   - `POST /api/todos/from-line` `{date, line_index}` → 201 `{task, month, path, days}`. 체크박스 줄만, 할일 `planned_date`=그 날짜, 줄 끝에 ` → 할일 #id` 추가(이미 있으면 거부). (경로는 `/api/tasks`가 아니라 `/api/todos`)
-  - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations:[]}`.
+  - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations:[]}` + (P2B-05) `planned_all`(오늘 계획, 완료 포함), `marked`(★·! 미완료), `requesters`, `tasks`(오늘 일지가 연결한 할일 `{id: task}`).
+- **일지 줄 ↔ 할일 동기화 (P2B-05, `app/journal_links.py`)**: 연결된 줄은 끝이 ` → 할일 #<id>`다. 오늘·주간·월간·할일 목록·상세 패널은 같은 ID를 읽는다.
+  - 할일 → 일지: `POST/PATCH/DELETE /api/todos`가 제목·완료·표시(`mark`)·`planned_date` 변화를 해당 줄에 반영한다. 응답에 `journal_days: {날짜: 본문}`(바뀐 날). `planned_date`를 새 날짜로 바꾸면 줄(들여쓴 하위 줄 포함)이 그날 칸 끝으로 이동하고, 줄이 없으면 새로 만든다. `planned_date`를 비우면 하위 줄 없는 줄은 삭제, 하위 줄이 있으면 텍스트만 남기고 연결을 끊는다. 할일 삭제는 줄의 연결만 끊는다. 납기(`due_date`)는 건드리지 않는다.
+  - 일지 → 할일: `PUT /api/journal/{yyyy-mm}/{dd}`가 저장 전에 그날의 연결 줄을 동기화한다(제목, `[x]` 완료, `[*]`·`[!]` 표시, 붙여넣어 옮긴 줄 = 계획일 변경). 같은 ID가 두 줄이면 뒤 줄은 연결을 푼다(복제로 이슈가 늘지 않음). 줄이 사라지면 그날의 계획 연결만 해제(할일은 남음). 응답 `{..., content(정규화된 본문), changed:[id], other_days, tasks}`.
+  - `GET /api/journal/{yyyy-mm}`에 `tasks: {id: task}`(그 달 연결 할일) 추가.
+  - 승격 `POST /api/todos/from-line`: `[ ]`·`[x]`·`[*]`·`[!]` 줄 지원(`*`→mark star, `!`→mark urgent+우선순위 1, `x`→done). 같은 날 같은 제목의 열린 할일이 있으면 새로 만들지 않고 연결(`reused:true`); 그 할일이 이미 그날 줄에 연결돼 있으면 409. 응답에 `tasks`.
+  - `GET /api/todos` 추가 필터: `ids=1,2`, `planned_from`/`planned_to`, `due_from`/`due_to`(양끝 포함), `unplanned=true`, `marked=true`, `open_only=true`. `mark`는 `POST/PATCH`로도 받는다(`star`·`urgent`·null).
 
 ### 4.3 평가 현황판 (board 타입, P4)
 
@@ -390,6 +396,7 @@ vault/
 | eval_id | INTEGER FK | 선택 |
 | page_path | TEXT | 선택 (vault 상대 경로) |
 | note | TEXT | |
+| mark | TEXT | `star` / `urgent` / NULL — 일지 줄의 ★·! 표시 (003, P2B-05). 완료 여부는 `status` |
 
 ### eval_templates
 | 컬럼 | 타입 | 설명 |

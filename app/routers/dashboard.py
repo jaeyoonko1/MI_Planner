@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Request
 
-from app import db, journal
+from app import db, journal, journal_links
 from app.repositories import tasks as repo
 
 router = APIRouter(prefix="/api/dashboard")
@@ -22,6 +22,10 @@ def today(request: Request) -> dict:
         planned = repo.list_tasks(conn, planned_date=day.isoformat())
         due_soon = repo.list_tasks(conn, due_within=DUE_SOON_DAYS)
         overdue = repo.list_tasks(conn, overdue=True)
+        marked = repo.list_tasks(conn, marked=True, open_only=True)
+        planned_all = repo.list_tasks(conn, planned_date=day.isoformat())
+        tasks = journal_links.task_map(conn, [journal_body])
+        requesters = repo.requesters(conn)
     finally:
         conn.close()
     return {
@@ -31,5 +35,9 @@ def today(request: Request) -> dict:
         "planned": [t for t in planned if t["status"] != "done"],
         "due_soon": due_soon,
         "overdue": overdue,
+        "requesters": requesters,
+        "marked": marked,
+        "planned_all": planned_all,
+        "tasks": tasks,
         "evaluations": [],  # filled in by P4-08
     }

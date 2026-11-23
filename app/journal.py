@@ -92,14 +92,18 @@ def get_month(vault: Vault, month: str) -> dict:
     return {"month": month, "path": path, "days": days}
 
 
-_CHECKBOX = re.compile(r"^(\s*[-*]\s+\[)([ xX])(\]\s?)(.*)$")
+_CHECKBOX = re.compile(r"^(\s*[-*]\s+\[)([ xX*!])(\]\s?)(.*)$")
 LINK_MARK = "→ 할일 #"
+_MARK_TAGS = re.compile(r"</?mark>")
+_ID_LINK = re.compile(r"→ 할일 #(\d+)\s*$")
 
 
-def promote_line(vault: Vault, day: str, line_index: int, create_task) -> dict:
+def promote_line(vault: Vault, day: str, line_index: int, create_task, find_existing=None) -> dict:
     """Turn a checkbox line of `day` into a task and leave a link on the line.
 
-    `create_task(title) -> task dict` is injected so this module stays DB-free.
+    `create_task(spec) -> task dict` and `find_existing(title, day) -> task | None` are injected
+    so this module stays DB-free. An open task with the same title already planned for that day
+    is linked instead of duplicated; if that task already has a line on the day, promotion is refused.
     """
     try:
         d = date.fromisoformat(day)
@@ -113,15 +117,29 @@ def promote_line(vault: Vault, day: str, line_index: int, create_task) -> dict:
     if not 0 <= line_index < len(lines):
         raise VaultError("해당 줄을 찾을 수 없습니다. 화면을 새로고침하세요.", 404)
     m = _CHECKBOX.match(lines[line_index])
-    if not m or not m.group(4).strip():
+    title = _MARK_TAGS.sub("", m.group(4)).strip() if m else ""
+    if not m or not title:
         raise VaultError("체크박스 줄(- [ ] 내용)만 할일로 만들 수 있습니다.")
     if LINK_MARK in m.group(4):
         raise VaultError("이미 할일로 만든 줄입니다.")
-    title = m.group(4).strip()
-    task = create_task(title)
-    lines[line_index] = f"{m.group(1)}{m.group(2)}{m.group(3)}{title} {LINK_MARK}{task['id']}"
+    mark = m.group(2).lower()
+    task = find_existing(title, day) if find_existing else None
+    reused = task is not None
+    if reused:
+        linked = {int(x.group(1)) for ln in lines if (x := _ID_LINK.search(ln))}
+        if task["id"] in linked:
+            raise VaultError("이 날짜 일지에 같은 할일이 이미 연결되어 있습니다.", 409)
+    else:
+        task = create_task({
+            "title": title, "planned_date": day,
+            "status": "done" if mark == "x" else "todo",
+            "mark": {"*": "star", "!": "urgent"}.get(mark),
+            **({"priority": 1} if mark == "!" else {}),
+        })
+    symbol = "x" if task["status"] == "done" else m.group(2)
+    lines[line_index] = f"{m.group(1)}{symbol}{m.group(3)}{m.group(4).strip()} {LINK_MARK}{task['id']}"
     vault.write(path, set_day(text, day, "\n".join(lines)))
-    return {"task": task, **get_month(vault, month)}
+    return {"task": task, "reused": reused, **get_month(vault, month)}
 
 
 def put_day(vault: Vault, month: str, dd: int, content: str) -> dict:

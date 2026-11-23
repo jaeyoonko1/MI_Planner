@@ -1,61 +1,124 @@
-// "Today" screen (P2-06): today's journal cell + planned / due-soon / overdue todos.
+// Today (P2B-05): today's journal beside what needs attention. Same hub, same task rows.
 import { api } from "./api.js";
-import { mountLineEditor } from "./lineeditor.js";
+import { hub } from "./hub.js";
+import { mountDay } from "./dayeditor.js";
+import { taskRow } from "./taskrow.js";
+import { debounce, el, emptyState, errorState, parseISO, skeleton, svg, WD } from "./ui.js";
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text !== undefined) e.textContent = text;
-  return e;
+const TABS = [["due", "납기 임박"], ["mark", "★ ! 중요"], ["plan", "오늘 일지"]];
+
+function panelHead(icon, title, ...extra) {
+  const h = el("div", "panel-head");
+  const t = el("h2");
+  t.append(svg(icon), title);
+  h.append(t, ...extra);
+  return h;
 }
 
-function todoList(items, empty) {
-  if (!items.length) return el("p", "meta", empty);
-  const ul = el("ul", "tdlist");
-  for (const t of items) {
-    const li = el("li", "");
-    li.append(el("span", "tprio-dot p" + t.priority, "●"), el("span", "", ` ${t.title}`));
-    if (t.due_date) li.append(el("span", "meta", `  납기 ${t.due_date}`));
-    if (t.requester) li.append(el("span", "meta", `  · ${t.requester}`));
-    ul.append(li);
-  }
-  return ul;
-}
-
-function section(title, ...body) {
-  const box = el("section", "card tcard");
-  box.append(el("h3", "", title), ...body);
-  return box;
+function link(href, label, iconId) {
+  const a = el("a", "btn");
+  a.href = href;
+  if (iconId) a.append(svg(iconId, "i s"));
+  a.append(label);
+  return a;
 }
 
 export async function renderToday(container) {
-  const d = await api.today();
-  const [y, m, dd] = d.date.split("-").map(Number);
-  const jbody = el("div", "today-editor");
-  const status = el("span", "jstatus");
-  mountLineEditor(jbody, {
-    value: d.journal || "",
-    save: (text) => api.saveDay(d.month, dd, text),
-    placeholder: "오늘 할 일을 불렛으로 쭉 쓰세요 — Tab으로 구조화, Ctrl+1로 ☐ ☑ ★ !",
-    toolbar: true,
-    expand: { title: `${m}월 ${dd}일 일지` },
-    foldKey: d.date,
-    onState: (k, msg) => { status.className = "jstatus" + (k === "error" ? " error" : ""); status.textContent = msg; },
-  });
-  const open = el("a", "btn ghost", "월간 일지에서 편집");
-  open.href = `#/page/${["일지", String(y), d.month].map(encodeURIComponent).join("/")}`;
-  const foot = el("div", "today-foot");
-  foot.append(open, status);
-  const grid = el("div", "tgrid");
-  grid.append(
-    section("오늘 하기로 한 일", todoList(d.planned, "없음")),
-    section("납기 임박 (3일 이내)", todoList(d.due_soon, "없음")),
-    section("납기 지남", todoList(d.overdue, "없음")),
-    section("평가 진행 현황", el("p", "meta", "평가 기능(P4) 이후 표시됩니다.")),
-  );
-  container.replaceChildren(
-    el("h2", "page-title", `오늘 · ${y}년 ${m}월 ${dd}일`),
-    section("오늘 일지", jbody, foot),
-    grid,
-  );
+  let tab = "due";
+  let data = null;
+  let editor = null;
+  const view = el("div", "page");
+  container.replaceChildren(view, skeleton(6));
+
+  const listBox = el("div", "tlist");
+  const tabs = el("div", "tabs");
+  tabs.setAttribute("role", "tablist");
+
+  function sets() {
+    const open = (a) => a.filter((t) => t.status !== "done");
+    const due = [...data.overdue, ...data.due_soon.filter((t) => !data.overdue.some((o) => o.id === t.id))]
+      .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    return { due: open(due), mark: data.marked, plan: data.planned_all };
+  }
+
+  function paintRight() {
+    const s = sets();
+    tabs.replaceChildren(...TABS.map(([k, label]) => {
+      const b = el("button", "", label);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(tab === k));
+      b.append(el("small", "", String(s[k].length)));
+      b.addEventListener("click", () => { tab = k; paintRight(); });
+      return b;
+    }));
+    const rows = s[tab];
+    const empty = {
+      due: { title: "임박한 납기가 없어요", desc: "3일 안에 끝내야 하는 일이 생기면 여기에 모여요.", icon: "cal" },
+      mark: { title: "★ ! 로 표시한 일이 없어요", desc: "일지 줄에서 Ctrl+1로 ★ 또는 !를 고르면 모아 보여 줘요.", icon: "star" },
+      plan: { title: "오늘 일지에 할일이 없어요", desc: "왼쪽 일지에 ☐ 줄을 쓰면 바로 이슈가 돼요.", icon: "todo" },
+    }[tab];
+    listBox.replaceChildren(...(rows.length ? rows.map((t) => taskRow(t, { drag: false, showPlanned: tab !== "plan" })) : [emptyState(empty)]));
+    paintHero();
+  }
+
+  const hero = el("div", "hero");
+  function paintHero() {
+    const [y, m, d] = data.date.split("-").map(Number);
+    const wd = WD[parseISO(data.date).getDay()];
+    const grow = el("div", "grow");
+    const late = data.overdue.length;
+    const plan = data.planned_all;
+    const doneN = plan.filter((t) => t.status === "done").length;
+    const lead = el("p", "lead");
+    if (late) lead.append(el("b", "r", `납기 지난 일 ${late}개`), "부터. ");
+    lead.append(`오늘 일지에 할일 `, el("b", "", String(plan.length - doneN)), "개 · 완료 ", el("b", "", String(doneN)));
+    grow.append(el("div", "eyebrow", `${y}년 ${m}월 ${d}일 ${wd}요일`), el("h1", "h1", "오늘"), lead);
+    hero.replaceChildren(grow, link("#/week", "주간 일지"), link(`#/month`, "월간 일지", "cal"), link("#/todos", "할일 목록", "todo"));
+  }
+
+  function build() {
+    const left = el("section", "panel");
+    const body = el("div", "panel-body");
+    const status = el("span", "jstatus");
+    editor = mountDay(body, data.date, data.journal, {
+      toolbar: true,
+      placeholder: "오늘 할 일을 불렛으로 쭉 쓰세요 — Tab으로 구조화, Ctrl+1로 ☐ ☑ ★ !",
+      onState: (k, msg) => { status.dataset.k = k; status.textContent = msg; },
+    });
+    const foot = el("div", "panel-foot");
+    foot.append(el("span", "", "☐ ☑ ★ ! 줄은 할일 목록·주간·월간과 같은 이슈예요"), el("span", "grow"), status);
+    left.append(panelHead("cal", "오늘 일지"), body, foot);
+
+    const right = el("section", "panel");
+    const rfoot = el("div", "panel-foot");
+    rfoot.append(el("span", "", "클릭 · 이름 바꾸기"), el("span", "", "더블클릭 · 상세"), el("span", "", "체크 → 일지에도 ☑"));
+    right.append(panelHead("flag", "지금 챙길 일", (() => { const a = el("a", "btn quiet sm", "전체"); a.href = "#/todos"; a.append(svg("chev", "i s")); return a; })()), tabs, listBox, rfoot);
+
+    const grid = el("div", "tgrid");
+    const l = el("div"); l.append(left);
+    const r = el("div"); r.append(right);
+    grid.append(l, r);
+    view.replaceChildren(hero, grid);
+  }
+
+  async function load(first) {
+    try {
+      const d = await api.today();
+      hub.putTasks(d.tasks);
+      hub.setRequesters(d.requesters);
+      hub.putTasks([...d.planned_all, ...d.marked, ...d.overdue, ...d.due_soon]);
+      data = d;
+    } catch (e) {
+      if (first) { container.replaceChildren(errorState(e.message, () => renderToday(container))); throw e; }
+      return;
+    }
+    if (first) { container.replaceChildren(view); build(); }
+    paintRight();
+  }
+
+  const reload = debounce(() => load(false), 60);
+  hub.on((info) => { if (info.kind === "task" || info.kind === "day") reload(); });
+  try { await load(true); } catch { return null; }
+  return editor;
 }

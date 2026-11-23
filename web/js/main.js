@@ -6,6 +6,10 @@ import { renderHtmlPage } from "./htmlpage.js";
 import { flushNote, renderNote } from "./note.js";
 import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
+import { renderWeek } from "./week.js";
+import { hub } from "./hub.js";
+import { closeInspector } from "./inspector.js";
+import { errorState, todayISO } from "./ui.js";
 import { flash, initShell, setCrumb } from "./shell.js";
 
 const treeEl = document.getElementById("tree");
@@ -86,21 +90,47 @@ function showScreen(name) {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.screen === name));
 }
 
+const MONTH_PAGE = /^일지\/\d{4}\/(\d{4}-\d{2})$/;
+const monthPath = (month) => `일지/${month.slice(0, 4)}/${month}`;
+
+// Open (and create when missing) a month page of the journal.
+async function openMonth(month) {
+  try {
+    await api.journal(month); // creates the page tree on first use
+    await refreshTree();
+    location.hash = toHash(monthPath(month));
+  } catch (e) {
+    flash(false, e.message);
+  }
+}
+
 async function route() {
   await flushNote(); // save a pending note edit before the view is replaced
+  closeInspector();
+  hub.reset(); // the previous view's editors and listeners are about to disappear
   const path = currentPath();
   paintTree();
   const screen = location.hash.replace(/^#\//, "");
-  showScreen(screen === "todos" || screen === "today" ? screen : "");
-  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : path ? path.split("/") : ["홈"]);
+  const week = screen.match(/^week(?:\/(\d{4}-\d{2}-\d{2}))?$/);
+  if (screen === "month") {
+    return openMonth(todayISO().slice(0, 7));
+  }
+  const isMonth = path && MONTH_PAGE.test(path);
+  const name = screen === "todos" || screen === "today" ? screen : week ? "week" : isMonth ? "month" : "";
+  showScreen(name);
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
+  const fail = (e) => viewEl.replaceChildren(errorState(e.message, route));
   if (screen === "today") {
-    return renderToday(viewEl).catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));
+    return renderToday(viewEl).catch(fail);
+  }
+  if (week) {
+    return renderWeek(viewEl, week[1], (d) => { location.hash = `#/week/${d}`; }).catch(fail);
   }
   if (screen === "todos") {
     quickInput = null;
     return renderTodos(viewEl)
       .then((q) => { quickInput = q; })
-      .catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));
+      .catch(fail);
   }
   if (!path) return showHome();
   try {
@@ -149,7 +179,8 @@ function showPage(page) {
   const month = page.path.split("/").pop();
   if (page.meta.type === "journal" && /^\d{4}-\d{2}$/.test(month)) {
     body.className = "journal";
-    renderJournal(body, month).catch((e) => body.replaceChildren(el("p", "error", e.message)));
+    viewEl.replaceChildren(body); // the month screen has its own hero
+    renderJournal(body, month, openMonth).catch((e) => body.replaceChildren(errorState(e.message, () => route())));
   }
 }
 

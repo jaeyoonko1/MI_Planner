@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import calendar
+from datetime import date
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from app import db, journal
+from app import db, journal, journal_links
 from app.routers import settings
 from app.vault import Vault
 
@@ -20,7 +23,13 @@ def _vault(request: Request) -> Vault:
 
 @router.get("/{month}")
 def get_month(request: Request, month: str) -> dict:
-    return journal.get_month(_vault(request), month)
+    data = journal.get_month(_vault(request), month)
+    conn = db.connect(request.app.state.db_path)
+    try:
+        data["tasks"] = journal_links.task_map(conn, list(data["days"].values()))
+    finally:
+        conn.close()
+    return data
 
 
 @router.get("/{month}/auto")
@@ -46,4 +55,19 @@ def get_auto(request: Request, month: str) -> dict:
 
 @router.put("/{month}/{dd}")
 def put_day(request: Request, month: str, dd: int, body: DayContent) -> dict:
-    return journal.put_day(_vault(request), month, dd, body.content)
+    """Save one day. Linked lines (`→ 할일 #id`) are synced to their tasks first (P2B-05);
+    `content` is the stored (normalized) body, `changed` the tasks updated by this save."""
+    vault = _vault(request)
+    year, mm = journal._split_month(month)
+    if not 1 <= dd <= calendar.monthrange(year, mm)[1]:
+        raise journal.VaultError("해당 월에 없는 날짜입니다.")
+    day = date(year, mm, dd).isoformat()
+    old = journal.get_month(vault, month)["days"].get(day, "")
+    conn = db.connect(request.app.state.db_path)
+    try:
+        content, changed, others = journal_links.sync_day(vault, conn, day, old, body.content.strip(chr(10)))
+        data = journal.put_day(vault, month, dd, content)
+        data["tasks"] = journal_links.task_map(conn, list(data["days"].values()))
+    finally:
+        conn.close()
+    return {**data, "content": content, "changed": [t["id"] for t in changed], "other_days": others}

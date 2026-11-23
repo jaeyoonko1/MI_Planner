@@ -52,7 +52,7 @@ def client(tmp_path: Path):
 
 def test_get_month_auto_creates_pages(client) -> None:
     r = client.get("/api/journal/2026-11").json()
-    assert r == {"month": "2026-11", "path": "일지/2026/2026-11", "days": {}}
+    assert r == {"month": "2026-11", "path": "일지/2026/2026-11", "days": {}, "tasks": {}}
     tree = client.get("/api/pages/tree").json()["tree"]
     month = tree[0]["children"][0]["children"][0]
     assert (month["type"], month["title"]) == ("journal", "2026년 11월")

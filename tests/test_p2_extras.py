@@ -63,7 +63,9 @@ def test_dashboard_today(client) -> None:
     client.post("/api/todos", json={"title": "지난 납기", "due_date": iso(-1)})
     client.post("/api/todos", json={"title": "먼 납기", "due_date": iso(30)})
     d = client.get("/api/dashboard/today").json()
-    assert d["journal"] == "- [ ] 오늘 할 것"
+    # a task planned for today also gets a linked line in today's journal (P2B-05)
+    first, second = d["journal"].split(chr(10))
+    assert first == "- [ ] 오늘 할 것" and second.startswith("- [ ] 오늘 하기로 → 할일 #")
     assert [t["title"] for t in d["planned"]] == ["오늘 하기로"]
     assert [t["title"] for t in d["due_soon"]] == ["곧 납기"]
     assert [t["title"] for t in d["overdue"]] == ["지난 납기"]

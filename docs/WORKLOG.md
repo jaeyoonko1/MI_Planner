@@ -2,6 +2,17 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-05
+- 한 일: **간헐 500 수정** — 원인은 SQLite 잠김이 아니라 FastAPI가 `yield` 의존성의 연결을 생성/종료 스레드가 다르게 처리해 `sqlite3.ProgrammingError`(스레드 검사)가 나던 것. `db.connect`에 `check_same_thread=False` + `busy_timeout` 추가, 재현 테스트 2개. **서버**: 마이그레이션 003(`tasks.mark`), 일지 줄↔할일 양방향 동기화(`app/journal_links.py`: 제목·완료·★!·계획일 이동·하위 줄 동반 이동·복제 줄 연결 해제·승격 중복 방지·같은 제목 재사용), 할일 목록 필터(`ids`·`planned_from/to`·`due_from/to`·`unplanned`·`marked`·`open_only`), 오늘 API 확장. **화면**: 오늘(납기 임박/★!/오늘 일지 탭), 주간 신규(`#/week[/날짜]`, 이전·이번·다음 주, 주말 토글, 계획/납기/날짜 없음 탭, 확대), 월간(트레이·드롭·주 헤더·주말/납기/단축키 칩), 할일(빠른 추가 상세 칩 + 마지막 선택 기본값·끄기·비우기, `@사람 ~날짜 ! 필드:값` 입력, 칩 필터, 행 한 번 클릭 이름 변경·더블클릭 상세), 우측 상세 패널(상태·우선순위·표시·계획일·납기·요청자·사용자 정의 칩, 메모 자동 저장, 삭제 확인), 토스트(되돌리기·다시 시도), 오류·빈·로딩 상태. 줄 편집기에 이슈 칩(#id·납기·요청자)·이동 손잡이·더블클릭=상세 추가. 공통 `hub.js`가 한 화면의 편집기·목록을 같은 응답으로 갱신.
+- 바뀐 파일: app/(db.py, journal.py, journal_links.py, repositories/tasks.py, routers/tasks·journal·dashboard.py), migrations/003_task_mark.sql, web/(index.html, css/screens.css·style.css, js/hub·ui·toast·dayeditor·taskrow·inspector·quickadd·week·today·todos·journal·lineeditor·main·api.js), tests/(test_journal_links.py, test_db.py 외 기대값 갱신), docs/(SPEC, DECISIONS D-25), project_flow.html.
+- 테스트: pytest 73 passed(신규 12: 동기화 10 + 연결 스레드 2). 브라우저(1024px, 격리된 임시 DB·vault 서버)에서 오늘·주간·월간·할일 확인: 체크/제목/메모/상태 변경이 일지 줄·목록에 즉시 반영, 일지 줄 타이핑 → 할일 제목 갱신, 주간 드롭·되돌리기, 월간 트레이 드롭, 승격, 빠른 추가 기본값 유지(새로고침 후에도), 오류 상태·재시도, 다크·라이트, 콘솔 오류 없음.
+- 다음에 할 것 / 막힌 것:
+  - 1280px 레이아웃(트레이·주간 목록이 오른쪽 열)은 미리보기 창이 1024px라 눈으로 확인하지 못함(CSS 미디어쿼리 1100px 기준). 회사 PC Edge에서 확인 필요.
+  - 실제 마우스 드래그(HTML5 DnD)는 합성 이벤트로만 검증. 손잡이(⠿)·행 드래그는 사람이 한 번 시험.
+  - 되돌리기는 줄을 원래 날짜의 **끝**에 붙임(원래 위치 복원 아님, D-25). 호버 메모 미리보기·단축키 J/K/X·검색 팔레트·상세 메모의 서식 편집(P2B-10)은 범위 밖.
+  - 월간 이전/다음 달 이동 시 비어 있는 월 페이지가 vault에 생성됨(기존 동작). 주간이 달 경계를 넘을 때도 다음 달 페이지를 만든다.
+  - 일지 줄 편집기의 ★(`[*]`)·`[!]` 줄은 이제 승격 가능. 하위 불렛→하위 할일(parent_task_id) 연결은 아직 안 함.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-04
 - 한 일: 워크스페이스 셸을 Final 시안에 맞춤. `theme.css`에 다크/라이트 토큰(D-23)·밀도 3단계·셸 레이아웃, 모든 화면 색을 토큰으로 교체(하드코딩 제거, 기존 변수는 별칭 유지). `boot.js`가 첫 페인트 전에 테마·밀도 적용(깜박임 없음), `shell.js`가 시스템/라이트/다크 + 컴팩트/기본/여유 버튼 토글(D-12), 사이드바 접기(`[`), 브레드크럼, 저장 상태 표시. 설정은 `settings.theme`/`density`에 저장(+localStorage 캐시). 사이드바 트리는 여섯 최상위(일지/MI 공정업무/연구 개발/성과/업무 매뉴얼/스터디)를 항상 표시(없으면 흐린 줄, 클릭 시 생성), 인라인 SVG 아이콘(`index.html` 스프라이트, 외부 자산 없음), 화살표·Home/End 키 이동(roving tabindex), 드래그로 하위 이동·형제 순서 변경(PATCH). 포커스 링, 1024/1280px 확인.
 - 바뀐 파일: web/index.html, web/css/(theme.css 신규, style.css, lineeditor.css, note.css), web/js/(boot.js·icons.js·shell.js 신규, tree.js, main.js, api.js), app/routers/settings.py, app/main.py(정적 파일 no-cache), tests/test_settings.py, docs/SPEC.md, project_flow.html.
