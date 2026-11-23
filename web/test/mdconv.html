@@ -6,6 +6,8 @@
 import { mdToHtml, htmlToMd, loadInto } from "/js/mdconv.js";
 import { runNoteLineAction } from "/js/note-lines.js";
 import { bindNoteTables } from "/js/note-table.js";
+import { mountFormatBar } from "/js/note-format.js";
+import { editorKeys } from "/js/lineeditor.js";
 const load = (md) => { const d = document.createElement("div"); loadInto(d, md); return d; };
 // untouched: the file is opened and saved without edits
 const rt = (md) => htmlToMd(load(md));
@@ -174,6 +176,78 @@ ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")]
     ok(changes === 1 && htmlToMd(editor) === original.replace("X\\|Y | 10", "| 수정 \\| 값 | 10 |"),
        "table edit changes only the selected row");
   }
+}
+// ---- P3-04: the toolbar writes only preset formats and the saved file round-trips unchanged
+{
+  const wait = async () => fmt.syncNow(); // rAF does not run in a hidden pane
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-9999px;top:0;width:600px";
+  const bar = document.createElement("div");
+  const ed = document.createElement("div");
+  ed.contentEditable = "true";
+  host.append(bar, ed);
+  document.body.append(host);
+  document.execCommand("styleWithCSS", false, true);
+  const fmt = mountFormatBar(ed, bar, { compact: false, schedule() {}, lineAction() {}, insertTable() {}, fold() {}, cleanups: [] });
+  const btn = (label) => [...bar.querySelectorAll("button.nb")].find((b) => b.getAttribute("aria-label") === label);
+  const pick = (text) => {
+    ed.focus();
+    const w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+    for (let t = w.nextNode(); t; t = w.nextNode()) {
+      const i = t.data.indexOf(text);
+      if (i < 0) continue;
+      const r = document.createRange();
+      r.setStart(t, i);
+      r.setEnd(t, i + text.length);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+      return;
+    }
+  };
+  const reload = (md) => { loadInto(ed, md); };
+  const labels = [...bar.querySelectorAll("button.nb")].map((b) => b.getAttribute("aria-label"));
+  ok(bar.getAttribute("role") === "toolbar" && labels.every(Boolean), "toolbar: role and a label on every button", show(labels));
+  ok(!bar.querySelector("select, option"), "toolbar: chips only, no dropdowns (D-12)");
+  const apply = (md, word, ...labs) => { reload(md); pick(word); labs.forEach((l) => btn(l).click()); return htmlToMd(ed); };
+  ok(apply("가 단어 나\n", "단어", "굵게") === "가 **단어** 나\n", "toolbar: bold");
+  ok(apply("가 단어 나\n", "단어", "기울임") === "가 *단어* 나\n", "toolbar: italic");
+  ok(apply("가 단어 나\n", "단어", "밑줄") === "가 <u>단어</u> 나\n", "toolbar: underline");
+  ok(apply("가 단어 나\n", "단어", "취소선") === "가 ~~단어~~ 나\n", "toolbar: strike");
+  ok(apply("가 단어 나\n", "단어", "글자 크기 22px (대)") === '가 <span style="font-size:22px">단어</span> 나\n', "toolbar: preset size");
+  ok(apply("가 단어 나\n", "단어", "글자색 빨강") === '가 <span style="color:#d93025">단어</span> 나\n', "toolbar: preset color");
+  ok(apply("가 단어 나\n", "단어", "형광펜 하늘") === '가 <mark style="background:#a5d8ff">단어</mark> 나\n', "toolbar: preset highlight");
+  ok(apply("가 단어 나\n", "단어", "형광펜 노랑") === "가 <mark>단어</mark> 나\n", "toolbar: default highlight keeps the bare mark");
+  ok(apply("가 단어 나\n", "단어", "글자색 빨강", "글자색 기본색") === "가 단어 나\n", "toolbar: default color removes the color");
+  ok(apply("가 단어 나\n", "단어", "글자색 빨강", "글자색 빨강") === "가 단어 나\n", "toolbar: second click on the same color resets it");
+  ok(apply("가 단어 나\n", "단어", "글자 크기 22px (대)", "글자 크기 15px (보통)") === "가 단어 나\n", "toolbar: base size removes the size");
+  ok(apply("가 단어 나\n", "단어", "형광펜 하늘", "형광펜 하늘") === "가 단어 나\n", "toolbar: second click on the same highlight removes it");
+  ok(apply("가 단어 나\n", "단어", "굵게", "기울임", "글자색 초록", "글자 크기 18px (중)", "형광펜 분홍", "서식 지우기") === "가 단어 나\n", "toolbar: clear format removes everything");
+  const mixed = apply("가 단어 나\n", "단어", "굵게", "글자색 파랑", "글자 크기 28px (특대)", "형광펜 살구");
+  ok(mixed === htmlToMd(load(mixed)) && mixed === rt(rt(mixed)), "toolbar: combined formats save the same after reopen", show(mixed));
+  ok(/<span style="color:#1a73e8;font-size:28px">/.test(mixed) && mixed.includes("**") && mixed.includes("#ffd8a8"), "toolbar: combined formats keep every preset", show(mixed));
+  ok(!/rgb\(|xxx|<font|font-weight|text-decoration/i.test(mixed), "toolbar: no browser-specific markup in the file", show(mixed));
+  // state follows the caret
+  reload("가 **굵게** 보통 <span style=\"font-size:22px\">큰글자</span> <span style=\"color:#d93025\">빨강</span>\n");
+  pick("굵게"); await wait();
+  ok(btn("굵게").getAttribute("aria-pressed") === "true" && btn("기울임").getAttribute("aria-pressed") === "false", "toolbar state: bold under the caret is pressed");
+  pick("큰글자"); await wait();
+  ok(btn("글자 크기 22px (대)").getAttribute("aria-pressed") === "true" && btn("글자 크기 15px (보통)").getAttribute("aria-pressed") === "false", "toolbar state: size chip follows the caret");
+  pick("빨강"); await wait();
+  ok(btn("글자색 빨강").getAttribute("aria-pressed") === "true" && btn("글자색 기본색").getAttribute("aria-pressed") === "false", "toolbar state: color chip follows the caret");
+  pick("보통"); await wait();
+  ok(btn("글자색 기본색").getAttribute("aria-pressed") === "true" && btn("글자 크기 15px (보통)").getAttribute("aria-pressed") === "true", "toolbar state: plain text shows default color and size");
+  // shortcut switch (P2B-02)
+  const key = (o) => ({ ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, key: "", code: "", preventDefault() {}, ...o });
+  const was = editorKeys.on;
+  editorKeys.set(true);
+  reload("가 단어 나\n"); pick("단어");
+  ok(fmt.handleKey(key({ key: "-", code: "Minus" })) === true && htmlToMd(ed) === "가 ~~단어~~ 나\n", "shortcut: Ctrl+- strikes through while shortcuts are on");
+  editorKeys.set(false);
+  reload("가 단어 나\n"); pick("단어");
+  ok(fmt.handleKey(key({ key: "-", code: "Minus" })) === false && htmlToMd(ed) === "가 단어 나\n", "shortcut: Ctrl+- does nothing while shortcuts are off");
+  ok(bar.querySelector(".nb-switch").getAttribute("aria-checked") === "false", "shortcut: toolbar switch shows the off state");
+  editorKeys.set(was);
+  host.remove();
 }
 const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");

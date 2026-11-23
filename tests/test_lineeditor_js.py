@@ -43,3 +43,13 @@ def test_note_table_cases():
         capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
     assert res.returncode == 0, res.stdout + res.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_note_format_core_cases():
+    """P3-04: toolbar presets, size stepping and shortcut mapping (web/test/run_note_format.mjs)."""
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_note_format.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr

@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P3-04 (Final 디자인 재작업)
+- 한 일: 서식 툴바를 Final 디자인으로 재구성. 토큰(라이트/다크)·밀도(컴팩트 26/기본 30/여유 34px)·인라인 SVG 아이콘·포커스 링·aria 라벨, 드롭다운 없는 토글 칩(D-12). 캐럿 위치의 굵게·기울임·밑줄·취소선·블록·목록·크기·글자색·형광펜을 `aria-pressed`로 표시하고, 같은 크기·색·형광펜을 다시 누르면 해제. 기본색 칩은 테마 기본색으로 되돌림(프리셋 #1f2430을 어두운 배경에 쓰던 문제 제거). 표 셀·읽기 전용 블록에서는 인라인 서식 버튼을 비활성화. 툴바 방향키 이동(roving tabindex)·Esc로 본문 복귀. 툴바 끝에 단축키 켬/끔 스위치(P2B-02 설정 `mi.editorKeys` 공유), 꺼지면 Ctrl+Alt+0~3·Ctrl+Shift+./,·Ctrl+Space·Ctrl+-·접기 단축키도 멈춤(Tab·Enter·Backspace·Ctrl+B/I/U는 유지). 툴팁은 단축키 상태를 따름. Ctrl+Shift+N도 서식 지우기로 받음(브라우저가 선점하면 Ctrl+Space).
+- 저장 형식: 변경 없음(프리셋 크기·색·형광펜만, 허용 목록 밖은 저장 때 제거). 툴바로 만든 서식이 편집→저장→열기→저장에서 동일함을 mdconv.html에 21건 추가.
+- 바뀐 파일: web/js/(note-format, note-format-core, note).js, web/css/note.css, web/test/(run_note_format.mjs, mdconv.html), tests/test_lineeditor_js.py, WORKLOG.
+- 테스트: pytest 172 passed(node 순수 로직 케이스 추가). mdconv.html 131/131. Edge 1024/1280px·라이트/다크·컴팩트 밀도·이슈 메모(compact) 확인, 앱 콘솔 오류 0(테스트 페이지의 404는 이미지 픽스처 경로).
+- 다음에 할 것 / 막힌 것: 실제 키 입력으로 Ctrl+Shift+./, Ctrl+Space(한글 IME 전환과 겹칠 수 있음)는 회사 PC에서 확인. 자동 입력 도구가 마침표 키 코드를 보내지 못해 합성 키 이벤트로 검증함. 다단 편집에서 열 전환 시 상태 칩이 새 열 캐럿을 반영하는지 사용 중 점검. 모두 접기 버튼은 아직 방향키 이동 대상이 아님.
+
 ## 2026-11-24 · Codex · P3-06
 - 한 일: 다단 노트와 이슈 메모의 GFM 표에 셀·머리글 편집, 저장되는 열 정렬, 행·표 추가, Excel TSV 복사와 붙여넣기를 연결했다. 기본 HTML 표를 사용한다. 표를 수정하지 않으면 원문을 내보내고 수정한 표의 인접 블록과 줄바꿈도 보존한다.
 - 바뀐 파일: web/js/(note-table-model, note-table, mdblocks, mdconv, note).js, web/css/note.css, web/test/(run_note_tables.mjs, mdconv.html), tests/test_lineeditor_js.py, SPEC, DECISIONS, FLOW, WORKLOG.
