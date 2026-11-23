@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P0-05
+- 한 일: 최초 커밋 `cf23e32`와 프로젝트의 `.venv`(Python 3.12.9, 3.11+ 조건 충족)를 확인하고 완료 표시.
+- 바뀐 파일: project_flow.html, docs/WORKLOG.md.
+- 테스트: pytest 134 passed.
+- 다음에 할 것 / 막힌 것: P3-02R 변환기 작업 사본의 미커밋 변경을 보존하고, 독립 작업 P3-05의 제목 더블클릭 접기를 확인.
+
 ## 2026-11-24 · Claude Code(Opus) · P3-01 (재검토)
 - 한 일: Final 디자인(DESIGN.md·prototype_final)과 P2B 편집기(lineeditor·note.js `mountEditor`·mdconv·D-29) 기준으로 D-20 재검토. **결론: 직접 만든 contenteditable + mdconv 유지**(라이브러리 교체로 해결되는 문제 없음, 오프라인·무의존 유지). 단 변환기가 블록 수준에서 원문을 바꾸는 결함 3개 확인 → D-20에 재검토 메모·후속 제약 8개 기록, 보강 작업 P3-02R 추가. 코드 변경 없음.
 - 증거: `web/test/mdconv.html` 12/12 PASS, `run_memo.mjs`·`run_lineeditor.mjs` PASS. 브라우저 추가 왕복: 한글 서식·`[!]`·` → 할일 #12`·표·`[[링크]]`·인용·`####` 원문 보존 / 중첩 목록 평탄화, `- [*]`→`- [\*]`, 코드 펜스 이스케이프는 원문 변경(제목 한 단어 편집만으로 파일 전체에 반영). note.js는 Tab 차단·표시 순환 없음·IME `keyCode 229` 가드 없음.
