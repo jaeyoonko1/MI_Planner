@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P1-03
+- 한 일: app/vault.py(트리·생성·읽기/쓰기·이름변경/이동/순서·휴지통 삭제, 경로 탈출 차단), /api/pages 라우터, VaultError → {"error"} 응답
+- 바뀐 파일: app/vault.py, app/routers/pages.py, app/main.py, tests/test_pages.py, tests/test_health.py, project_flow.html
+- 테스트: pytest 16 passed
+- 다음에 할 것 / 막힌 것:
+  - GET /api/pages/tree 응답은 {"tree": [...]} 형태 (SPEC에는 형태 미명시)
+  - 폴더명 = 제목에서 금지문자 제거한 값. 같은 이름이면 " (2)" 붙임
+  - P1-04 프론트 셸 (사이드바 트리 + 라우팅 + 칩 버튼)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P1-02
 - 한 일: app/db.py(connect, 마이그레이션 러너, init_db), migrations/001_init.sql(tasks, settings), 앱 시작 시 자동 마이그레이션(lifespan)
 - 바뀐 파일: app/db.py, app/main.py, migrations/001_init.sql, tests/test_db.py, tests/test_health.py, project_flow.html
