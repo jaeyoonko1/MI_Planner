@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P3-03
+- 한 일: 노트 본문에 2~4단 편집기, 단 추가, 포인터 또는 방향키 너비 조절, 맞춤/고정 너비 가로 스크롤을 연결했다. 포맷 도구 모음은 활성 단을 편집한다. 페이지 배치 옵션은 기존 API로 저장하며 열 개수와 저장 비율이 다르면 균등 너비로 표시한다.
+- 한 일: 최상위 단 경계를 분리하고 원문 구분자와 줄바꿈을 보존해 재조립한다. 코드 펜스·인용의 예시와 4단 한도를 넘는 표식은 원문에 남는다. 모든 단의 본문을 한 큐로 자동 저장하고, 이슈 메모는 같은 구역을 좁은 패널에 세로로 표시한다.
+- 바뀐 파일: web/js/(note, inspector, note-columns, note-column-layout).js, web/css/note.css, web/test/run_note_columns.mjs, tests/test_lineeditor_js.py, project_flow.html, WORKLOG.
+- 테스트: pytest 145 passed. 격리 vault/DB를 사용한 Edge 1024/1280px에서 단 추가·4단 제한, 원문/줄바꿈 보존, 실제 포인터·키보드 조절, 설정 저장 실패와 다시 저장, 표시 모드와 새로고침 복원, 이슈 페이지↔메모 편집 동기화를 확인했다.
+- 다음에 할 것 / 막힌 것: P3-06 표 편집은 같은 공용 편집기에서 이어간다. 열린 코드 블록이나 주석을 먼저 닫으면 단을 추가할 수 있다. 회사 PC에서 실제 한글 IME와 브라우저 단축키 우선순위 확인은 남았다.
+
 ## 2026-11-24 · Codex · P4-02
 - 한 일: 006 평가 스키마, 기본 마스터, 템플릿 조회·생성·수정 API를 추가했다. 마스터 교체를 한 트랜잭션에서 처리하고, 복합 FK가 서로 다른 평가의 설비·Lot·웨이퍼 혼합을 막는다. 단계 진입 시각은 이력으로만 읽는다.
 - 바뀐 파일: migrations/006_evaluations.sql, app/main.py, app/(repositories, routers)/eval_templates.py, tests/(test_eval_templates, test_db, test_task_fields).py, docs/SPEC.md, project_flow.html.

@@ -72,3 +72,29 @@
 .rich.compact .note-editor h3 { font-size: 14.5px; margin-block: 8px 3px; }
 .rich.compact .memo-stat { padding: 0 12px 6px; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .imgbar { animation: none; } .rich.compact .note-bar, .note-editor [data-fold]::before { transition: none; } }
+
+/* P3-03: adjacent note editors share formatting and save controls. */
+.note-layout { min-width: 0; }
+.note-layout-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.note-layout-tools .chip[hidden], .note-format-host .note-bar[hidden] { display: none; }
+.note-layout-tools .chip:disabled { opacity: .55; cursor: default; }
+.note-layout-status { min-width: 0; margin-left: auto; }
+.note-layout-status:empty { display: none; }
+.note-format-host { position: sticky; top: calc(var(--pad-t) * -1); z-index: 2; }
+.note-format-host .note-bar { position: static; border-radius: 0; }
+.note-column-viewport { min-width: 0; overflow: auto; }
+.note-column-grid { display: grid; min-width: 0; }
+.note-layout[data-mode="scroll"]:not([data-columns="1"]) .note-column-grid { width: calc(320px * var(--note-columns)); }
+.note-column { min-width: 0; }
+.note-column .note-editor { overflow-wrap: anywhere; }
+.note-layout:not([data-columns="1"]) .note-column .note-editor:focus { background: var(--fill); }
+.note-column-divider { position: relative; min-width: 0; cursor: col-resize; touch-action: none; }
+.note-column-divider::before { content: ""; position: absolute; inset: 0 5px; background: var(--line-2); }
+.note-column-divider:hover::before, .note-column-divider:focus-visible::before { background: var(--accent); }
+.note-column-divider:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.note-layout.compact .note-format-host { position: static; }
+.note-layout.compact .note-layout-tools { border-bottom: 0; padding: 0 12px; font-size: 11px; }
+.note-layout.compact .note-layout-tools:not(:has(.chip:not([hidden]))):has(.note-layout-status:empty) { display: none; }
+.note-layout.compact .note-column:not(:first-child) { border-top: 1px solid var(--line); }
+.note-layout.compact .note-column { --gut: 20px; }
+.note-layout.compact .note-layout-status { margin-block: 5px; }

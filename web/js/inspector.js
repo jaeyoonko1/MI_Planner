@@ -3,6 +3,7 @@
 import { api } from "./api.js";
 import { hub } from "./hub.js";
 import { mountEditor } from "./note.js";
+import { mountNoteColumns } from "./note-columns.js";
 import { openPageSheet } from "./pagedialog.js";
 import { toast } from "./toast.js";
 import { chipRow, dateChoices, el, fmtMD, svg } from "./ui.js";
@@ -225,8 +226,9 @@ function paint(focusTitle) {
   memoWrap.append(memoHead);
   if (!memo || memo.id !== openId) {
     const id = openId;
-    const ctl = mountEditor({
+    const ctl = mountNoteColumns(mountEditor, {
       content: t.note || "",
+      pagePath: t.page_path || undefined,
       compact: true,
       label: "메모",
       placeholder: "이 이슈에 대한 메모 — 입력하면 자동으로 저장돼요 · 이미지는 붙여넣기",

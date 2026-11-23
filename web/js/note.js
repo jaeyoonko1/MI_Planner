@@ -8,6 +8,7 @@ import { getFolds, setFolds } from "./foldstore.js";
 import { keyAction } from "./lineeditor-core.js";
 import { editorKeys } from "./lineeditor.js";
 import { runNoteLineAction } from "./note-lines.js";
+import { mountNoteColumns } from "./note-columns.js";
 import { hub } from "./hub.js";
 import { BASE_PX, COLORS, HLS, SIZES, htmlToMd, loadInto } from "./mdconv.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
@@ -63,7 +64,7 @@ function loadCss() {
  */
 export function mountEditor(cfg) {
   loadCss();
-  const root = el("div", "rich" + (cfg.compact ? " compact" : ""));
+  const root = el("div", "rich" + (cfg.compact && !cfg.shared ? " compact" : ""));
   const bar = el("div", "note-bar");
   const status = el("span", cfg.compact ? "memo-stat" : "jstatus", "");
   const ed = el("div", "note-editor");
@@ -86,6 +87,7 @@ export function mountEditor(cfg) {
   const setStatus = (t, bad = false) => {
     status.textContent = t;
     status.classList.toggle("error", bad);
+    if (cfg.shared && t.startsWith("이미지")) cfg.report?.(t, bad);
   };
   const markEmpty = () => ed.classList.toggle("is-empty", !ed.textContent.trim() && !ed.querySelector("img"));
   const save = () => {
@@ -290,7 +292,7 @@ export function mountEditor(cfg) {
   foldBtn.addEventListener("mousedown", (e) => e.preventDefault());
   foldBtn.addEventListener("click", foldAll);
   bar.append(foldBtn);
-  if (!cfg.compact) bar.append(status);
+  if (!cfg.compact && !cfg.shared) bar.append(status);
 
   // An image gets its own block (its own line in the markdown), with an empty line after it to keep typing.
   function placeImage(html) {
@@ -571,12 +573,13 @@ export function mountEditor(cfg) {
   ed.addEventListener("scroll", onScroll);
 
   root.append(bar, ed);
-  if (cfg.compact) root.append(status);
+  if (cfg.compact && !cfg.shared) root.append(status);
   markEmpty();
   applyFolds();
 
   return {
     el: root,
+    toolbar: bar,
     flush: save,
     getMd: () => htmlToMd(ed),
     // Replace the text from outside (another view saved). The caller decides when it is safe (not typing).
@@ -610,8 +613,11 @@ export function renderNote(host, page) {
   const taskId = page.meta?.task_id ?? null;
   const qs = encodeURIComponent(path);
   const fileUrl = (rel) => `/api/pages/file?path=${qs}&name=${encodeURIComponent(rel.replace(/^files\//, ""))}`;
-  const ctl = mountEditor({
+  const ctl = mountNoteColumns(mountEditor, {
     content: page.content || "",
+    pagePath: path,
+    layout: page.meta?.note_layout,
+    saveLayout: (layout) => req("PUT", `/api/pages/layout?path=${qs}`, layout),
     fileUrl,
     // an issue page and the issue memo are one text: fold alike in both places
     foldScope: taskId != null ? `t:${taskId}` : `p:${path}`,
@@ -628,7 +634,7 @@ export function renderNote(host, page) {
       if (i.kind !== "task" || Number(i.id) !== Number(taskId) || i.from === "page" || ctl.isBusy()) return;
       try {
         const fresh = await api.page(path);
-        if (!ctl.isBusy() && fresh.content !== ctl.getMd()) ctl.setMd(fresh.content);
+        if (!ctl.isBusy() && fresh.content !== ctl.getMd()) ctl.setMd(fresh.content, fresh.meta?.note_layout);
       } catch { /* page moved or gone: keep what is shown */ }
     });
   }
