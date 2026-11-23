@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2-02 (보기 전용)
+- 한 일: 월간 일지 그리드(열=주, 행=요일, 오늘 강조, 월 밖 날짜 흐리게, 주말 접기/펼치기 칩, 이전달/다음달/오늘). 체크박스 줄은 ☐/☑ 모양으로만 표시. journal 타입 페이지에서 자동으로 그리드 표시
+- 바뀐 파일: web/js/journal.js(신규), web/js/api.js, web/js/main.js, web/css/style.css, project_flow.html, .claude/launch.json(미리보기용)
+- 테스트: pytest 25 passed. 시드 데이터로 브라우저 확인(30칸, 오늘 강조, 주말 펼치면 42칸)
+- 다음에 할 것 / 막힌 것:
+  - **P2-02b 편집**: 칸 편집·자동 저장(PUT /api/journal/{yyyy-mm}/{dd}), 서식 편집기 여부 결정
+  - 이전달/다음달 이동은 URL 해시를 바꾸지 않고 제자리 렌더링 (GET이 월 페이지를 자동 생성하므로 트리는 새로고침 전까지 안 갱신됨)
+  - 서버 없이 돌리는 프론트 자동 테스트 없음
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-01
 - 한 일: app/journal.py(## YYYY-MM-DD 파서·렌더러·set_day, 월 페이지 자동 생성), /api/journal/{yyyy-mm} GET, /{dd} PUT, Vault.exists와 create(folder_name) 추가. 시드의 일지 위치를 일지/2026/2026-11로 변경
 - 바뀐 파일: app/journal.py, app/routers/journal.py, app/vault.py, app/main.py, scripts/seed_sample.py, tests/test_journal.py, docs/SPEC.md(4.2 확정 사항), project_flow.html

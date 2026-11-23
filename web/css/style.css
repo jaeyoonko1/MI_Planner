@@ -41,3 +41,20 @@ body { display: flex; font: 14px/1.5 "Malgun Gothic", "Segoe UI", sans-serif; co
 .meta { color: var(--muted); margin-bottom: 16px; }
 .content { white-space: pre-wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-height: 120px; }
 .error { color: #c0392b; }
+
+.journal { overflow-x: auto; }
+.jhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.jtitle { font-size: 16px; min-width: 100px; text-align: center; }
+.jgrid { display: grid; gap: 4px; align-items: stretch; }
+.jweek, .jdow { color: var(--muted); font-weight: 600; text-align: center; padding: 4px 0; }
+.jdow { align-self: start; }
+.jdow.weekend { color: #c0392b; }
+.jcell { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; min-height: 90px; white-space: normal; }
+.jcell.out { background: var(--bg); opacity: .55; }
+.jcell.weekend { background: #fbf7f7; }
+.jcell.today { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); background: var(--accent-weak); }
+.jdate { font-size: 12px; color: var(--muted); }
+.jcell.today .jdate { color: var(--accent); font-weight: 700; }
+.jline { white-space: pre-wrap; word-break: break-word; }
+.jbox { margin-right: 4px; color: var(--muted); }
+.jdone { text-decoration: line-through; color: var(--muted); }

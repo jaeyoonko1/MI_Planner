@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { chipGroup } from "./chips.js";
 import { renderTree } from "./tree.js";
+import { renderJournal } from "./journal.js";
 
 const treeEl = document.getElementById("tree");
 const viewEl = document.getElementById("view");
@@ -62,11 +63,17 @@ function showHome() {
 
 function showPage(page) {
   const typeLabel = TYPES.find((t) => t.value === page.meta.type)?.label ?? page.meta.type;
+  const body = el("div", "content", page.content || "(내용 없음)");
   viewEl.replaceChildren(
     el("h2", "page-title", page.meta.title),
     el("div", "meta", `${typeLabel} · ${page.path}`),
-    el("div", "content", page.content || "(내용 없음)"),
+    body,
   );
+  const month = page.path.split("/").pop();
+  if (page.meta.type === "journal" && /^\d{4}-\d{2}$/.test(month)) {
+    body.className = "journal";
+    renderJournal(body, month).catch((e) => body.replaceChildren(el("p", "error", e.message)));
+  }
 }
 
 function showAddForm(parent) {
