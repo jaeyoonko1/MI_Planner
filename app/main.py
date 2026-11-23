@@ -11,6 +11,7 @@ from app import db
 from fastapi.exceptions import RequestValidationError
 
 from app.repositories.tasks import TaskError
+from app.routers import html_pages
 from app.routers import journal as journal_router
 from app.routers import pages
 from app.routers import tasks as tasks_router
@@ -31,6 +32,7 @@ def create_app(
     app = FastAPI(title="MI_Planner", version=APP_VERSION, lifespan=lifespan)
     app.state.db_path = db_path
     app.state.vault = Vault(vault_path)
+    app.include_router(html_pages.router)  # before pages.router (/state vs "")
     app.include_router(pages.router)
     app.include_router(journal_router.router)
     app.include_router(tasks_router.router)

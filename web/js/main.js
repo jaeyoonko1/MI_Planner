@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { chipGroup } from "./chips.js";
 import { renderTree } from "./tree.js";
 import { renderJournal } from "./journal.js";
+import { renderHtmlPage } from "./htmlpage.js";
 
 const treeEl = document.getElementById("tree");
 const viewEl = document.getElementById("view");
@@ -69,6 +70,11 @@ function showPage(page) {
     el("div", "meta", `${typeLabel} · ${page.path}`),
     body,
   );
+  if (page.meta.type === "html") {
+    body.className = "html-host";
+    renderHtmlPage(body, page).catch((e) => body.replaceChildren(el("p", "error", e.message)));
+    return;
+  }
   const month = page.path.split("/").pop();
   if (page.meta.type === "journal" && /^\d{4}-\d{2}$/.test(month)) {
     body.className = "journal";

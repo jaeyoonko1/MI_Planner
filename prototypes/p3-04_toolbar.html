@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>P3-04 서식 툴바 프로토타입</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 단독 실행 프로토타입: 외부 네트워크·라이브러리 없음. 더블클릭으로 열면 된다. -->
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#d7dbe2; --ink:#1f2430; --sub:#6b7280; --accent:#2f6fed; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.6 "Malgun Gothic",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--card); }
+  header h1 { margin:0; font-size:16px; }
+  header p { margin:2px 0 0; color:var(--sub); font-size:12px; }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:14px; padding:14px 20px; }
+  @media (max-width:900px){ main{grid-template-columns:1fr;} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .card h2 { margin:0; padding:8px 12px; font-size:12px; color:var(--sub); background:#fafbfc; border-bottom:1px solid var(--line); }
+  .toolbar { display:flex; flex-wrap:wrap; gap:6px 14px; padding:8px 10px; border-bottom:1px solid var(--line); background:#fafbfc; position:sticky; top:0; }
+  .grp { display:flex; align-items:center; gap:3px; }
+  .grp .lab { font-size:11px; color:var(--sub); margin-right:2px; }
+  button.chip { border:1px solid var(--line); background:#fff; border-radius:6px; min-width:28px; height:28px; padding:0 7px; cursor:pointer; font:inherit; color:var(--ink); }
+  button.chip:hover { border-color:var(--accent); }
+  button.chip.on { background:#e6eeff; border-color:var(--accent); color:var(--accent); }
+  .sw { width:20px; height:20px; padding:0; min-width:20px; border-radius:50%; }
+  .sw.none { background:linear-gradient(135deg,#fff 45%,#e11 45%,#e11 55%,#fff 55%); }
+  #editor { min-height:360px; padding:14px 18px; outline:none; }
+  #editor:focus { box-shadow: inset 0 0 0 2px #cfe0ff; }
+  pre { margin:0; padding:12px; white-space:pre-wrap; word-break:break-all; font:12px/1.6 Consolas,monospace; min-height:150px; }
+  .bar { padding:8px 12px; display:flex; gap:8px; align-items:center; border-top:1px solid var(--line); background:#fafbfc; }
+  .bar span { color:var(--sub); font-size:12px; }
+  table.keys { border-collapse:collapse; font-size:12px; margin:8px 12px 12px; }
+  table.keys td { padding:2px 10px 2px 0; }
+  kbd { background:#eef0f4; border:1px solid var(--line); border-radius:4px; padding:0 5px; font:11px Consolas,monospace; }
+  #reopen { padding:14px 18px; min-height:120px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>P3-04 서식 툴바 · 프로토타입 (단독 파일, 저장 기능 없음)</h1>
+  <p>왼쪽에서 글을 쓰고 서식을 적용 → 오른쪽에 "파일에 실제로 저장될 내용"이 실시간으로 나옵니다. 아래 [저장 후 다시 열기]로 왕복 검증도 가능.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>편집기 (위지윅)</h2>
+    <div class="toolbar" id="tb">
+      <div class="grp"><span class="lab">크기</span><span id="sizes"></span></div>
+      <div class="grp">
+        <button class="chip" data-cmd="bold" title="Ctrl+B"><b>B</b></button>
+        <button class="chip" data-cmd="italic" title="Ctrl+I"><i>I</i></button>
+        <button class="chip" data-cmd="underline" title="Ctrl+U"><u>U</u></button>
+        <button class="chip" data-cmd="strikeThrough" title="Ctrl+-"><s>S</s></button>
+      </div>
+      <div class="grp"><span class="lab">글자색</span><span id="colors"></span></div>
+      <div class="grp"><span class="lab">형광펜</span><span id="hls"></span></div>
+      <div class="grp"><button class="chip" id="clear" title="Ctrl+Space">서식 지우기</button></div>
+    </div>
+    <div id="editor" contenteditable="true" spellcheck="false">
+      <div>측정 이상 <b>점검 메모</b> — 샘플 텍스트입니다 (가짜 데이터).</div>
+      <div>이 줄을 드래그로 선택한 뒤 툴바 버튼이나 단축키를 눌러보세요.</div>
+      <div><span style="color:#d93025">경고</span> / <mark style="background:#fff176">형광펜</mark> / <u>밑줄</u> / <s>취소선</s> / <span style="font-size:20px">큰 글자</span></div>
+      <div>EQ-A01 RCP 확인 후 LOT-TEST-001 재측정.</div>
+    </div>
+    <table class="keys">
+      <tr><td><kbd>Ctrl+B</kbd> <kbd>Ctrl+I</kbd> <kbd>Ctrl+U</kbd></td><td>굵게 · 기울임 · 밑줄</td></tr>
+      <tr><td><kbd>Ctrl+-</kbd></td><td>취소선</td></tr>
+      <tr><td><kbd>Ctrl+Alt+H</kbd></td><td>형광펜 켜기/끄기 (노랑)</td></tr>
+      <tr><td><kbd>Ctrl+Shift+.</kbd> / <kbd>,</kbd></td><td>글자 크기 키우기 / 줄이기</td></tr>
+      <tr><td><kbd>Ctrl+Space</kbd></td><td>서식 지우기</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>파일에 저장될 내용 (마크다운 + 허용 목록 HTML)</h2>
+    <pre id="out"></pre>
+    <div class="bar">
+      <button class="chip" id="reopenBtn">저장 후 다시 열기 ▶</button>
+      <span id="rtMsg">저장된 텍스트를 다시 읽어 아래에 그립니다.</span>
+    </div>
+    <h2>다시 연 결과 (저장 → 열기 왕복)</h2>
+    <div id="reopen"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// ---- presets (D-15: 크기 6단계, 색 10개 안팎) ----
+const SIZES = [{l:"극소",px:11},{l:"소",px:13},{l:"보통",px:15},{l:"중",px:18},{l:"대",px:22},{l:"특대",px:28}];
+const BASE_PX = 15;
+const COLORS = ["#1f2430","#d93025","#e8710a","#188038","#1a73e8","#7b1fa2","#6b7280"];
+const HLS = ["#fff176","#a5f3a5","#a5d8ff","#ffc9de","#ffd8a8"];
+const ed = document.getElementById("editor");
+const out = document.getElementById("out");
+document.execCommand("styleWithCSS", false, true);
+// drop whitespace-only text nodes left by the HTML source indentation
+[...ed.childNodes].forEach(n => { if (n.nodeType === 3 && !n.textContent.trim()) n.remove(); });
+// sample uses a non-preset size (20px) on purpose: it must be dropped on save
+
+
+// ---- build chip rows ----
+const sizesEl = document.getElementById("sizes");
+SIZES.forEach(s => sizesEl.appendChild(mk("chip", s.l, () => setSize(s.px), `${s.px}px`)));
+const colorsEl = document.getElementById("colors");
+COLORS.forEach(c => colorsEl.appendChild(sw(c, () => run("foreColor", c))));
+const hlsEl = document.getElementById("hls");
+hlsEl.appendChild(sw(null, () => run("hiliteColor", "transparent"), "형광펜 없음"));
+HLS.forEach(c => hlsEl.appendChild(sw(c, () => run("hiliteColor", c))));
+function mk(cls, txt, fn, title) {
+  const b = document.createElement("button");
+  b.className = cls; b.textContent = txt; if (title) b.title = title;
+  b.onmousedown = e => e.preventDefault();          // keep selection in editor
+  b.onclick = () => { ed.focus(); fn(); update(); };
+  return b;
+}
+function sw(color, fn, title) {
+  const b = mk("chip sw" + (color ? "" : " none"), "", fn, title || color);
+  if (color) b.style.background = color;
+  return b;
+}
+document.querySelectorAll("[data-cmd]").forEach(b => {
+  b.onmousedown = e => e.preventDefault();
+  b.onclick = () => { ed.focus(); run(b.dataset.cmd); update(); };
+});
+document.getElementById("clear").onmousedown = e => e.preventDefault();
+document.getElementById("clear").onclick = () => { ed.focus(); clearFmt(); update(); };
+
+function run(cmd, val) { document.execCommand(cmd, false, val); }
+function clearFmt() { run("removeFormat"); run("hiliteColor", "transparent"); }
+
+// size: apply max browser size, then rewrite to preset px
+function setSize(px) {
+  run("fontSize", 7);
+  ed.querySelectorAll('span[style*="xxx-large"], font[size="7"]').forEach(el => {
+    if (el.tagName === "FONT") { const s = document.createElement("span"); s.innerHTML = el.innerHTML; el.replaceWith(s); el = s; }
+    el.style.fontSize = px === BASE_PX ? "" : px + "px";
+    if (!el.getAttribute("style")) el.removeAttribute("style");
+  });
+}
+function stepSize(dir) {
+  const sel = getSelection(); if (!sel.rangeCount) return;
+  let n = sel.anchorNode; n = n.nodeType === 3 ? n.parentElement : n;
+  const cur = parseFloat(getComputedStyle(n).fontSize);
+  let i = SIZES.findIndex(s => s.px >= cur - 0.5); if (i < 0) i = SIZES.length - 1;
+  i = Math.max(0, Math.min(SIZES.length - 1, i + dir));
+  setSize(SIZES[i].px);
+}
+function toggleHL() {
+  const sel = getSelection(); if (!sel.rangeCount) return;
+  let n = sel.anchorNode; n = n.nodeType === 3 ? n.parentElement : n;
+  const bg = getComputedStyle(n).backgroundColor;
+  const has = bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+  run("hiliteColor", has ? "transparent" : HLS[0]);
+}
+
+// ---- shortcuts (OneNote-like) ----
+ed.addEventListener("keydown", e => {
+  const c = e.ctrlKey || e.metaKey;
+  if (!c) return;
+  const k = e.key.toLowerCase();
+  let handled = true;
+  if (e.altKey && k === "h") toggleHL();
+  else if (!e.altKey && !e.shiftKey && k === "-") run("strikeThrough");
+  else if (e.shiftKey && (e.key === "." || e.key === ">")) stepSize(+1);
+  else if (e.shiftKey && (e.key === "," || e.key === "<")) stepSize(-1);
+  else if (k === " ") clearFmt();
+  else handled = false;           // Ctrl+B/I/U are native
+  if (handled) { e.preventDefault(); update(); }
+});
+ed.addEventListener("input", update);
+document.addEventListener("selectionchange", syncButtons);
+
+function syncButtons() {
+  document.querySelectorAll("[data-cmd]").forEach(b => {
+    let on = false; try { on = document.queryCommandState(b.dataset.cmd); } catch (_) {}
+    b.classList.toggle("on", on);
+  });
+}
+
+// ---- serializer: DOM -> markdown + allowed inline HTML ----
+function hex(c) {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(c);
+  if (!m) return /^#[0-9a-f]{6}$/i.test(c) ? c.toLowerCase() : null;
+  if (m[4] !== undefined && +m[4] === 0) return null;
+  return "#" + [m[1], m[2], m[3]].map(v => (+v).toString(16).padStart(2, "0")).join("");
+}
+function inline(node) {
+  let s = "";
+  node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { s += n.textContent.replace(/ /g, " "); return; }
+    if (n.nodeType !== 1) return;
+    const t = n.tagName.toLowerCase();
+    if (t === "br") { s += "\n"; return; }
+    let inner = inline(n);
+    if (!inner) return;
+    const st = n.style || {};
+    if (t === "b" || t === "strong" || +st.fontWeight >= 600 || st.fontWeight === "bold") inner = `**${inner}**`;
+    if (t === "i" || t === "em" || st.fontStyle === "italic") inner = `*${inner}*`;
+    const deco = (st.textDecorationLine || st.textDecoration || "");
+    if (t === "s" || t === "strike" || t === "del" || deco.includes("line-through")) inner = `~~${inner}~~`;
+    if (t === "u" || deco.includes("underline")) inner = `<u>${inner}</u>`;
+    const bg = hex(st.backgroundColor), col = hex(st.color), fs = parseFloat(st.fontSize);
+    if (t === "mark" || bg) { if (bg) inner = `<mark style="background:${bg}">${inner}</mark>`; }
+    const css = [];
+    if (col && COLORS.includes(col) && col !== COLORS[0]) css.push(`color:${col}`);
+    if (fs && SIZES.some(z => z.px === fs) && fs !== BASE_PX) css.push(`font-size:${fs}px`);
+    if (css.length) inner = `<span style="${css.join(";")}">${inner}</span>`;
+    s += inner;
+  });
+  return s;
+}
+function serialize() {
+  const lines = [];
+  const kids = [...ed.childNodes];
+  let buf = null;
+  const flush = () => { if (buf !== null) { lines.push(buf); buf = null; } };
+  kids.forEach(n => {
+    if (n.nodeType === 1 && /^(DIV|P)$/.test(n.tagName)) { flush(); lines.push(inline(n)); }
+    else { buf = (buf || "") + (n.nodeType === 3 ? n.textContent : inline({childNodes:[n]})); }
+  });
+  flush();
+  return lines.join("\n");
+}
+
+// ---- reader: saved text -> sanitized HTML (what P3-02 would do on open) ----
+function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function render(md) {
+  return md.split("\n").map(line => {
+    // keep only allowed tags, escape everything else
+    const keep = [];
+    let s = line.replace(/<(\/?)(u)>|<(\/?)mark( style="background:#[0-9a-f]{6}")?>|<(\/?)span( style="(?:color:#[0-9a-f]{6};?)?(?:font-size:\d+px)?")?>/gi,
+      m => { keep.push(m); return `\u0000${keep.length-1}\u0000`; });
+    s = esc(s)
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/\*(.+?)\*/g, "<i>$1</i>")
+      .replace(/~~(.+?)~~/g, "<s>$1</s>")
+      .replace(/\u0000(\d+)\u0000/g, (_, i) => keep[+i]);
+    return `<div>${s || "<br>"}</div>`;
+  }).join("");
+}
+
+function update() { out.textContent = serialize(); syncButtons(); }
+document.getElementById("reopenBtn").onclick = () => {
+  const md = serialize();
+  document.getElementById("reopen").innerHTML = render(md);
+  document.getElementById("rtMsg").textContent = "왕복 완료: " + new Date().toLocaleTimeString();
+};
+update();
+</script>
+</body>
+</html>
