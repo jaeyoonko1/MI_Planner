@@ -9,7 +9,12 @@ from app.repositories.tasks import TaskError
 router = APIRouter(prefix="/api/settings")
 
 # Whitelisted keys with defaults (SPEC section 5 settings table).
-DEFAULTS: dict[str, str] = {"journal_auto_show": "on"}
+DEFAULTS: dict[str, str] = {"journal_auto_show": "on", "theme": "system", "density": "normal"}
+# Keys with a closed set of values (D-23 theme, density). Other keys accept any string.
+CHOICES: dict[str, set[str]] = {
+    "theme": {"system", "light", "dark"},
+    "density": {"compact", "normal", "cozy"},
+}
 
 
 class SettingIn(BaseModel):
@@ -34,6 +39,8 @@ def get_settings(request: Request) -> dict:
 def put_setting(request: Request, key: str, body: SettingIn) -> dict:
     if key not in DEFAULTS:
         raise TaskError("알 수 없는 설정입니다.", 404)
+    if key in CHOICES and body.value not in CHOICES[key]:
+        raise TaskError("허용되지 않는 설정 값입니다.", 400)
     conn = db.connect(request.app.state.db_path)
     try:
         conn.execute(

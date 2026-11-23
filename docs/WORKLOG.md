@@ -2,6 +2,17 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-04
+- 한 일: 워크스페이스 셸을 Final 시안에 맞춤. `theme.css`에 다크/라이트 토큰(D-23)·밀도 3단계·셸 레이아웃, 모든 화면 색을 토큰으로 교체(하드코딩 제거, 기존 변수는 별칭 유지). `boot.js`가 첫 페인트 전에 테마·밀도 적용(깜박임 없음), `shell.js`가 시스템/라이트/다크 + 컴팩트/기본/여유 버튼 토글(D-12), 사이드바 접기(`[`), 브레드크럼, 저장 상태 표시. 설정은 `settings.theme`/`density`에 저장(+localStorage 캐시). 사이드바 트리는 여섯 최상위(일지/MI 공정업무/연구 개발/성과/업무 매뉴얼/스터디)를 항상 표시(없으면 흐린 줄, 클릭 시 생성), 인라인 SVG 아이콘(`index.html` 스프라이트, 외부 자산 없음), 화살표·Home/End 키 이동(roving tabindex), 드래그로 하위 이동·형제 순서 변경(PATCH). 포커스 링, 1024/1280px 확인.
+- 바뀐 파일: web/index.html, web/css/(theme.css 신규, style.css, lineeditor.css, note.css), web/js/(boot.js·icons.js·shell.js 신규, tree.js, main.js, api.js), app/routers/settings.py, app/main.py(정적 파일 no-cache), tests/test_settings.py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 61 passed. 브라우저 미리보기에서 1024·1280px, 다크·라이트, 컴팩트·여유, 사이드바 접기, 트리 드래그(자식 이동·순서 변경)·키보드 이동, 콘솔 오류 없음 확인(이동 후 원상 복구).
+- 다음에 할 것 / 막힌 것:
+  - 오늘·할일 외 바로가기(주간·월간·구조·평가 현황판)와 검색 팔레트(`/`, Ctrl+K), 단축키 켬/끔 설정은 해당 작업(P2B-05 이후)에서.
+  - 트리의 '자동 폴더'·할일 페이지 노드·위치 고정 표시는 P2B-07/08 범위. 고스트(미생성) 루트는 사용자가 클릭해 직접 만든다.
+  - 일지 월간 표는 좁은 폭에서 가로 스크롤(기존 동작, 미개선). 사이드바는 900px 미만에서 자동 접힘 없음(수동 토글만).
+  - 동시에 여러 요청(설정 저장 + 할일 조회)을 보내면 드물게 `/api/todos`가 500(SQLite 잠김 추정)을 낸 적이 있음 — 재현 조건 확인 필요(WAL/busy_timeout 점검).
+  - 실제 Edge·웨일에서의 `[` 키 및 시스템 테마 전환 연동은 미확인(미리보기 브라우저만).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-03
 - 한 일: 사용자 정의 필드 저장·API. `002_task_fields.sql`: `task_fields` 테이블 + `tasks.props`(JSON) 추가, 기본 항목 4개(우선순위·요청자·납기·하기로 한 날) 시드, 기존 값을 props로 복사. 기존 4개 컬럼은 props와 함께 쓰는 미러로 유지(기존 쿼리·필터·일지·대시보드 무변경). `app/repositories/task_fields.py`(정의 CRUD, 선택지 추가·삭제·옮기기·계층, 보관/purge 삭제, 규칙 검증·참조 검사)와 `app/routers/task_fields.py`. 할일 API에 `props`·`?field_<key>=` 필터 추가.
 - 바뀐 파일: migrations/002_task_fields.sql, app/repositories/task_fields.py, app/repositories/tasks.py, app/routers/task_fields.py, app/routers/tasks.py, app/main.py, tests/test_task_fields.py, tests/test_db.py, docs/SPEC.md, project_flow.html. UI는 건드리지 않음.

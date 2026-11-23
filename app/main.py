@@ -43,6 +43,14 @@ def create_app(
     app.include_router(settings_router.router)
     app.include_router(dashboard_router.router)
 
+    @app.middleware("http")
+    async def revalidate_static(request, call_next):
+        # Local app: always revalidate UI files so an updated css/js is never served stale from cache.
+        response = await call_next(request)
+        if not request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok", "version": APP_VERSION}

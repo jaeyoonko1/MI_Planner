@@ -273,7 +273,7 @@ vault/
   - `POST /api/todos`(title 필수, 201), `GET /{id}`, `PATCH /{id}`(보낸 필드만 수정, null로 비우기 가능), `DELETE /{id}` → `{ok:true}`. 상위 할일 삭제 시 하위는 최상위로 풀림. 순환·자기 참조 거부.
   - 오류: 검증 400, 없음 404, 요청 형식 오류 422 — 모두 `{"error": "..."}`.
 - **확정(P2-05/06) API**:
-  - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off, 기본 on).
+  - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off 기본 on, `theme` system|light|dark 기본 system, `density` compact|normal|cozy 기본 normal. theme·density는 그 외 값이면 400). 정적 파일(비 `/api`)은 `Cache-Control: no-cache`로 서빙.
   - `GET /api/journal/{yyyy-mm}/auto` → `{month, enabled, days: {"YYYY-MM-DD": [{id,title,status,priority,due_date}]}}` (납기가 그날이고 done 아닌 할일, 읽기 전용·파일에 쓰지 않음).
   - `POST /api/todos/from-line` `{date, line_index}` → 201 `{task, month, path, days}`. 체크박스 줄만, 할일 `planned_date`=그 날짜, 줄 끝에 ` → 할일 #id` 추가(이미 있으면 거부). (경로는 `/api/tasks`가 아니라 `/api/todos`)
   - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations:[]}`.

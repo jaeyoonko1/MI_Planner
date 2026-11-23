@@ -6,6 +6,7 @@ import { renderHtmlPage } from "./htmlpage.js";
 import { flushNote, renderNote } from "./note.js";
 import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
+import { flash, initShell, setCrumb } from "./shell.js";
 
 const treeEl = document.getElementById("tree");
 const viewEl = document.getElementById("view");
@@ -29,7 +30,51 @@ let treeData = [];
 let quickInput = null;
 
 function paintTree() {
-  renderTree(treeEl, treeData, { activePath: currentPath(), onAdd: showAddForm });
+  renderTree(treeEl, treeData, { activePath: currentPath(), onAdd: showAddForm, onCreateRoot: createRoot, onMove: movePage });
+}
+
+async function createRoot(title) {
+  try {
+    const page = await api.create("", title, "note");
+    await refreshTree();
+    location.hash = toHash(page.path);
+  } catch (e) {
+    flash(false, e.message);
+  }
+}
+
+const findNode = (nodes, path) => {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    const hit = findNode(n.children, path);
+    if (hit) return hit;
+  }
+  return null;
+};
+
+// Move `from` under `parent` at a position: Infinity = last, {before, target} = next to a sibling.
+async function movePage(from, parent, where) {
+  try {
+    const siblings = (parent ? findNode(treeData, parent)?.children : treeData) ?? [];
+    const rest = siblings.filter((n) => n.path !== from);
+    let at = rest.length;
+    if (where !== Infinity) {
+      const i = rest.findIndex((n) => n.path === where.target);
+      at = i < 0 ? rest.length : where.before ? i : i + 1;
+    }
+    const moved = await api.movePage(from, { parent, order: at });
+    await Promise.all(rest.map((n, i) => {
+      const pos = i < at ? i : i + 1;
+      return n.order === pos ? null : api.movePage(n.path, { order: pos });
+    }));
+    const active = currentPath();
+    await refreshTree();
+    if (active && (active === from || active.startsWith(from + "/"))) location.hash = toHash(moved.path + active.slice(from.length));
+    flash(true, "옮겼어요");
+  } catch (e) {
+    flash(false, e.message);
+    await refreshTree();
+  }
 }
 
 async function refreshTree() {
@@ -47,6 +92,7 @@ async function route() {
   paintTree();
   const screen = location.hash.replace(/^#\//, "");
   showScreen(screen === "todos" || screen === "today" ? screen : "");
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : path ? path.split("/") : ["홈"]);
   if (screen === "today") {
     return renderToday(viewEl).catch((e) => viewEl.replaceChildren(el("p", "error", e.message)));
   }
@@ -73,7 +119,7 @@ function el(tag, cls, text) {
 }
 
 function showHome() {
-  const box = el("div", "card");
+  const box = el("div", "card home");
   box.append(el("h3", "", "MI_Planner"));
   box.append(el("p", "", treeData.length ? "왼쪽 트리에서 페이지를 고르세요." : "아직 페이지가 없습니다."));
   const btn = el("button", "btn", "페이지 만들기");
@@ -152,6 +198,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+initShell();
 document.getElementById("btn-new-root").addEventListener("click", () => showAddForm(""));
 document.addEventListener("tree-changed", paintTree);
 window.addEventListener("hashchange", route);

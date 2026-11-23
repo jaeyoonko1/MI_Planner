@@ -1,10 +1,5 @@
 /* Shared line editor (P2B-02). All colors are tokens so the theme work (D-23) can override them. */
-:root {
-  --le-star: #e08a00; --le-urgent: #d92d20; --le-done: #1a9d5b;
-  --le-hl: #ffe9a8; --le-hl-text: inherit;
-  --le-hover: rgba(47, 111, 237, .06); --le-ring: rgba(47, 111, 237, .22);
-  --le-step: 18px;
-}
+:root { --le-step: 18px; }
 
 .le { position: relative; }
 
@@ -12,8 +7,8 @@
 .le-bar { display: flex; align-items: center; gap: 2px; padding: 4px; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
 .le-btn { min-width: 30px; height: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
 .le-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.le-btn:hover { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(15, 23, 42, .08); }
-.le-btn:focus-visible, .le-switch:focus-visible, .le-fold:focus-visible, .le-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.le-btn:hover { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.le-btn:focus-visible, .le-switch:focus-visible, .le-fold:focus-visible, .le-mark:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 .le-btn[data-name="star"]:hover { color: var(--le-star); }
 .le-hl { background: var(--le-hl); color: var(--text); border-radius: 4px; padding: 0 5px; font-weight: 700; font-size: 13px; line-height: 18px; }
 .le-cyc { font-size: 15px; line-height: 1; }
@@ -21,7 +16,7 @@
 .le-grow { flex: 1; }
 .le-switch { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--muted); }
 .le-switch:hover { background: var(--panel); }
-.le-knob { position: relative; width: 28px; height: 16px; border-radius: 999px; background: #c5ccd6; transition: background .15s; }
+.le-knob { position: relative; width: 28px; height: 16px; border-radius: 999px; background: var(--knob-off); transition: background .15s; }
 .le-knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
 .le-switch[aria-checked="true"] .le-knob { background: var(--accent); }
 .le-switch[aria-checked="true"] .le-knob::after { transform: translateX(12px); }
@@ -41,7 +36,7 @@
 .le-line:hover .le-fold, .le-fold:focus-visible { opacity: 1; }
 .le-fold:hover { background: var(--line); }
 .le-dot { flex: none; width: 5px; height: 5px; margin: .72em 5px 0; border-radius: 50%; background: var(--muted); }
-.le-mark { flex: none; width: 17px; height: 17px; margin: .3em 2px 0; padding: 0; border-radius: 5px; border: 1.6px solid #9aa5b4; background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 700 11px/1 inherit; transition: transform .1s, background .12s; }
+.le-mark { flex: none; width: 17px; height: 17px; margin: .3em 2px 0; padding: 0; border-radius: 5px; border: 1.6px solid var(--check-bd); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 700 11px/1 inherit; transition: transform .1s, background .12s; }
 .le-mark:hover { transform: scale(1.12); }
 .le-mark svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .le-mark.mdone { background: var(--le-done); border-color: var(--le-done); }
@@ -49,7 +44,7 @@
 .le-mark.mstar svg { width: 18px; height: 18px; stroke: none; fill: currentColor; }
 .le-mark.murgent { background: var(--le-urgent); border-color: var(--le-urgent); color: #fff; border-radius: 50%; }
 .le-text { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
-.le-text.done { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(107, 119, 133, .55); }
+.le-text.done { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--dim); }
 .le-text mark { background: linear-gradient(transparent 12%, var(--le-hl) 12%, var(--le-hl) 92%, transparent 92%); color: var(--le-hl-text); border-radius: 3px; padding: 0 2px; }
 .le-pill { flex: none; align-self: center; font-size: 11px; padding: 0 8px; border-radius: 999px; background: var(--line); color: var(--muted); }
 .le-line .jpromote { align-self: center; }
@@ -69,12 +64,12 @@
 .jcell-view .le-gut { width: 12px; }
 .jcell-view .le-mark { width: 14px; height: 14px; margin-top: .22em; }
 .jcell-view .le-ta { min-height: 80px; padding: 4px 6px; border-radius: 6px; font-size: 13px; box-shadow: 0 0 0 2px var(--le-ring); }
-.jcell.editable:hover { border-color: #b9c3d3; }
+.jcell.editable:hover { border-color: var(--line-2); }
 
 /* side sheet (double click) */
-.le-sheet { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(640px, 94vw); height: 100vh; max-height: none; padding: 0; border: 0; border-left: 1px solid var(--line); border-radius: 18px 0 0 18px; background: var(--panel); color: var(--text); box-shadow: -24px 0 60px rgba(15, 23, 42, .22); flex-direction: column; animation: le-in .22s cubic-bezier(.2, .8, .2, 1); }
+.le-sheet { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(640px, 94vw); height: 100vh; max-height: none; padding: 0; border: 0; border-left: 1px solid var(--line); border-radius: 18px 0 0 18px; background: var(--panel); color: var(--text); box-shadow: -24px 0 60px rgba(0, 0, 0, .35); flex-direction: column; animation: le-in .22s cubic-bezier(.2, .8, .2, 1); }
 .le-sheet[open] { display: flex; }
-.le-sheet::backdrop { background: rgba(15, 23, 42, .28); backdrop-filter: blur(2px); animation: le-fade .2s ease; }
+.le-sheet::backdrop { background: var(--scrim); backdrop-filter: blur(2px); animation: le-fade .2s ease; }
 .le-sheet-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .le-sheet-head strong { font-size: 16px; letter-spacing: -.01em; }
 .le-sheet-status { flex: 1; font-size: 12px; color: var(--muted); text-align: right; }
@@ -87,8 +82,8 @@
 @keyframes le-fade { from { opacity: 0; } to { opacity: 1; } }
 
 /* help dialog */
-.le-help { width: min(560px, 94vw); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 24px 60px rgba(15, 23, 42, .28); }
-.le-help::backdrop { background: rgba(15, 23, 42, .28); backdrop-filter: blur(2px); }
+.le-help { width: min(560px, 94vw); padding: 0; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 24px 60px var(--scrim); }
+.le-help::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .le-help-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .le-keys { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 14px 18px; align-items: center; font-size: 13px; }
 .le-keycaps { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; align-items: center; }

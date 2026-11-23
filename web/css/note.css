@@ -1,6 +1,6 @@
 /* note editor (P3-02). Loaded by note.js on first use. */
 .note-host { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
-.note-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: -24px; background: var(--panel); border-radius: 8px 8px 0 0; z-index: 1; }
+.note-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: calc(var(--pad-t) * -1); background: var(--panel); border-radius: 8px 8px 0 0; z-index: 1; }
 .note-bar .chip { border-radius: 6px; padding: 2px 10px; }
 .note-editor { padding: 14px 18px; min-height: 360px; outline: none; line-height: 1.7; }
 .note-editor h1 { font-size: 24px; margin: 14px 0 6px; }
@@ -17,4 +17,4 @@
 .note-bar .grp { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
 .note-bar .lab { font-size: 11px; color: var(--muted); margin-right: 2px; }
 .note-bar .chip.sw { width: 20px; height: 20px; padding: 0; min-width: 20px; border-radius: 50%; }
-.note-bar .chip.sw.none { background: linear-gradient(135deg, #fff 45%, #d33 45%, #d33 55%, #fff 55%); }
+.note-bar .chip.sw.none { background: linear-gradient(135deg, var(--panel) 45%, var(--red) 45%, var(--red) 55%, var(--panel) 55%); }

@@ -32,5 +32,6 @@ export const api = {
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
   promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
   today: () => request("GET", "/api/dashboard/today"),
+  movePage: (path, data) => request("PATCH", `/api/pages${q(path)}`, data),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
 };
