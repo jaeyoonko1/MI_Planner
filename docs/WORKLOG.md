@@ -2,6 +2,35 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P2B-01 최종 시안 반영
+- 오늘·주간·월간의 v4 줄 편집기와 Astra 구조 표를 같은 이슈 데이터에 연결했다. 한 번 클릭으로 바로 수정하고 더블클릭으로 오른쪽 상세 또는 날짜 확대 창을 연다.
+- 기준 파일은 web/design/prototype_final.html, docs/DESIGN.md, project_flow.html이다. P2B-01은 완료 상태이며 저장·API·vault 연결은 후속 단계다.
+- Edge에서 주간 별표 줄의 월간 연결, 날짜 이동과 되돌리기, 제목 직접 수정과 확대, 구조 접기·복사·사용자 분류·자유 배치를 확인했다.
+
+## 2026-11-24 · Codex · P2B-01 완료
+- 한 일: 사용자 확정에 따라 Astra를 기준 시안으로 채택. 일반 이슈 생성과 기존 이슈의 페이지 확장을 분리했다. 전용 계층 편집 창에서 기본·사용자 정의 단계, 순서, 모양·색을 편집하고 적용하거나 취소한다.
+- 바뀐 파일: web/design/prototype_astra.html, docs/DESIGN.md, docs/WORKLOG.md, project_flow.html.
+- 테스트: pytest 44 passed. Headless Edge 상호작용 12개 통과(새 분류 적용·취소, 이슈 단독 생성과 동일 ID 페이지 확장 포함).
+- 다음: P2B-02 공통 줄 편집기. 저장·마이그레이션·실제 vault 연동·테마·접근성 검증은 flow의 후속 구현 항목.
+
+## 2026-11-24 · Codex · P2B-01 (Astra 구조 작업표)
+- 한 일: Tempo Structure의 사용자 정의 계층과 스프레드시트형 보기를 참고해 독립 시안 제작. 계층 핸들 순서 변경, 임의 단계 추가, 전체 접기·펼치기, 자유 트리의 하위 그룹 이동, 이슈·에픽 복사와 그룹 완료 집계.
+- 바뀐 파일: web/design/prototype_astra.html, docs/WORKLOG.md.
+- 테스트: pytest 44 passed. Edge에서 전체 펼침·접힘, 유형을 에픽 위로 이동, 새 ID로 이슈 복사, 여러 유형에 걸친 에픽 복사, 세 번째 분류 추가, 하위 트리 이동, 순환 거부 확인.
+- 다음: 실제 사용자가 구조 편집을 검토한 뒤 본 앱의 뷰 저장 형식 결정. 시안은 탭 메모리에서 작동.
+
+## 2026-11-24 · Codex · P2B-01 (_solhigh 구조·일지·편집)
+- 한 일: 구조 관리에서 분류와 선택지를 편집하고 할일을 그룹 간 이동. 페이지·폴더 트리 이동과 순서 변경, 조건부 노트 경로와 생성 전 미리보기, 그룹·날짜별 할일 페이지 생성. 일지·오늘·할일의 ID 연결과 완료/제목 반영. Tab/Shift+Tab, Ctrl+N·Alt+N, 본문 접기, 이미지 붙여넣기와 너비 제어.
+- 바뀐 파일: web/design/prototype_solhigh.html, docs/DESIGN_solhigh.md, docs/SPEC.md, docs/WORKLOG.md.
+- 테스트: pytest 44 passed. Headless Edge에서 합성 드래그·키·클립보드 이벤트로 필드 이동, 경로 규칙, 메모·이미지, 일지 연결 등 16개 확인. 실제 OS 예약 키와 시스템 클립보드는 별도.
+- 범위: 오프라인 단일 HTML, 탭 메모리의 모의 페이지 트리. vault·DB 연동은 앱 적용 단계에서 진행.
+
+## 2026-11-24 · Codex · P2B-01 (_solhigh 사용자 피드백)
+- 한 일: 오늘 할일 행에 메모 미리보기, 메모 단축키·목록 연속 입력, 설정의 단축키 토글과 컴팩트 모드를 추가했다. 할일 상세 입력에서 납기·요청자·제품·유형·에픽·태그를 고르고 다음 입력에서 재사용한다. 할일과 연결된 페이지의 메모를 상세 패널과 공유한다.
+- 바뀐 파일: web/design/prototype_solhigh.html, docs/DESIGN_solhigh.md, docs/WORKLOG.md
+- 테스트: pytest 44 passed. 브라우저에서 제품 B·이슈·내일 선택 후 다음 입력의 기본값, Ctrl+. 불릿, 단축키 끄기, 할일에서 페이지 생성 및 메모 연결을 확인했다.
+- 다음에 할 것: 실제 앱에 적용할 때 사용자 정의 필드와 페이지 연결의 저장 형식을 결정한다. 이 시안은 탭 메모리에서 동작한다.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P3-04
 - 한 일: 노트 편집기에 서식 툴바 추가 — 글자 크기 6단계 칩, 글자색 7, 형광펜 5 + 없음, 서식 지우기. 단축키 Ctrl+Alt+H(형광펜 켜고 끄기), Ctrl+Shift+. / ,(크기 한 단계 키우기·줄이기), Ctrl+Space(서식 지우기). 기존 Ctrl+B/I/U, Ctrl+-, Ctrl+Alt+0~3 유지. 저장은 프리셋 값만, 그 밖은 제거(mdconv.js, P3-02에서 구현)
 - 바뀐 파일: web/js/note.js, web/css/note.css, project_flow.html

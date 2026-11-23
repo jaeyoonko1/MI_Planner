@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="ko" data-density="normal">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<title>MI Planner · 프로토타입 v3</title>
+<!-- 정적 프로토타입 v3: solhigh 디자인 언어 + 할일/에픽/단축키/밀도 UX. 가짜 데이터, 외부 요청 0 -->
+<style>
+:root{
+  --bg:#02040a; --bg-2:#070c18; --panel:rgba(13,20,33,.86); --panel-2:#0f1828; --raise:#152137; --hover:#16233a;
+  --line:rgba(145,174,255,.13); --line-2:rgba(132,166,255,.32);
+  --text:#edf4ff; --text-2:#c3d0e6; --muted:#9aa9c3; --dim:#6f7f9a;
+  --blue:#729eff; --blue-s:#376ee8; --cyan:#5ee6f4; --violet:#ac91ff; --green:#64e4ae; --red:#ff8ba1; --yellow:#ffd27b;
+  --font:"Segoe UI Variable Text","Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.5,.64,1);
+  --rail:252px;
+  /* density: normal */
+  --py:13px; --px:22px; --gap:18px; --ttl:36px; --fs:14px; --meta:11.5px; --metric-h:112px; --cell-h:146px; --tile-h:46px;
+}
+[data-density="compact"]{--py:7px; --px:18px; --gap:12px; --ttl:28px; --fs:13.5px; --meta:11px; --metric-h:84px; --cell-h:108px; --tile-h:34px}
+[data-density="cozy"]{--py:18px; --px:24px; --gap:22px; --ttl:40px; --fs:14.5px; --meta:12px; --metric-h:128px; --cell-h:176px; --tile-h:54px}
+
+*{box-sizing:border-box}
+html{scrollbar-color:#2c3b57 #080d17}
+body{margin:0;color:var(--text);background:var(--bg);font:var(--fs)/1.6 var(--font);letter-spacing:-.018em;-webkit-font-smoothing:antialiased;overflow:hidden}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 82% 0%,rgba(51,82,164,.14),transparent 50%),radial-gradient(ellipse at 25% 95%,rgba(51,49,124,.08),transparent 45%);z-index:-1}
+button,input,textarea{font:inherit;color:inherit;letter-spacing:inherit}
+button{background:none;border:0;padding:0;cursor:pointer;text-align:inherit}
+h1,h2,h3,h4,p{margin:0}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+svg.s{width:14px;height:14px}
+kbd{font:10.5px/1 var(--mono);border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;padding:3px 5px;color:var(--muted);background:rgba(20,30,50,.6)}
+.mono{font-family:var(--mono)}
+
+/* ── shell ── */
+.app{display:grid;grid-template-columns:var(--rail) minmax(0,1fr) auto;height:100vh;transition:grid-template-columns .35s var(--ease)}
+.app.rail-off{grid-template-columns:0 minmax(0,1fr) auto}
+.rail{background:rgba(8,12,22,.97);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.brand{display:flex;align-items:center;gap:11px;padding:24px 20px 20px}
+.brand-mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(150deg,rgba(114,158,255,.22),rgba(94,230,244,.08));border:1px solid var(--line-2);color:#a9c4ff}
+.brand-mark svg{width:20px;height:20px;stroke-width:1.6}
+.brand b{display:block;font-size:16px;font-weight:720;letter-spacing:-.05em;line-height:1.15;white-space:nowrap}
+.brand small{display:block;font-size:9.5px;letter-spacing:.18em;color:var(--dim);white-space:nowrap}
+.rail-search{margin:0 14px 14px;height:36px;display:flex;align-items:center;gap:9px;padding:0 10px 0 12px;border:1px solid var(--line);border-radius:9px;color:var(--dim);font-size:12px;background:rgba(19,29,47,.4);white-space:nowrap}
+.rail-search:hover{border-color:var(--line-2);color:var(--muted)}
+.rail-search span{flex:1}
+.rail-scroll{flex:1;overflow:auto;padding:0 12px 16px}
+.rail-label{display:flex;align-items:center;justify-content:space-between;padding:16px 10px 7px;color:var(--dim);font-size:10px;font-weight:650;letter-spacing:.13em}
+.rail-label .ib{width:22px;height:22px}
+.nav{width:100%;height:36px;display:flex;align-items:center;gap:11px;padding:0 10px;border-radius:9px;color:var(--muted);font-size:13px;font-weight:550;position:relative;white-space:nowrap}
+.nav:hover{background:#111b2c;color:var(--text)}
+.nav.on{background:linear-gradient(90deg,rgba(55,110,232,.22),rgba(55,110,232,.06));color:#fff}
+.nav.on:before{content:"";position:absolute;left:-12px;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:var(--blue)}
+.nav .lbl{flex:1;overflow:hidden;text-overflow:ellipsis}
+.nav .cnt{font:11px var(--mono);color:var(--dim)}
+.nav .cnt.r{color:var(--red)}
+.tree-row{width:100%;height:31px;display:flex;align-items:center;gap:6px;border-radius:8px;color:var(--muted);font-size:12.5px;padding-right:8px;white-space:nowrap}
+.tree-row:hover{background:#111b2c;color:var(--text)}
+.tree-row.on{background:#15223a;color:#fff}
+.tree-row .tw{width:18px;height:18px;display:grid;place-items:center;color:var(--dim);border-radius:5px;flex:none}
+.tree-row .tw svg{width:10px;height:10px;stroke-width:2.4;transition:transform .2s var(--ease)}
+.tree-row .tw.open svg{transform:rotate(90deg)}
+.tree-row .ty svg{width:14px;height:14px}
+.tree-row .tl{flex:1;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.tree-row .pg{font:10px var(--mono);color:var(--dim)}
+.rail-foot{border-top:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim);letter-spacing:.04em}
+.rail-foot .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.rail-foot .grow{flex:1;white-space:nowrap}
+
+.main{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+.topbar{height:60px;flex:none;border-bottom:1px solid var(--line);padding:0 28px 0 22px;display:flex;align-items:center;gap:10px;background:rgba(6,10,19,.8);backdrop-filter:blur(18px);z-index:8}
+.crumb{display:flex;align-items:center;gap:6px;flex:1;min-width:0;color:var(--dim);font-size:12px;white-space:nowrap;overflow:hidden}
+.crumb button{padding:3px 6px;border-radius:6px}
+.crumb button:hover{color:var(--text);background:#111b2c}
+.crumb .cur{color:#c0cde2;font-weight:550}
+.crumb .sep{opacity:.5}
+.ib{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;color:var(--muted);flex:none;transition:background .15s,color .15s}
+.ib:hover{background:#131e31;color:#fff}
+.ib.bd{border:1px solid var(--line)}
+.kbtn{height:34px;display:inline-flex;align-items:center;gap:7px;padding:0 11px;border-radius:9px;border:1px solid var(--line);font-size:11.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.kbtn:hover{border-color:var(--line-2);color:var(--text)}
+.kbtn[aria-pressed=true]{color:var(--cyan);border-color:rgba(94,230,244,.35);background:rgba(94,230,244,.06)}
+.kbtn .led{width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.kbtn[aria-pressed=true] .led{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.save{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);padding:0 6px;white-space:nowrap}
+.save i{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.save.busy i{background:var(--yellow);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+.content{flex:1;overflow:auto;scroll-behavior:smooth}
+.page{max-width:1240px;margin:0 auto;padding:calc(var(--gap) + 14px) clamp(20px,3.4vw,44px) 120px;animation:enter .45s var(--ease)}
+.page.wide{max-width:1500px}
+@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── type & controls ── */
+.eyebrow{display:flex;align-items:center;gap:12px;font-size:12px;font-weight:650;letter-spacing:.06em;color:var(--cyan)}
+.eyebrow:before{content:"";width:26px;height:1px;background:currentColor;opacity:.6}
+.eyebrow.muted{color:var(--muted)}
+.h1{font-size:var(--ttl);font-weight:760;letter-spacing:-.055em;line-height:1.15;margin:12px 0 8px}
+.lead{color:var(--muted);font-size:14px}
+.lead b{color:var(--text);font-weight:650}
+.lead b.r{color:var(--red)}
+.hero{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:calc(var(--gap) + 8px)}
+.hero .grow{flex:1;min-width:280px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;font-weight:600;background:rgba(19,29,47,.5);white-space:nowrap;transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{background:#18263d;border-color:var(--line-2)}
+.btn:active{transform:translateY(1px)}
+.btn.pri{color:#f6f9ff;background:var(--blue-s);border-color:#5a8bf4;box-shadow:0 3px 14px rgba(14,48,97,.45),inset 0 1px rgba(255,255,255,.09)}
+.btn.pri:hover{background:#477ef7}
+.btn.quiet{background:none;border-color:transparent;color:var(--muted)}
+.btn.quiet:hover{background:#141e30;color:#e0e9fa}
+.btn.sm{height:30px;font-size:11.5px;padding:0 10px}
+.btn kbd{margin-left:2px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#dfe9ff}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:600;white-space:nowrap;border:1px solid transparent;line-height:1.7}
+.pill.blue{background:rgba(75,130,255,.12);color:#a9c4ff;border-color:rgba(75,130,255,.2)}
+.pill.red{background:rgba(255,79,115,.09);color:var(--red);border-color:rgba(255,79,115,.16)}
+.pill.yellow{background:rgba(255,209,92,.08);color:var(--yellow);border-color:rgba(255,209,92,.15)}
+.pill.green{background:rgba(57,229,140,.07);color:var(--green);border-color:rgba(57,229,140,.16)}
+.pill.violet{background:rgba(138,92,255,.1);color:var(--violet);border-color:rgba(138,92,255,.2)}
+.pill.cyan{background:rgba(94,230,244,.07);color:var(--cyan);border-color:rgba(94,230,244,.18)}
+.pill.gray{background:rgba(145,174,255,.06);color:var(--muted);border-color:var(--line)}
+.chip{display:inline-flex;align-items:center;gap:6px;height:30px;font-size:12px;font-weight:550;border:1px solid var(--line);border-radius:8px;padding:0 11px;color:var(--muted);white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.chip:hover{background:#19273d;color:var(--text)}
+.chip[aria-pressed=true]{background:#1a2e50;border-color:#4068a8;color:#d6e5ff}
+.chip .sw{width:7px;height:7px;border-radius:50%}
+.chip .n{font:10.5px var(--mono);color:var(--dim)}
+.chip.add{border-style:dashed}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--line);border-radius:10px;background:rgba(8,13,24,.6);gap:2px}
+.seg button{height:28px;padding:0 12px;border-radius:7px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed=true]{background:#1d2d4a;color:#fff;box-shadow:inset 0 0 0 1px rgba(114,158,255,.3)}
+.switch{position:relative;width:36px;height:21px;border-radius:99px;background:#24324b;flex:none;transition:background .2s}
+.switch:after{content:"";position:absolute;left:3px;top:3px;width:15px;height:15px;border-radius:50%;background:#c9d6ec;transition:transform .25s var(--spring),background .2s}
+[aria-checked=true] > .switch,.switch[aria-checked=true]{background:var(--blue-s)}
+[aria-checked=true] > .switch:after,.switch[aria-checked=true]:after{transform:translateX(15px);background:#fff}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.toggle[aria-checked=true]{color:var(--text)}
+
+/* ── panels ── */
+.panel{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 8px 28px rgba(0,0,0,.14);overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:10px;padding:calc(var(--py) + 5px) var(--px) calc(var(--py) - 1px)}
+.panel-head h2{font-size:15px;font-weight:650;letter-spacing:-.03em;flex:1;display:flex;align-items:center;gap:9px}
+.panel-head h2 svg{color:var(--blue);width:17px;height:17px}
+.panel-head h2 small{font:11px var(--mono);color:var(--dim);font-weight:400}
+.panel-foot{padding:11px var(--px);border-top:1px solid var(--line);background:rgba(11,19,33,.3);font-size:11px;color:var(--dim);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.panel-foot span{display:inline-flex;gap:5px;align-items:center}
+.tabs{display:flex;gap:20px;padding:0 var(--px);border-bottom:1px solid var(--line)}
+.tabs button{position:relative;padding:4px 0 11px;font-size:13px;font-weight:600;color:var(--dim)}
+.tabs button:hover{color:var(--text)}
+.tabs button small{font:10.5px var(--mono);margin-left:4px;color:var(--dim)}
+.tabs button[aria-selected=true]{color:#fff}
+.tabs button[aria-selected=true]:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--blue);border-radius:2px}
+.ghead{display:flex;align-items:center;gap:8px;padding:calc(var(--py) + 3px) var(--px) 4px;font-size:11px;font-weight:650;letter-spacing:.08em;color:var(--dim)}
+.ghead.r{color:var(--red)} .ghead.y{color:var(--yellow)}
+.ghead .ln{flex:1;height:1px;background:var(--line)}
+.ghead .eb{display:inline-flex;align-items:center;gap:7px;letter-spacing:0;font-size:12.5px;color:var(--text);font-weight:650}
+.ghead .eb i{width:8px;height:8px;border-radius:3px}
+.ghead .bar{width:90px}
+
+/* ── task row ── */
+.trow{position:relative;display:flex;align-items:flex-start;gap:13px;padding:var(--py) var(--px) var(--py) calc(var(--px) + 4px);border-top:1px solid var(--line);transition:background .15s;outline:0}
+.trow:first-child,.ghead + .trow{border-top-color:transparent}
+.trow:hover{background:rgba(22,35,58,.55)}
+.trow.cur{background:rgba(29,45,74,.55);box-shadow:inset 2px 0 0 var(--cyan)}
+.trow.sel{background:rgba(55,110,232,.12)}
+.pbar{position:absolute;left:var(--px);left:10px;top:calc(var(--py) + 3px);bottom:calc(var(--py) + 3px);width:3px;border-radius:3px}
+.pbar.p1{background:var(--red)} .pbar.p2{background:var(--yellow)}
+.check{width:20px;height:20px;margin-top:1px;flex:none;border:1.5px solid #43516a;border-radius:6px;display:grid;place-items:center;background:#0c1524;transition:background .2s,border-color .2s,transform .12s}
+.check svg{width:13px;height:13px;stroke:#fff;stroke-width:2.6;fill:none;stroke-dasharray:22;stroke-dashoffset:22;transition:stroke-dashoffset .28s var(--ease) .04s}
+.check:hover{border-color:var(--blue);background:#1a2a47}
+.check:active{transform:scale(.88)}
+.check[aria-pressed=true]{background:var(--blue-s);border-color:#5e93fd}
+.check[aria-pressed=true] svg{stroke-dashoffset:0}
+.tmain{flex:1;min-width:0}
+.ttitle{font-size:calc(var(--fs) + .5px);font-weight:600;line-height:1.45;letter-spacing:-.025em;display:block}
+.ttitle:hover{color:#b4ccff}
+.trow.done .ttitle{color:var(--dim);text-decoration:line-through}
+.tmeta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;margin-top:3px;font-size:var(--meta);color:var(--muted)}
+.tmeta .d{width:2px;height:2px;border-radius:50%;background:var(--dim)}
+.tmeta span{display:inline-flex;align-items:center;gap:5px}
+.tmeta svg{width:12px;height:12px;color:var(--dim)}
+.tmeta .ep i{width:7px;height:7px;border-radius:2.5px}
+[data-density="compact"] .tmeta .opt{display:none}
+[data-density="compact"] .trow .ttitle{display:inline}
+.tright{display:flex;align-items:center;gap:8px;flex:none}
+.tright .pill{font-family:var(--mono);font-size:11px}
+.tright .memo-ic{color:var(--dim)}
+.type{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:5px;font-size:10.5px;font-weight:700;letter-spacing:.01em}
+.trow.leaving{animation:leave .45s var(--ease) .35s forwards}
+@keyframes leave{to{opacity:0;transform:translateX(14px)}}
+
+/* ── hover preview ── */
+.peek{position:fixed;z-index:40;width:360px;max-height:440px;overflow:hidden;border:1px solid var(--line-2);border-radius:16px;background:rgba(12,19,32,.97);backdrop-filter:blur(20px);box-shadow:0 24px 60px rgba(0,0,0,.55),0 0 0 1px rgba(0,0,0,.4);padding:16px 18px;opacity:0;transform:translateY(4px) scale(.985);pointer-events:none;transition:opacity .16s,transform .2s var(--ease)}
+.peek.show{opacity:1;transform:none;pointer-events:auto}
+.peek h4{font-size:15px;font-weight:650;letter-spacing:-.03em;line-height:1.4;margin-bottom:8px}
+.peek .props{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.peek .memo{font-size:13px;color:var(--text-2);line-height:1.6;border-top:1px solid var(--line);padding-top:10px;max-height:230px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 80%,transparent)}
+.peek .memo.empty{color:var(--dim);-webkit-mask-image:none}
+.peek .foot{display:flex;justify-content:space-between;margin-top:10px;font-size:11px;color:var(--dim)}
+
+/* ── rich memo (editor) ── */
+.rte{outline:0;min-height:120px;font-size:14px;line-height:1.7;color:var(--text-2)}
+.rte:empty:before{content:attr(data-ph);color:var(--dim)}
+.rte ul,.rte ol,.memo ul,.memo ol{margin:2px 0 6px;padding-left:22px}
+.rte li::marker,.memo li::marker{color:var(--blue)}
+.rte h3,.memo h3{font-size:16px;color:var(--text);margin:10px 0 4px;letter-spacing:-.03em}
+.rte h4,.memo h4{font-size:14.5px;color:var(--text);margin:8px 0 2px}
+.rte mark,.memo mark{background:rgba(255,210,123,.28);color:#fff3d6;border-radius:3px;padding:0 2px}
+.rte .tl,.memo .tl{position:relative;padding-left:26px;list-style:none}
+.rte .tl:before,.memo .tl:before{content:"";position:absolute;left:0;top:.35em;width:15px;height:15px;border-radius:4px;border:1.5px solid #4a5a78;background:#0c1524;cursor:pointer}
+.rte .tl.done,.memo .tl.done{color:var(--dim);text-decoration:line-through}
+.rte .tl.done:before,.memo .tl.done:before{background:var(--blue-s) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center/11px no-repeat;border-color:#5e93fd}
+.rte .imp:after,.memo .imp:after{content:"★";color:var(--yellow);margin-left:6px;font-size:12px}
+.rte-bar{display:flex;align-items:center;gap:2px;padding:6px;border:1px solid var(--line);border-radius:11px;background:rgba(8,13,24,.7);margin-bottom:10px;flex-wrap:wrap}
+.rte-bar .ib{width:30px;height:30px;font-weight:700;font-size:13px}
+.rte-bar .vs{width:1px;height:18px;background:var(--line);margin:0 4px}
+.rte-bar .hint{margin-left:auto;font-size:11px;color:var(--dim);padding-right:6px;display:flex;gap:6px;align-items:center}
+.rte-wrap{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:rgba(8,13,24,.45);transition:border-color .2s,box-shadow .2s}
+.rte-wrap:focus-within{border-color:rgba(114,158,255,.45);box-shadow:0 0 0 4px rgba(55,110,232,.12)}
+
+/* ── today ── */
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--gap) - 4px);margin-bottom:var(--gap)}
+.metric{min-height:var(--metric-h);position:relative;border:1px solid var(--line);border-radius:14px;padding:14px 18px;background:linear-gradient(120deg,rgba(21,32,52,.8),rgba(11,18,31,.75));text-align:left;transition:border-color .2s,background .2s,transform .2s var(--ease)}
+.metric:hover{border-color:var(--line-2);transform:translateY(-1px)}
+.metric .top{display:flex;align-items:center;justify-content:space-between;color:#a7b7ce;font-size:12px}
+.metric .top svg{width:16px;height:16px;color:var(--dim)}
+.metric .val{display:flex;align-items:baseline;gap:6px;margin-top:6px}
+.metric .val strong{font:500 30px/1.25 var(--font);letter-spacing:-.06em}
+.metric .val span{font-size:11px;color:var(--dim)}
+.metric .ft{position:absolute;right:16px;bottom:14px;font-size:11px;color:var(--muted)}
+.metric.red strong,.metric.red .top svg{color:var(--red)}
+.metric.cyan strong{color:var(--cyan)}
+.mbar{height:3px;width:56px;background:#283851;border-radius:2px;overflow:hidden;margin-top:6px}
+.mbar i{display:block;background:var(--cyan);height:100%}
+[data-density="compact"] .metric .val{margin-top:0} [data-density="compact"] .metric .val strong{font-size:24px}
+.tgrid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:var(--gap);align-items:start}
+.tgrid > div{display:flex;flex-direction:column;gap:var(--gap);min-width:0}
+.jl{display:flex;align-items:flex-start;gap:10px;padding:calc(var(--py) - 7px) 0;font-size:13.5px}
+.jl .b{width:4px;height:4px;border-radius:50%;background:var(--dim);margin:9px 8px 0 8px;flex:none}
+.jl .check{width:18px;height:18px;border-radius:5px}
+.jl.done .tx{color:var(--dim);text-decoration:line-through}
+.jl .tx{flex:1}
+.jl .promote{opacity:0;font-size:11px;color:var(--blue);white-space:nowrap;padding:2px 7px;border-radius:6px}
+.jl:hover .promote{opacity:1}
+.jl .promote:hover{background:rgba(114,158,255,.12)}
+.jadd{display:flex;align-items:center;gap:10px;color:var(--dim);padding:6px 0 2px 2px}
+.jadd input{flex:1;border:0;outline:0;background:none;font-size:13px;padding:4px 0}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) 70px 46px;align-items:center;gap:12px;padding:calc(var(--py) - 3px) var(--px);border-top:1px solid var(--line);font-size:12.5px}
+.wrow b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wrow small{color:var(--dim);font-size:11px}
+.bar{height:4px;border-radius:9px;background:#1f2c44;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:9px}
+.wrow .h{text-align:right;font:600 12px var(--mono)}
+
+/* ── quick add ── */
+.qa{border:1px solid var(--line);border-radius:16px;background:linear-gradient(120deg,rgba(21,32,52,.85),rgba(11,18,31,.8));margin-bottom:var(--gap);transition:border-color .2s,box-shadow .2s}
+.qa:focus-within{border-color:rgba(114,158,255,.5);box-shadow:0 0 0 4px rgba(55,110,232,.12)}
+.qa-row{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 18px}
+.qa-row > svg{color:var(--blue)}
+.qa-row input{flex:1;min-width:0;height:36px;border:0;outline:0;background:none;font-size:15px}
+.qa-row input::placeholder{color:var(--dim)}
+.qa-detail{display:grid;grid-template-rows:0fr;transition:grid-template-rows .32s var(--ease)}
+.qa.open .qa-detail{grid-template-rows:1fr}
+.qa-detail > div{overflow:hidden}
+.qa-props{border-top:1px solid var(--line);padding:6px 18px 14px;display:grid;grid-template-columns:72px 1fr;gap:8px 14px;align-items:center}
+.qa-props .k{font-size:11.5px;font-weight:650;color:var(--dim);display:flex;align-items:center;gap:6px}
+.qa-props .k svg{width:13px;height:13px}
+.qa-props .chip{height:28px;font-size:11.5px}
+.qa-props input[type=date]{height:28px;border:1px solid var(--line);border-radius:8px;background:none;padding:0 8px;font-size:11.5px;color:var(--muted);color-scheme:dark}
+.qa-foot{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding-top:6px;font-size:11px;color:var(--dim)}
+.qa-foot .pin{display:inline-flex;align-items:center;gap:6px;color:var(--cyan)}
+.qa-foot button{color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.qa-preview{display:flex;gap:5px;flex-wrap:wrap;padding:0 18px 10px 46px;margin-top:-4px}
+.qa.open .qa-preview{display:none}
+.filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.fgroup{display:flex;align-items:center;gap:5px}
+.fgroup .k{font-size:11px;color:var(--dim);font-weight:650;margin-right:3px}
+.vsep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.fsearch{margin-left:auto;height:30px;display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--dim)}
+.fsearch input{border:0;outline:0;background:none;width:120px;font-size:12px}
+.empty{border:1px dashed var(--line-2);border-radius:14px;padding:30px 20px;text-align:center;color:var(--muted);font-size:12.5px;margin:var(--px)}
+.empty b{display:block;color:var(--text);font-size:14px;margin-bottom:4px}
+
+/* ── task page / property grid ── */
+.doc{max-width:900px;margin:0 auto}
+.doc-title{font-size:calc(var(--ttl) - 2px);font-weight:760;letter-spacing:-.05em;line-height:1.2;outline:0;margin:14px 0 18px;border-radius:8px}
+.doc-title:focus{box-shadow:0 0 0 3px rgba(55,110,232,.25)}
+.propgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 26px;padding:12px 0 18px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.prop{display:grid;grid-template-columns:96px 1fr;align-items:center;min-height:36px;gap:10px}
+.prop .k{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px;font-weight:600}
+.prop .k svg{width:14px;height:14px}
+.pv{justify-self:start;display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:30px;padding:3px 8px;margin-left:-8px;border-radius:8px;font-size:13px;transition:background .15s}
+.pv:hover{background:#141f33}
+.pv .ph{color:var(--dim)}
+.sec-h{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:650;color:var(--muted);margin:26px 0 10px}
+.sec-h .ln{flex:1;height:1px;background:var(--line)}
+.subs .trow{padding-left:4px;border-top:0}
+.activity{list-style:none;margin:0;padding:0;font-size:12.5px;color:var(--muted)}
+.activity li{display:flex;gap:10px;padding:5px 0}
+.activity time{font:11px var(--mono);color:var(--dim);width:92px;flex:none}
+
+/* ── popover picker ── */
+.pop{position:fixed;z-index:60;min-width:240px;max-width:340px;border:1px solid var(--line-2);border-radius:14px;background:rgba(14,22,37,.98);backdrop-filter:blur(20px);box-shadow:0 20px 50px rgba(0,0,0,.55);padding:10px;opacity:0;transform:translateY(-4px);pointer-events:none;transition:opacity .14s,transform .18s var(--ease)}
+.pop.show{opacity:1;transform:none;pointer-events:auto}
+.pop .pt{font-size:10.5px;font-weight:650;letter-spacing:.1em;color:var(--dim);padding:2px 4px 8px}
+.pop .chips{gap:5px}
+.pop input[type=date],.pop input.txt{margin-top:8px;width:100%;height:32px;border:1px solid var(--line);border-radius:8px;background:rgba(8,13,24,.6);padding:0 10px;color-scheme:dark;outline:0;font-size:12.5px}
+.pop .pm{display:flex;flex-direction:column;gap:2px}
+.pop .pm button{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px}
+.pop .pm button:hover{background:#18263d}
+.pop .pm small{display:block;color:var(--dim);font-size:11px}
+.pop .pm .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;border:1px solid var(--line)}
+
+/* ── inspector ── */
+.insp{width:0;overflow:hidden;border-left:1px solid var(--line);background:rgba(9,14,25,.97);transition:width .38s var(--ease);height:100vh}
+.insp.open{width:420px}
+.insp-in{width:420px;height:100%;display:flex;flex-direction:column}
+.insp-h{display:flex;align-items:flex-start;gap:8px;padding:18px 16px 10px 22px}
+.insp-h .grow{flex:1;min-width:0}
+.insp-h .k{font:11px var(--mono);color:var(--dim);margin-bottom:4px}
+.insp-h h3{font-size:18px;font-weight:700;letter-spacing:-.04em;line-height:1.35;outline:0;border-radius:6px}
+.insp-b{flex:1;overflow:auto;padding:0 22px 30px}
+.insp-b .prop{grid-template-columns:86px 1fr;min-height:34px}
+.insp .rte{min-height:90px;font-size:13.5px}
+
+/* ── journal ── */
+.jtools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.jscroll{overflow-x:auto;padding-bottom:6px}
+.jgrid{display:grid;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-width:1000px;background:var(--line);gap:1px}
+.jh{background:#0c1424;padding:10px 14px;font:11px var(--mono);color:var(--dim)}
+.jh b{display:block;font:650 13.5px var(--font);color:var(--text);letter-spacing:-.03em}
+.jh.cur b{color:var(--cyan)}
+.jd{background:#0c1424;display:grid;place-items:center;font-size:12px;font-weight:650;color:var(--dim)}
+.jc{background:rgba(10,16,28,.96);min-height:var(--cell-h);padding:10px 12px;cursor:text;position:relative;transition:background .15s}
+.jc:hover{background:#0f192b}
+.jc.out{background:#080d18} .jc.out .dn{opacity:.35}
+.jc .dn{font:600 12px var(--mono);color:var(--muted);display:inline-grid;place-items:center;min-width:24px;height:22px;border-radius:6px;margin:-2px 0 4px -4px}
+.jc.today{box-shadow:inset 0 0 0 1.5px rgba(94,230,244,.6);background:#0d1a2c}
+.jc.today .dn{background:var(--cyan);color:#04111a}
+.jc .ln{display:flex;gap:6px;font-size:12px;line-height:1.5;color:var(--text-2);padding:1px 0}
+.jc .ln .b{width:3px;height:3px;border-radius:50%;background:var(--dim);margin:8px 3px 0 2px;flex:none}
+.jc .ln .cb{width:11px;height:11px;border-radius:3px;border:1.3px solid #4a5a78;flex:none;margin-top:4px}
+.jc .ln.x .cb{background:var(--blue-s);border-color:var(--blue-s)}
+.jc .ln.x span{color:var(--dim);text-decoration:line-through}
+.jc .auto{margin-top:5px;padding-top:5px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:2px}
+.jc .auto div{font-size:11px;color:var(--yellow);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jc .auto div.r{color:var(--red)}
+.jc textarea{position:absolute;inset:0;padding:36px 12px 12px;border:0;outline:0;resize:none;font-size:12.5px;line-height:1.55;background:#0d1a2c;box-shadow:inset 0 0 0 1.5px var(--blue)}
+
+/* ── board ── */
+.bsum{padding:calc(var(--py) + 4px) var(--px);margin-bottom:var(--gap)}
+.bstat{display:flex;gap:30px;flex-wrap:wrap;margin-bottom:14px}
+.bstat div{display:flex;flex-direction:column}
+.bstat strong{font:500 24px/1.2 var(--font);letter-spacing:-.05em}
+.bstat span{font-size:11px;color:var(--dim)}
+.prog{display:flex;height:8px;border-radius:99px;overflow:hidden;gap:2px;background:#1a2538}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:3px}
+.legend b{font-family:var(--mono);color:var(--text);font-weight:500}
+.bwrap{overflow:auto;padding:6px 10px 12px}
+table.mx{border-collapse:separate;border-spacing:5px;user-select:none}
+.mx th{font-weight:500;text-align:left;padding:8px 4px 4px;vertical-align:bottom}
+.mx th b{display:block;font-size:12.5px;color:var(--text)}
+.mx th small{font:10.5px var(--mono);color:var(--dim)}
+.mx td.lot{vertical-align:top;padding:6px 10px 0 2px;white-space:nowrap}
+.mx td.lot b{display:block;font:600 12px var(--mono);margin-bottom:5px}
+.mx td.wf{font:11px var(--mono);color:var(--dim);padding:0 4px}
+.mx tr.gap td{height:4px;padding:0}
+.tile{position:relative;width:118px;height:var(--tile-h);border-radius:9px;padding:4px 10px;display:flex;flex-direction:column;justify-content:center;font-size:11.5px;line-height:1.25;border:1px solid transparent;transition:transform .12s,border-color .15s}
+.tile:hover{transform:translateY(-1px);border-color:var(--line-2)}
+.tile b{font-weight:650;white-space:nowrap}
+.tile small{font:10.5px var(--mono);opacity:.75;white-space:nowrap}
+[data-density="compact"] .tile small{display:none}
+.tile .wd{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%}
+.tile.sel{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(94,230,244,.15)}
+.tile.x{background:repeating-linear-gradient(135deg,rgba(145,174,255,.05) 0 6px,transparent 6px 12px);color:var(--dim);cursor:default}
+.tile.dim{opacity:.2}
+.s0{background:rgba(145,174,255,.07);color:var(--muted)} .s1{background:rgba(114,158,255,.13);color:#a9c4ff}
+.s2{background:rgba(114,158,255,.23);color:#c6d8ff} .s3{background:rgba(114,158,255,.36);color:#e6eeff}
+.s4{background:rgba(94,230,244,.17);color:#a8f3fb} .s5{background:rgba(100,228,174,.12);color:var(--green)}
+.stage-list{display:flex;flex-direction:column;gap:3px}
+.stage-btn{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:9px;font-size:13px}
+.stage-btn:hover{background:#141f33}
+.stage-btn .sw{width:12px;height:12px;border-radius:4px}
+.stage-btn .grow{flex:1}
+.stage-btn kbd{font-size:10px}
+.stage-btn[aria-pressed=true]{background:#1a2e50;color:#fff;box-shadow:inset 0 0 0 1px #365688}
+.callout{display:flex;gap:9px;padding:10px 12px;border-radius:10px;font-size:12.5px;margin-bottom:12px}
+.callout.y{background:rgba(255,209,92,.07);color:var(--yellow);border:1px solid rgba(255,209,92,.15)}
+.callout.r{background:rgba(255,79,115,.08);color:var(--red);border:1px solid rgba(255,79,115,.16)}
+
+/* ── modal / palette / toast ── */
+.scrim{position:fixed;inset:0;background:rgba(1,3,8,.6);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:70}
+.scrim.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:50%;top:50%;width:min(720px,calc(100vw - 32px));max-height:min(760px,calc(100vh - 48px));overflow:auto;transform:translate(-50%,-48%) scale(.98);opacity:0;pointer-events:none;border:1px solid var(--line-2);border-radius:20px;background:rgba(11,17,30,.98);box-shadow:0 30px 90px rgba(0,0,0,.6);transition:opacity .2s,transform .28s var(--ease);z-index:71}
+.sheet.show{opacity:1;transform:translate(-50%,-50%);pointer-events:auto}
+.sheet-h{display:flex;align-items:center;gap:10px;padding:20px 22px 6px}
+.sheet-h h2{flex:1;font-size:19px;font-weight:720;letter-spacing:-.045em}
+.sheet-b{padding:4px 22px 24px}
+.set-sec{padding:16px 0;border-top:1px solid var(--line)}
+.set-sec:first-child{border-top:0}
+.set-sec h3{font-size:11px;font-weight:650;letter-spacing:.12em;color:var(--dim);margin-bottom:12px}
+.set-row{display:flex;align-items:center;gap:16px;padding:7px 0}
+.set-row .grow{flex:1}
+.set-row b{display:block;font-size:13.5px;font-weight:600}
+.set-row small{display:block;font-size:12px;color:var(--muted)}
+.dens-prev{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+.dens-prev button{border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;transition:border-color .2s,background .2s}
+.dens-prev button:hover{border-color:var(--line-2)}
+.dens-prev button[aria-pressed=true]{border-color:#4a76c4;background:rgba(55,110,232,.1)}
+.dens-prev .lines{display:flex;flex-direction:column;margin:2px 0 10px}
+.dens-prev .lines i{height:5px;border-radius:3px;background:#2a3a58}
+.dens-prev b{font-size:12.5px} .dens-prev small{display:block;font-size:11px;color:var(--dim)}
+.kt{width:100%;border-collapse:collapse;font-size:12.5px}
+.kt td{padding:6px 0;border-bottom:1px solid var(--line);color:var(--text-2)}
+.kt td:last-child{text-align:right;white-space:nowrap}
+.kt tr.off td{opacity:.4}
+.kcols{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+.note-w{font-size:11.5px;color:var(--dim);margin-top:10px;line-height:1.6}
+.palette{position:fixed;left:50%;top:14vh;width:min(640px,calc(100vw - 32px));transform:translate(-50%,-6px);opacity:0;pointer-events:none;border:1px solid var(--line-2);border-radius:18px;background:rgba(11,17,30,.98);box-shadow:0 30px 90px rgba(0,0,0,.6);transition:opacity .18s,transform .22s var(--ease);z-index:71;overflow:hidden}
+.palette.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.palette .in{display:flex;align-items:center;gap:12px;height:56px;padding:0 18px;border-bottom:1px solid var(--line);color:var(--dim)}
+.palette .in input{flex:1;border:0;outline:0;background:none;font-size:17px;color:var(--text)}
+.palette .res{max-height:min(420px,55vh);overflow:auto;padding:6px}
+.palette .gl{font-size:10px;font-weight:650;letter-spacing:.12em;color:var(--dim);padding:10px 12px 4px}
+.palette .it{width:100%;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:9px;font-size:13.5px}
+.palette .it .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palette .it small{color:var(--dim);font-size:11px}
+.palette .it.on{background:#1a2e50;box-shadow:inset 0 0 0 1px #365688}
+.toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,170%);display:flex;align-items:center;gap:14px;padding:9px 9px 9px 16px;border:1px solid var(--line-2);border-radius:12px;background:rgba(16,25,42,.98);box-shadow:0 18px 50px rgba(0,0,0,.5);font-size:12.5px;transition:transform .38s var(--spring);z-index:80}
+.toast.show{transform:translate(-50%,0)}
+.toast button{color:var(--cyan);font-weight:650;padding:5px 10px;border-radius:7px}
+.toast button:hover{background:rgba(94,230,244,.08)}
+.selbar{position:absolute;left:50%;bottom:22px;transform:translate(-50%,160%);display:flex;align-items:center;gap:4px;padding:6px 8px 6px 16px;border:1px solid var(--line-2);border-radius:14px;background:rgba(14,22,37,.97);box-shadow:0 20px 50px rgba(0,0,0,.5);transition:transform .36s var(--spring);z-index:20;max-width:calc(100% - 32px);overflow-x:auto}
+.selbar.show{transform:translate(-50%,0)}
+.selbar .st{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:8px;font-size:12px;white-space:nowrap}
+.selbar .st:hover{background:#18263d}
+.selbar .st i{width:9px;height:9px;border-radius:3px}
+
+@media (max-width:1200px){.tgrid{grid-template-columns:1fr}.insp.open{position:absolute;right:0;top:0;bottom:0;z-index:30;box-shadow:-20px 0 60px rgba(0,0,0,.5)}}
+@media (max-width:900px){.app{grid-template-columns:0 minmax(0,1fr) auto}.metrics{grid-template-columns:repeat(2,1fr)}.propgrid{grid-template-columns:1fr}.kcols{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="home" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+  <symbol id="todo" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8 12.2l2.6 2.6L16.2 9"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="board" viewBox="0 0 24 24"><path d="M4 5.5h16M4 12h16M4 18.5h16M9.5 5.5v13"/></symbol>
+  <symbol id="doc" viewBox="0 0 24 24"><path d="M6.5 3h7.5l4.5 4.5V19a2 2 0 0 1-2 2h-10a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M13.5 3v5h5M8.5 13h7M8.5 16.5h5"/></symbol>
+  <symbol id="stack" viewBox="0 0 24 24"><path d="M12 3.5l8.5 4.5L12 12.5 3.5 8z"/><path d="M3.5 12.2L12 16.7l8.5-4.5M3.5 16.2L12 20.7l8.5-4.5"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="M8.5 7.5L4 12l4.5 4.5M15.5 7.5L20 12l-4.5 4.5"/></symbol>
+  <symbol id="folder" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h3.8l2 2.2h7.2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+  <symbol id="chevl" viewBox="0 0 24 24"><path d="M15 5.5L8.5 12l6.5 6.5"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.4 2.8-.6.6 2.8 2.4 1.6-1.4 2.5 1.4 2.5-2.4 1.6-.6 2.8-2.8-.6L12 21.2l-1.6-2.4-2.8.6-.6-2.8L4.6 15l1.4-2.5L4.6 10 7 8.4l.6-2.8 2.8.6z"/></symbol>
+  <symbol id="rail" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M9.5 4.5v15"/></symbol>
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></symbol>
+  <symbol id="flag" viewBox="0 0 24 24"><path d="M5 21V4.5M5 4.5h11l-2 4 2 4H5"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M3.5 12.5V4.5h8l9 9-8 8z"/><circle cx="8" cy="9" r="1.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><path d="M9.5 4l-2 16M16.5 4l-2 16M4.5 9h16M3.5 15h16"/></symbol>
+  <symbol id="cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="M12 4l9 15.5H3z"/><path d="M12 10v4M12 17h0"/></symbol>
+  <symbol id="pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></symbol>
+  <symbol id="note" viewBox="0 0 24 24"><path d="M5 4.5h14v11l-4.5 4.5H5z"/><path d="M14.5 20v-4.5H19M8.5 9h7M8.5 12.5h4"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="kbd" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h0M9.5 10h0M13 10h0M16.5 10h0M7.5 14h9"/></symbol>
+  <symbol id="density" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3zM12 14v6"/></symbol>
+  <symbol id="list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h0M4.5 12h0M4.5 17.5h0"/></symbol>
+  <symbol id="hl" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5-8 8H6.5v-5z"/><path d="M4 21h16"/></symbol>
+  <symbol id="sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+  <symbol id="sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  <symbol id="hour" viewBox="0 0 24 24"><path d="M7 3.5h10M7 20.5h10M8 3.5c0 4.5 4 5.5 4 8.5s-4 4-4 8.5M16 3.5c0 4.5-4 5.5-4 8.5s4 4 4 8.5"/></symbol>
+  <symbol id="tick" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+</svg>
+
+<div class="app" id="app">
+  <aside class="rail" aria-label="사이드바">
+    <div class="brand">
+      <span class="brand-mark"><svg class="i" viewBox="0 0 24 24"><path d="M4 18V7l4.5 4.5L12 6l3.5 5.5L20 7v11"/><path d="M4 18h16"/></svg></span>
+      <span><b>MI Planner</b><small>LOCAL WORKSPACE</small></span>
+    </div>
+    <button class="rail-search" onclick="openPalette()"><svg class="i s"><use href="#search"/></svg><span>검색 · 이동 · 명령</span><kbd>/</kbd></button>
+    <div class="rail-scroll">
+      <div class="rail-label">워크스페이스</div>
+      <nav id="nav"></nav>
+      <div class="rail-label">페이지 <button class="ib" title="새 페이지" onclick="addPageMenu(this)"><svg class="i s"><use href="#plus"/></svg></button></div>
+      <div id="tree"></div>
+    </div>
+    <div class="rail-foot"><span class="dot"></span><span class="grow">로컬 · 외부 연결 없음</span>
+      <button class="ib" title="설정" onclick="openSettings()" style="width:28px;height:28px"><svg class="i s"><use href="#gear"/></svg></button></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="ib" id="railBtn" title="사이드바 ( [ )" onclick="toggleRail()"><svg class="i"><use href="#rail"/></svg></button>
+      <nav class="crumb" id="crumb"></nav>
+      <div class="save" id="save"><i></i><span>저장됨</span></div>
+      <span id="tbx" style="display:flex;gap:6px;align-items:center"></span>
+      <button class="ib bd" id="densBtn" title="화면 밀도" onclick="cycleDensity()"><svg class="i"><use href="#density"/></svg></button>
+      <button class="kbtn" id="keyBtn" aria-pressed="true" onclick="toggleKeys()" title="웹 전용 단축키 켜기/끄기"><span class="led"></span>단축키</button>
+    </header>
+    <div class="content" id="content"></div>
+    <div class="selbar" id="selbar"></div>
+  </main>
+
+  <aside class="insp" id="insp" aria-label="상세"></aside>
+</div>
+
+<div class="peek" id="peek"></div>
+<div class="pop" id="pop"></div>
+<div class="scrim" id="scrim" onclick="closeModals()"></div>
+<div class="palette" id="palette" role="dialog" aria-label="검색">
+  <div class="in"><svg class="i"><use href="#search"/></svg><input id="pq" placeholder="페이지 · 할일 · 명령 검색" autocomplete="off"><kbd>esc</kbd></div>
+  <div class="res" id="pres"></div>
+</div>
+<div class="sheet" id="sheet" role="dialog" aria-label="설정"></div>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="toastBtn">실행 취소</button></div>
+
+<script>
+/* ═════════ helpers ═════════ */
+const TODAY = '2026-11-24', WD = ['일','월','화','수','목','금','토'];
+const pd = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (s, n) => { const d = pd(s); d.setDate(d.getDate()+n); return iso(d); };
+const dd = s => Math.round((pd(s) - pd(TODAY)) / 864e5);
+const $ = (s, r=document) => r.querySelector(s), $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const ic = (id, c='i') => `<svg class="${c}"><use href="#${id}"/></svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get(k, d){ try { const v = localStorage.getItem('mi.v3.'+k); return v ? JSON.parse(v) : d; } catch { return d; } },
+                set(k, v){ try { localStorage.setItem('mi.v3.'+k, JSON.stringify(v)); } catch {} } };
+
+/* ═════════ fake data (D-17) ═════════ */
+const TYPES = [
+  {k:'setup', l:'셋업', c:'#5ee6f4', bg:'rgba(94,230,244,.1)'},
+  {k:'issue', l:'이슈', c:'#ff8ba1', bg:'rgba(255,79,115,.1)'},
+  {k:'improve', l:'개선', c:'#64e4ae', bg:'rgba(57,229,140,.09)'},
+  {k:'eval', l:'평가', c:'#ac91ff', bg:'rgba(138,92,255,.12)'},
+];
+const typeOf = k => TYPES.find(t => t.k === k);
+const PEOPLE = ['김책임','이팀장','박선임'];
+const PRODUCTS = ['PRD-A','PRD-B','PRD-C'];
+const TAGS = ['반복도','scan-time','리뷰','보고','레시피'];
+let EPICS = [
+  {id:'ep1', t:'2026 3사 평가', c:'#ac91ff', desc:'설비사 3곳의 검출력·반복도·scan time 비교. 현황판과 연결.', end:'2026-12-03'},
+  {id:'ep2', t:'RCP 표준화', c:'#5ee6f4', desc:'라인별 레시피 파라미터 차이를 정리하고 기준안을 만든다.', end:'2026-12-20'},
+  {id:'ep3', t:'DOI 정비', c:'#64e4ae', desc:'제품별 DOI 이미지·설명 최신화.', end:null},
+  {id:'ep4', t:'주간 운영', c:'#ffd27b', desc:'보고·회의 등 반복 업무.', end:null},
+];
+const epicOf = id => EPICS.find(e => e.id === id);
+
+let TODOS = [
+  {id:14, title:'LOT-TEST-002 리뷰 결과 정리', status:'doing', pri:1, due:'2026-11-21', req:'김책임', product:'PRD-A', type:'eval', epic:'ep1', tags:['리뷰'], planned:TODAY,
+   memo:'<h3>정리 범위</h3><ul><li>B사 결과 <mark>누락분 4장</mark> 다시 받기</li><li>설비별 false 비율 표로</li></ul><div class="tl done">A사 리뷰 이미지 정리</div><div class="tl">B사 재요청 메일</div><div class="tl">표 공유</div>',
+   subs:[{t:'A사 정리',d:true},{t:'B사 재요청',d:false},{t:'표 공유',d:false}]},
+  {id:15, title:'EQ-B02 scan time 재측정', status:'todo', pri:2, due:'2026-11-23', req:'박선임', product:'PRD-A', type:'eval', epic:'ep1', tags:['scan-time'],
+   memo:'첫 측정이 <b>기준 대비 18% 느림</b>. 스테이지 속도 설정 확인 후 재측정.'},
+  {id:16, title:'DOI 리스트 11월분 업데이트', status:'todo', pri:2, due:TODAY, req:'이팀장', product:'PRD-B', type:'improve', epic:'ep3', tags:[], planned:TODAY, memo:''},
+  {id:17, title:'라인별 RCP 파라미터 비교표 공유', status:'todo', pri:1, due:'2026-11-25', req:'박선임', product:'PRD-A', type:'improve', epic:'ep2', tags:['레시피'],
+   memo:'<ul><li>Focus offset</li><li>Threshold</li><li>Pixel size</li></ul>3개 항목 위주로 차이 강조.'},
+  {id:18, title:'LOT-TEST-003 반복도 데이터 확인', status:'doing', pri:2, due:'2026-11-26', req:null, product:'PRD-C', type:'eval', epic:'ep1', tags:['반복도'], planned:TODAY,
+   memo:'3회 반복 CV 계산. <mark>5% 넘으면 재검사</mark>.'},
+  {id:19, title:'주간 업무 보고 자료', status:'todo', pri:3, due:'2026-11-27', req:'이팀장', product:null, type:null, epic:'ep4', tags:['보고'], memo:''},
+  {id:20, title:'EQ-C01 셋업 조건 회신 대기', status:'hold', pri:3, due:null, req:'김책임', product:'PRD-A', type:'setup', epic:'ep1', tags:[], memo:'C사 엔지니어 회신 대기 (11/20 요청).'},
+  {id:21, title:'Hold Lot 원인 이슈 정리', status:'todo', pri:1, due:'2026-11-28', req:'김책임', product:'PRD-C', type:'issue', epic:null, tags:[], memo:'LOT-TEST-003 Hold. 포커스 오프셋 의심.'},
+  {id:22, title:'광학 스터디 3장 — 회절', status:'todo', pri:3, due:'2026-12-04', req:null, product:null, type:null, epic:null, tags:[], memo:''},
+  {id:12, title:'LOT-TEST-001 디펙 분류', status:'done', pri:2, due:'2026-11-20', req:'김책임', product:'PRD-A', type:'eval', epic:'ep1', tags:[], memo:''},
+  {id:13, title:'EQ-A01 레시피 문의 회신', status:'done', pri:3, due:'2026-11-22', req:'박선임', product:'PRD-A', type:'setup', epic:'ep2', tags:[], memo:''},
+];
+const STATUS = {todo:['대기','gray'], doing:['진행 중','blue'], hold:['보류','yellow'], done:['완료','green']};
+const PRI = {1:'높음', 2:'보통', 3:'낮음'};
+
+const TREE = [
+  {id:'j', t:'일지', ty:'note', open:false, kids:[{id:'j2611', t:'2026년 11월', ty:'journal'},{id:'j2610', t:'2026년 10월', ty:'journal'}]},
+  {id:'mi', t:'MI 공정업무', ty:'note', open:true, kids:[
+    {id:'ep1', t:'2026 3사 평가', ty:'epic'}, {id:'ep2', t:'RCP 표준화', ty:'epic'}, {id:'ep3', t:'DOI 정비', ty:'epic'},
+    {id:'ev26', t:'3사 평가 현황판', ty:'board'}, {id:'evm', t:'평가 방법', ty:'note'},
+  ]},
+  {id:'ops', t:'운영', ty:'note', open:true, kids:[{id:'ep4', t:'주간 운영', ty:'epic'}]},
+  {id:'rnd', t:'연구 개발', ty:'note'}, {id:'st', t:'스터디', ty:'note'},
+];
+const TYICON = {note:'doc', journal:'cal', epic:'stack', board:'board', html:'code'};
+const TYNAME = {note:'노트', journal:'월간 일지', epic:'할일 목록 (에픽)', board:'평가 현황판', html:'HTML'};
+
+const JOURNAL = {
+  '2026-11-02':'- [x] 3사 평가 킥오프\n- 설비 반입 일정 확인', '2026-11-03':'- [x] 평가 템플릿 확정\n- LOT-TEST-001 투입',
+  '2026-11-05':'- [x] EQ-A01 셋업 확인', '2026-11-06':'- 주간 보고', '2026-11-09':'- [x] LOT-TEST-001 검사 시작\n- [x] DOI 회의',
+  '2026-11-10':'- [x] EQ-B01 반복도 1차', '2026-11-12':'- [x] LOT-TEST-002 투입\n- [ ] 설비사 Q&A 정리', '2026-11-13':'- 주간 보고',
+  '2026-11-16':'- [x] LOT-TEST-001 리뷰 완료', '2026-11-17':'- [x] EQ-C01 셋업\n- [ ] 디펙 모수 정리', '2026-11-18':'- [x] LOT-TEST-003 투입',
+  '2026-11-19':'- [x] LOT-TEST-001 디펙 분류\n- Hold 사유 확인', '2026-11-20':'- 주간 보고\n- [x] 반복도 2차',
+  '2026-11-23':'- [x] EQ-A01 레시피 문의 회신\n- [ ] EQ-B02 scan time 재측정',
+  '2026-11-24':'- [ ] LOT-TEST-002 리뷰 결과 정리 → 할일 #14\n- [ ] DOI 리스트 11월분 업데이트\n- [x] 아침 MOS 상태 확인\n- 오후 2시 B사 미팅',
+};
+
+const STAGES = [{l:'검사대기',w:24},{l:'검사완료',w:12},{l:'리뷰대기',w:24},{l:'분류대기',w:24},{l:'분류완료',w:48},{l:'정리완료',w:0}];
+const EQS = ['EQ-A01','EQ-A02','EQ-B01','EQ-B02','EQ-C01'];
+const LOTS = [['LOT-TEST-001','MI 완료','green'],['LOT-TEST-002','MI 진행','blue'],['LOT-TEST-003','Hold','yellow'],['LOT-TEST-004','도착 전','gray']];
+let seed = 11; const rnd = () => (seed = seed * 16807 % 2147483647) / 2147483647;
+const CELLS = {};
+LOTS.forEach(([lot], li) => [1,2,3].forEach(w => EQS.forEach((eq, ei) => {
+  const k = `${lot}|${w}|${eq}`; if (li === 3 && w === 3 && ei === 4) { CELLS[k] = null; return; }
+  const st = Math.max(0, Math.min(5, Math.round([5.2,3.3,2,.2][li] + rnd()*2 - 1.1)));
+  const out = (li === 2 && w === 2 && ei === 3) || (li === 1 && w === 1 && ei === 1);
+  CELLS[k] = {lot, w, eq, st, wait: st === 5 ? 0 : Math.round((2 + rnd() * (STAGES[st].w || 24) * 1.15) * (out ? 2.6 : 1))};
+})));
+const cells = () => Object.values(CELLS).filter(Boolean);
+const wl = c => { const w = STAGES[c.st].w; return !w || !c.wait ? 0 : c.wait > w*2 ? 2 : c.wait > w ? 1 : 0; };
+
+/* ═════════ state ═════════ */
+const S = {
+  view:'today', arg:null, todayTab:'due', listMode:'due', insp:null, cur:-1, sel:new Set(),
+  f:{status:new Set(['todo','doing','hold']), type:new Set(), epic:new Set(), req:new Set(), q:''}, showDone:false,
+  keys: store.get('keys', {app:true, editor:true}),
+  density: store.get('density', 'normal'),
+  qa: {detail: store.get('qaDetail', false), remember: store.get('qaRemember', true), draft: store.get('qaDefaults', {due:null, req:null, product:null, type:null, epic:null, pri:2, tags:[]})},
+  jAuto:true, bOnly:false,
+};
+document.documentElement.dataset.density = S.density;
+
+/* ═════════ shell ═════════ */
+const NAV = [
+  {v:'today', t:'오늘', i:'home'},
+  {v:'todos', t:'할일', i:'todo', cnt:() => { const o = TODOS.filter(t => t.status !== 'done'), od = o.filter(t => t.due && dd(t.due) < 0).length;
+      return `${od?`<span class="cnt r">${od}</span>`:''}<span class="cnt">${o.length}</span>`; }},
+  {v:'journal', t:'월간 일지', i:'cal'},
+  {v:'board', t:'평가 현황판', i:'board'},
+];
+function renderNav(){
+  $('#nav').innerHTML = NAV.map(n => `<button class="nav ${S.view===n.v?'on':''}" onclick="go('${n.v}')">${ic(n.i)}<span class="lbl">${n.t}</span>${n.cnt?n.cnt():''}</button>`).join('');
+}
+function epicProg(id){ const l = TODOS.filter(t => t.epic === id); return [l.filter(t => t.status === 'done').length, l.length]; }
+function treeHTML(ns, dep){
+  return ns.map(n => { const has = n.kids && n.kids.length; const on = (S.view==='epic'||S.view==='note') && S.arg===n.id || (n.ty==='board'&&S.view==='board') || (n.id==='j2611'&&S.view==='journal');
+    const color = n.ty==='epic' ? epicOf(n.id)?.c : n.ty==='board' ? 'var(--violet)' : n.ty==='journal' ? 'var(--red)' : 'var(--dim)';
+    const pg = n.ty==='epic' ? (p => `<span class="pg">${p[0]}/${p[1]}</span>`)(epicProg(n.id)) : '';
+    return `<div><button class="tree-row ${on?'on':''}" style="padding-left:${4+dep*14}px" onclick="openNode('${n.id}')">
+      <span class="tw ${n.open?'open':''}" style="${has?'':'visibility:hidden'}" onclick="event.stopPropagation();toggleNode('${n.id}')">${ic('chev')}</span>
+      <span class="ty" style="color:${color}">${ic(has&&n.ty==='note'?'folder':TYICON[n.ty])}</span><span class="tl">${esc(n.t)}</span>${pg}</button>
+      ${has&&n.open?treeHTML(n.kids, dep+1):''}</div>`; }).join('');
+}
+function renderTree(){ $('#tree').innerHTML = treeHTML(TREE, 0); }
+const findNode = (id, ns=TREE, p=[]) => { for (const n of ns){ const q = [...p, n]; if (n.id === id) return q; if (n.kids){ const r = findNode(id, n.kids, q); if (r) return r; } } return null; };
+function toggleNode(id){ const n = findNode(id).at(-1); n.open = !n.open; renderTree(); }
+function openNode(id){ const n = findNode(id).at(-1);
+  if (n.ty === 'epic') return go('epic', id); if (n.ty === 'board') return go('board'); if (n.ty === 'journal') return go('journal');
+  if (n.kids && !['evm'].includes(n.id)) { toggleNode(id); return; } go('note', id); }
+
+function crumb(parts){ $('#crumb').innerHTML = parts.map((p, i) => `${i?'<span class="sep">/</span>':''}<button class="${i===parts.length-1?'cur':''}" ${p.go?`onclick="${p.go}"`:''}>${esc(p.t)}</button>`).join(''); }
+function tbx(h){ $('#tbx').innerHTML = h; }
+const V = {};
+function go(v, arg=null){
+  S.view = v; S.arg = arg; S.cur = -1; S.sel.clear(); hidePeek(); closePop(); closeInsp(true);
+  renderNav(); renderTree(); $('#content').scrollTop = 0; V[v](); renderSelbar();
+}
+function rerender(){ const y = $('#content').scrollTop; V[S.view](true); $('#content').scrollTop = y; renderNav(); renderTree(); }
+function toggleRail(){ $('#app').classList.toggle('rail-off'); }
+function cycleDensity(){ const o = ['compact','normal','cozy']; setDensity(o[(o.indexOf(S.density)+1) % 3]); }
+function setDensity(d){ S.density = d; document.documentElement.dataset.density = d; store.set('density', d);
+  toast({compact:'컴팩트 — 한 화면에 더 많이', normal:'기본 밀도', cozy:'여유 — 넉넉한 간격'}[d]); if ($('#sheet').classList.contains('show')) renderSettings(); }
+function toggleKeys(force){ S.keys.app = force ?? !S.keys.app; store.set('keys', S.keys); syncKeyBtn(); toast(S.keys.app ? '웹 단축키 켜짐 — N, /, J·K, X…' : '웹 단축키 꺼짐 — 브라우저 기본 동작'); if ($('#sheet').classList.contains('show')) renderSettings(); }
+function syncKeyBtn(){ $('#keyBtn').setAttribute('aria-pressed', S.keys.app); }
+function flashSave(){ const s = $('#save'); s.classList.add('busy'); s.lastChild.textContent = '저장 중'; clearTimeout(s._t); s._t = setTimeout(() => { s.classList.remove('busy'); s.lastChild.textContent = '저장됨'; }, 650); }
+let toastT; function toast(m, undo){ $('#toastMsg').textContent = m; const b = $('#toastBtn'); b.style.display = undo ? '' : 'none';
+  b.onclick = () => { undo(); $('#toast').classList.remove('show'); }; $('#toast').classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => $('#toast').classList.remove('show'), undo ? 5000 : 1800); }
+
+/* ═════════ task row + peek ═════════ */
+function dueP(d, done){ if (!d) return ''; const n = dd(d), dt = pd(d);
+  if (done) return `<span class="pill gray">${dt.getMonth()+1}/${dt.getDate()}</span>`;
+  if (n < 0) return `<span class="pill red">${-n}일 지남</span>`; if (n === 0) return `<span class="pill yellow">오늘</span>`;
+  if (n <= 3) return `<span class="pill yellow">D-${n}</span>`; if (n <= 6) return `<span class="pill gray">${WD[dt.getDay()]}요일</span>`;
+  return `<span class="pill gray">${dt.getMonth()+1}/${dt.getDate()}</span>`; }
+const typeTag = k => { const t = typeOf(k); return t ? `<span class="type" style="color:${t.c};background:${t.bg}">${t.l}</span>` : ''; };
+function row(t, o={}){
+  const done = t.status === 'done', ep = epicOf(t.epic);
+  return `<div class="trow ${done?'done':''} ${S.insp?.id===t.id?'sel':''}" data-id="${t.id}" tabindex="-1" onclick="openInsp(${t.id})" ondblclick="go('task',${t.id})">
+    ${!done&&t.pri<3?`<i class="pbar p${t.pri}"></i>`:''}
+    <button class="check" aria-pressed="${done}" aria-label="완료" onclick="event.stopPropagation();toggleDone(${t.id},this)"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    <div class="tmain"><span class="ttitle">${esc(t.title)}</span>
+      <div class="tmeta">${typeTag(t.type)}${ep&&!o.noEpic?`<span class="ep"><i style="background:${ep.c}"></i>${esc(ep.t)}</span>`:''}
+        ${t.status==='doing'?'<span style="color:#a9c4ff">진행 중</span>':''}${t.status==='hold'?'<span style="color:var(--yellow)">보류</span>':''}
+        ${t.req?`<span class="opt">${ic('person')}${t.req}</span>`:''}${t.product?`<span class="opt">${ic('cube')}${t.product}</span>`:''}
+        ${(t.tags||[]).map(g => `<span class="opt" style="color:var(--dim)">#${g}</span>`).join('')}</div></div>
+    <div class="tright">${t.memo?`<span class="memo-ic" title="메모 있음">${ic('note','i s')}</span>`:''}${t.subs?`<span class="mono" style="font-size:11px;color:var(--dim)">${t.subs.filter(s=>s.d).length}/${t.subs.length}</span>`:''}${dueP(t.due, done)}</div>
+  </div>`;
+}
+function toggleDone(id, btn){
+  const t = TODOS.find(x => x.id === id), prev = t.status; t.status = prev === 'done' ? 'todo' : 'done';
+  btn.setAttribute('aria-pressed', t.status === 'done'); const r = btn.closest('.trow'); r.classList.toggle('done', t.status === 'done');
+  if (t.status === 'done' && !S.showDone && S.view !== 'epic') r.classList.add('leaving');
+  flashSave(); setTimeout(() => { rerender(); if (S.insp?.id === id) openInsp(id); }, 800);
+  if (t.status === 'done') toast('완료했어요', () => { t.status = prev; rerender(); });
+}
+let peekT, peekHideT, peekId = null;
+document.addEventListener('mouseover', e => {
+  const r = e.target.closest('.trow[data-id]'); const inPeek = e.target.closest('#peek');
+  if (inPeek){ clearTimeout(peekHideT); return; }
+  if (!r){ clearTimeout(peekT); peekHideT = setTimeout(hidePeek, 140); return; }
+  const id = +r.dataset.id; clearTimeout(peekHideT);
+  if (peekId === id) return;
+  clearTimeout(peekT); peekT = setTimeout(() => showPeek(id, r), peekId ? 60 : 380);
+});
+function showPeek(id, r){
+  if (S.insp?.id === id || $('#pop').classList.contains('show')) return;
+  const t = TODOS.find(x => x.id === id); if (!t) return; peekId = id; const ep = epicOf(t.epic), p = $('#peek');
+  p.innerHTML = `<h4>${esc(t.title)}</h4>
+    <div class="props"><span class="pill ${STATUS[t.status][1]}">${STATUS[t.status][0]}</span>${typeTag(t.type)}${ep?`<span class="pill gray"><i style="width:7px;height:7px;border-radius:2px;background:${ep.c}"></i>${esc(ep.t)}</span>`:''}
+      ${t.req?`<span class="pill gray">${t.req}</span>`:''}${t.product?`<span class="pill gray">${t.product}</span>`:''}${dueP(t.due, t.status==='done')}${(t.tags||[]).map(g=>`<span class="pill gray">#${g}</span>`).join('')}</div>
+    <div class="memo ${t.memo?'':'empty'}">${t.memo || '메모 없음 — 클릭해서 추가'}</div>
+    <div class="foot"><span>클릭 · 상세 패널</span><span>더블클릭 · 페이지로 열기</span></div>`;
+  const b = r.getBoundingClientRect(), W = 360, H = Math.min(440, p.scrollHeight || 260);
+  let x = b.right - W - 12; let y = b.bottom + 6;
+  if (b.right + W + 16 < innerWidth) { x = Math.min(b.right + 10, innerWidth - W - 12); y = b.top - 6; }
+  if (y + H > innerHeight - 12) y = Math.max(12, innerHeight - H - 12);
+  p.style.left = Math.max(12, x) + 'px'; p.style.top = y + 'px'; p.classList.add('show');
+}
+function hidePeek(){ peekId = null; $('#peek').classList.remove('show'); }
+$('#content').addEventListener('scroll', hidePeek);
+
+/* ═════════ popover chip picker ═════════ */
+let POP = null;
+function propOpts(key){
+  return {
+    status: Object.entries(STATUS).map(([k, v]) => [k, v[0]]),
+    pri: [[1,'높음'],[2,'보통'],[3,'낮음']],
+    type: [...TYPES.map(t => [t.k, t.l]), [null,'없음']],
+    epic: [...EPICS.map(e => [e.id, e.t]), [null,'없음']],
+    req: [...PEOPLE.map(p => [p, p]), [null,'본인']],
+    product: [...PRODUCTS.map(p => [p, p]), [null,'없음']],
+    due: [[TODAY,'오늘'],[addDays(TODAY,1),'내일'],[addDays(TODAY,3),'금요일'],[addDays(TODAY,6),'다음 주 월'],[null,'없음']],
+    tags: TAGS.map(g => [g, '#'+g]),
+  }[key];
+}
+const PROPDEF = {status:['상태','circle'], pri:['우선순위','flag'], due:['납기','cal'], type:['유형','tag'], epic:['에픽','stack'], req:['요청자','person'], product:['제품','cube'], tags:['태그','hash']};
+function pick(anchor, key, cur, onPick){
+  hidePeek(); const multi = key === 'tags'; const opts = propOpts(key);
+  POP = {opts, onPick, multi, cur: multi ? new Set(cur||[]) : cur, key};
+  const p = $('#pop');
+  const draw = () => { p.innerHTML = `<div class="pt">${PROPDEF[key][0]}${multi?' · 여러 개':''}</div><div class="chips">${opts.map(([v, l], i) => {
+      const on = multi ? POP.cur.has(v) : String(v) === String(POP.cur); const t = key==='type' && typeOf(v), e = key==='epic' && epicOf(v);
+      return `<button class="chip" aria-pressed="${on}" onclick="popSel(${i})">${t?`<span class="sw" style="background:${t.c}"></span>`:''}${e?`<span class="sw" style="background:${e.c};border-radius:2px"></span>`:''}${esc(l)}</button>`; }).join('')}
+      ${key==='req'||key==='tags'||key==='product'?`<button class="chip add" onclick="popAdd()">${ic('plus','i s')}추가</button>`:''}</div>
+      ${key==='due'?`<input type="date" value="${POP.cur||''}" onchange="POP.onPick(this.value||null);closePop()">`:''}
+      ${key==='epic'?`<button class="chip add" style="margin-top:8px;width:100%" onclick="closePop();newEpic()">${ic('plus','i s')}새 에픽 페이지 만들기</button>`:''}`; };
+  POP.draw = draw; draw();
+  const b = anchor.getBoundingClientRect(); p.style.left = Math.min(b.left, innerWidth - 350) + 'px';
+  p.style.top = (b.bottom + 6 + 230 > innerHeight ? b.top - 6 - Math.max(120, p.offsetHeight || 160) : b.bottom + 6) + 'px';
+  requestAnimationFrame(() => p.classList.add('show'));
+}
+function popSel(i){ const [v] = POP.opts[i];
+  if (POP.multi){ POP.cur.has(v) ? POP.cur.delete(v) : POP.cur.add(v); POP.onPick([...POP.cur]); POP.draw(); return; }
+  POP.onPick(v); closePop(); }
+function popAdd(){ const p = $('#pop'); if ($('input.txt', p)) return; p.insertAdjacentHTML('beforeend', `<input class="txt" placeholder="이름 입력 후 Enter">`);
+  const inp = $('input.txt', p); inp.focus(); inp.onkeydown = e => { if (e.key !== 'Enter' || !inp.value.trim()) return; const v = inp.value.trim().replace(/^#/, '');
+    ({req:PEOPLE, tags:TAGS, product:PRODUCTS})[POP.key].push(v); POP.opts = propOpts(POP.key); POP.multi ? (POP.cur.add(v), POP.onPick([...POP.cur]), POP.draw()) : (POP.onPick(v), closePop()); }; }
+function closePop(){ $('#pop').classList.remove('show'); POP = null; }
+document.addEventListener('mousedown', e => { if (POP && !e.target.closest('#pop') && !e.target.closest('[data-pick]')) closePop(); });
+
+function propVal(t, key){
+  const v = t[key];
+  if (key === 'status') return `<span class="pill ${STATUS[v][1]}">${STATUS[v][0]}</span>`;
+  if (key === 'pri') return `<span style="color:${v===1?'var(--red)':v===2?'var(--yellow)':'var(--muted)'}">${'●'.repeat(4-v)}${'○'.repeat(v-1)}</span> ${PRI[v]}`;
+  if (key === 'due') return v ? `${dueP(v)} <span class="mono" style="font-size:12px;color:var(--muted)">${v.slice(5).replace('-','/')}</span>` : '<span class="ph">없음</span>';
+  if (key === 'type') return v ? typeTag(v) : '<span class="ph">없음</span>';
+  if (key === 'epic'){ const e = epicOf(v); return e ? `<i style="width:8px;height:8px;border-radius:3px;background:${e.c}"></i>${esc(e.t)}` : '<span class="ph">없음</span>'; }
+  if (key === 'tags') return (v&&v.length) ? v.map(g => `<span class="pill gray">#${g}</span>`).join('') : '<span class="ph">추가</span>';
+  return v ? esc(v) : `<span class="ph">${key==='req'?'본인':'없음'}</span>`;
+}
+function propRow(t, key){ return `<div class="prop"><span class="k">${ic(PROPDEF[key][1])}${PROPDEF[key][0]}</span>
+  <button class="pv" data-pick onclick="pick(this,'${key}',${JSON.stringify(t[key]??null).replace(/"/g,'&quot;')},v=>setTask(${t.id},'${key}',v))">${propVal(t, key)}</button></div>`; }
+function setTask(id, key, v){ const t = TODOS.find(x => x.id === id); t[key] = v; flashSave(); rerender(); if (S.insp?.id === id) openInsp(id, true); }
+
+/* ═════════ rich memo editor (OneNote shortcuts) ═════════ */
+const RTE_KEYS = [
+  ['글머리 기호', 'Ctrl + .'], ['번호 목록', 'Ctrl + /'], ['할일 체크 (만들기·완료)', 'Ctrl + 1  ·  Ctrl + Enter'], ['중요 ★', 'Ctrl + 2'],
+  ['굵게 · 기울임 · 밑줄', 'Ctrl + B · I · U'], ['취소선', 'Ctrl + -'], ['형광펜', 'Ctrl + Alt + H'], ['제목 1 · 2', 'Ctrl + Alt + 1 · 2'],
+  ['본문으로', 'Ctrl + Alt + 0'], ['서식 지우기', 'Ctrl + Shift + N'], ['들여쓰기 · 내어쓰기', 'Tab · Shift + Tab'], ['날짜 · 시간 넣기', 'Alt + Shift + D · T'],
+];
+function rteBar(){ return `<div class="rte-bar" onmousedown="event.preventDefault()">
+  <button class="ib" title="굵게 Ctrl+B" onclick="ex('bold')"><b>B</b></button><button class="ib" title="기울임 Ctrl+I" onclick="ex('italic')"><i style="font-family:Georgia,serif">I</i></button>
+  <button class="ib" title="밑줄 Ctrl+U" onclick="ex('underline')"><u>U</u></button><button class="ib" title="취소선 Ctrl+-" onclick="ex('strikeThrough')"><s>S</s></button>
+  <button class="ib" title="형광펜 Ctrl+Alt+H" onclick="hilite()">${ic('hl','i s')}</button><span class="vs"></span>
+  <button class="ib" title="글머리 기호 Ctrl+." onclick="ex('insertUnorderedList')">${ic('list','i s')}</button>
+  <button class="ib" title="할일 체크 Ctrl+1" onclick="todoLine()">${ic('todo','i s')}</button>
+  <button class="ib" title="제목 Ctrl+Alt+1" onclick="ex('formatBlock','h3')" style="font-size:12px">H</button>
+  <span class="hint">${S.keys.editor?`${ic('kbd','i s')}원노트 단축키 켜짐`:'단축키 꺼짐'} <button class="ib" style="width:24px;height:24px" title="단축키 목록 (?)" onclick="openSettings('keys')">?</button></span></div>`; }
+function rte(html, ph, onSave){ const id = 'r' + Math.random().toString(36).slice(2, 7); RTE_SAVE[id] = onSave;
+  return `<div class="rte-wrap">${rteBar()}<div class="rte" id="${id}" contenteditable="true" spellcheck="false" data-ph="${ph}" data-rte>${html||''}</div></div>`; }
+const RTE_SAVE = {};
+function ex(cmd, val){ document.execCommand(cmd, false, val); saveRte(); }
+function hilite(){ const s = getSelection(); if (s.rangeCount && s.anchorNode.parentElement.closest('mark')) { const m = s.anchorNode.parentElement.closest('mark'); m.replaceWith(...m.childNodes); } else ex('hiliteColor', 'rgba(255,210,123,.28)'); saveRte(); }
+function curBlock(){ const s = getSelection(); if (!s.rangeCount) return null; let n = s.anchorNode; const root = n.nodeType === 1 ? n.closest('[data-rte]') : n.parentElement.closest('[data-rte]'); if (!root) return null;
+  if (n === root){ document.execCommand('formatBlock', false, 'div'); n = getSelection().anchorNode; }
+  while (n && n.parentNode !== root && !(n.nodeName === 'LI')) n = n.parentNode;
+  if (n && n.nodeType === 3){ const d = document.createElement('div'); n.replaceWith(d); d.appendChild(n); n = d; }
+  return n; }
+function todoLine(toggleOnly){ const b = curBlock(); if (!b) return; if (b.classList.contains('tl')) b.classList.toggle('done'); else if (!toggleOnly) b.classList.add('tl'); saveRte(); }
+function stamp(kind){ const d = new Date(); document.execCommand('insertText', false, kind === 'D' ? TODAY : `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`); saveRte(); }
+function saveRte(){ const el = document.activeElement?.closest?.('[data-rte]') || $('[data-rte]:focus'); if (el && RTE_SAVE[el.id]) RTE_SAVE[el.id](el.innerHTML); flashSave(); }
+document.addEventListener('input', e => { if (e.target.matches?.('[data-rte]')) { e.target.querySelectorAll('.tl.done').forEach(x => { if (!x.textContent.trim()) x.classList.remove('done'); }); RTE_SAVE[e.target.id]?.(e.target.innerHTML); flashSave(); } });
+document.addEventListener('click', e => { const tl = e.target.closest('[data-rte] .tl'); if (tl && e.offsetX < 20) { tl.classList.toggle('done'); saveRte(); } });
+document.addEventListener('keydown', e => {
+  if (!e.target.matches?.('[data-rte]') || !S.keys.editor) return;
+  const c = e.ctrlKey || e.metaKey, k = e.key.toLowerCase(); let hit = true;
+  if (e.key === 'Enter' && !c && !e.shiftKey){ const b = curBlock(); if (b?.classList?.contains('tl') && !b.textContent.trim()){ b.className = ''; e.preventDefault(); return; } return; }
+  if (c && !e.altKey && !e.shiftKey && k === '.') ex('insertUnorderedList');
+  else if (c && !e.altKey && k === '/') ex('insertOrderedList');
+  else if (c && !e.altKey && !e.shiftKey && (k === '1' || e.key === 'Enter')) todoLine(e.key === 'Enter' ? false : false);
+  else if (c && !e.altKey && !e.shiftKey && k === '2'){ const b = curBlock(); b && b.classList.toggle('imp'); saveRte(); }
+  else if (c && !e.altKey && !e.shiftKey && k === '-') ex('strikeThrough');
+  else if (c && e.altKey && k === 'h') hilite();
+  else if (c && e.altKey && k === '1') ex('formatBlock', 'h3');
+  else if (c && e.altKey && k === '2') ex('formatBlock', 'h4');
+  else if (c && e.altKey && k === '0') ex('formatBlock', 'div');
+  else if (c && e.shiftKey && k === 'n'){ ex('removeFormat'); ex('formatBlock', 'div'); }
+  else if (e.key === 'Tab') ex(e.shiftKey ? 'outdent' : 'indent');
+  else if (e.altKey && e.shiftKey && (k === 'd' || k === 't')) stamp(k.toUpperCase());
+  else hit = false;
+  if (hit){ e.preventDefault(); e.stopPropagation(); }
+}, true);
+
+/* ═════════ VIEW: 오늘 ═════════ */
+V.today = () => {
+  crumb([{t:'워크스페이스'},{t:'오늘'}]); tbx('');
+  const open = TODOS.filter(t => t.status !== 'done'), od = open.filter(t => t.due && dd(t.due) < 0), plan = open.filter(t => t.planned === TODAY);
+  const done = TODOS.filter(t => t.status === 'done').length, all = cells(), cd = all.filter(c => c.st === 5).length;
+  const dt = pd(TODAY);
+  const lists = {
+    due: open.filter(t => t.due && dd(t.due) <= 3).sort((a, b) => a.due.localeCompare(b.due) || a.pri - b.pri),
+    plan,
+    epic: null,
+  };
+  let body;
+  if (S.todayTab === 'epic'){
+    body = EPICS.map(e => { const l = open.filter(t => t.epic === e.id && (t.due && dd(t.due) <= 7 || t.planned === TODAY)); if (!l.length) return '';
+      const [a, b] = epicProg(e.id); return `<div class="ghead"><span class="eb"><i style="background:${e.c}"></i>${esc(e.t)}</span><span class="ln"></span><span class="mono">${a}/${b}</span></div>${l.map(t => row(t, {noEpic:true})).join('')}`; }).join('');
+  } else body = lists[S.todayTab].map(t => row(t)).join('') || `<div class="empty"><b>비어 있어요</b>여유 있는 하루네요.</div>`;
+  const waits = all.filter(c => c.st < 5).sort((a, b) => wl(b) - wl(a) || b.wait - a.wait).slice(0, 3);
+  const jl = (JOURNAL[TODAY] || '').split('\n');
+  $('#content').innerHTML = `<div class="page">
+    <div class="hero"><div class="grow">
+      <div class="eyebrow">${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일 ${WD[dt.getDay()]}요일</div>
+      <h1 class="h1">오늘</h1>
+      <p class="lead">${od.length?`<b class="r">납기 지난 일 ${od.length}개</b>부터 확인하세요. `:''}오늘 하기로 한 일 <b>${plan.length}개</b>.</p></div>
+      <button class="btn" onclick="go('journal')">${ic('cal','i s')}월간 일지</button>
+      <button class="btn pri" onclick="newTodo()">${ic('plus','i s')}할일 추가 <kbd>N</kbd></button></div>
+    <div class="metrics">
+      <button class="metric" onclick="go('todos')"><div class="top">남은 할일 ${ic('todo')}</div><div class="val"><strong>${String(open.length).padStart(2,'0')}</strong><span>개</span></div><span class="ft">진행 중 ${open.filter(t=>t.status==='doing').length}</span></button>
+      <button class="metric red" onclick="S.todayTab='due';rerender()"><div class="top">납기 지남 ${ic('alert')}</div><div class="val"><strong>${String(od.length).padStart(2,'0')}</strong><span>개</span></div><span class="ft" style="color:var(--red)">먼저 확인</span></button>
+      <button class="metric" onclick="S.todayTab='plan';rerender()"><div class="top">오늘 계획 ${ic('cal')}</div><div class="val"><strong>${String(plan.length).padStart(2,'0')}</strong><span>개</span></div><span class="ft">완료 ${done}</span></button>
+      <button class="metric cyan" onclick="go('board')"><div class="top">3사 평가 ${ic('pulse')}</div><div class="val"><strong>${Math.round(cd/all.length*100)}</strong><span>%</span></div><div class="mbar"><i style="width:${cd/all.length*100}%"></i></div><span class="ft">${cd}/${all.length}칸</span></button>
+    </div>
+    <div class="tgrid">
+      <div><section class="panel">
+        <div class="panel-head"><h2>${ic('flag')}지금 챙길 일</h2><button class="btn quiet sm" onclick="go('todos')">전체 보기 ${ic('chev','i s')}</button></div>
+        <div class="tabs" role="tablist">${[['due','납기 우선',lists.due.length],['plan','오늘 계획',plan.length],['epic','에픽별','']].map(([k,l,n]) => `<button role="tab" aria-selected="${S.todayTab===k}" onclick="S.todayTab='${k}';rerender()">${l}<small>${n}</small></button>`).join('')}</div>
+        <div id="list">${body}</div>
+        <div class="panel-foot"><span>${ic('note','i s')}마우스를 올리면 메모 미리보기</span>${S.keys.app?'<span><kbd>J</kbd><kbd>K</kbd> 이동</span><span><kbd>X</kbd> 완료</span><span><kbd>Enter</kbd> 열기</span>':''}</div>
+      </section></div>
+      <div>
+        <section class="panel"><div class="panel-head"><h2>${ic('cal')}오늘 일지</h2><button class="btn quiet sm" onclick="go('journal')">11월 ${ic('chev','i s')}</button></div>
+          <div style="padding:0 var(--px) calc(var(--py) + 4px)">${jl.map((l, i) => jLine(l, i)).join('')}
+            <div class="jadd">${ic('plus','i s')}<input placeholder="한 줄 추가 · [] 로 시작하면 체크" onkeydown="if(event.key==='Enter'&&this.value.trim())addJ(this.value)"></div></div></section>
+        <section class="panel"><div class="panel-head"><h2>${ic('hour')}평가 · 오래 기다리는 칸</h2><button class="btn quiet sm" onclick="go('board')">현황판 ${ic('chev','i s')}</button></div>
+          ${waits.map(c => { const l = wl(c), col = l===2?'var(--red)':l===1?'var(--yellow)':'var(--blue)';
+            return `<div class="wrow"><div><b>${c.lot.slice(-3)} · W${c.w} × ${c.eq}</b><small>${STAGES[c.st].l}</small></div><div class="bar"><i style="width:${Math.min(100, c.wait/((STAGES[c.st].w||24)*2)*100)}%;background:${col}"></i></div><span class="h" style="color:${col}">${c.wait}h</span></div>`; }).join('')}
+          <div style="height:6px"></div></section>
+      </div>
+    </div></div>`;
+};
+function jLine(l, i){
+  const m = l.match(/^- \[( |x)\] (.*)$/), b = l.match(/^- (.*)$/);
+  if (m){ const done = m[1] === 'x'; let tx = m[2], link = ''; const lk = tx.match(/ → 할일 #(\d+)$/);
+    if (lk){ tx = tx.replace(lk[0], ''); link = `<button class="pill blue" onclick="openInsp(${lk[1]})">#${lk[1]}</button>`; }
+    return `<div class="jl ${done?'done':''}"><button class="check" aria-pressed="${done}" onclick="this.setAttribute('aria-pressed',this.getAttribute('aria-pressed')!=='true');this.parentNode.classList.toggle('done');flashSave()"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><span class="tx">${esc(tx)}</span>${link || (done?'':`<button class="promote" onclick="promote(${i})">할일로 ↗</button>`)}</div>`; }
+  return b ? `<div class="jl"><span class="b"></span><span class="tx">${esc(b[1])}</span></div>` : '';
+}
+function promote(i){ const ls = JOURNAL[TODAY].split('\n'); const id = nextId(); TODOS.push({...defaultsFromDraft(), id, title: ls[i].replace(/^- \[ \] /, ''), status:'todo', planned:TODAY, memo:''});
+  ls[i] += ` → 할일 #${id}`; JOURNAL[TODAY] = ls.join('\n'); flashSave(); rerender(); toast(`할일 #${id} 만들었어요 (기본값 적용)`); }
+function addJ(v){ v = v.trim(); JOURNAL[TODAY] += '\n' + (v.startsWith('[]') ? `- [ ] ${v.slice(2).trim()}` : `- ${v}`); flashSave(); rerender(); setTimeout(() => $('.jadd input').focus(), 0); }
+const nextId = () => Math.max(...TODOS.map(t => t.id)) + 1;
+
+/* ═════════ VIEW: 할일 ═════════ */
+function newTodo(){ if (S.view !== 'todos') go('todos'); setTimeout(() => $('#qa-in')?.focus(), 40); }
+function defaultsFromDraft(){ const d = S.qa.draft; return {due:d.due, req:d.req, product:d.product, type:d.type, epic:d.epic, pri:d.pri||2, tags:[...(d.tags||[])]}; }
+function qaHTML(prefEpic){
+  const d = S.qa.draft; const fake = {id:0, ...d, epic: prefEpic || d.epic};
+  const chipRow = key => propOpts(key).map(([v, l], i) => { const on = key==='tags' ? (d.tags||[]).includes(v) : String(v) === String(fake[key]);
+    const t = key==='type'&&typeOf(v), e = key==='epic'&&epicOf(v);
+    return `<button class="chip" aria-pressed="${on}" onclick="qaSet('${key}',${i})">${t?`<span class="sw" style="background:${t.c}"></span>`:''}${e?`<span class="sw" style="background:${e.c};border-radius:2px"></span>`:''}${esc(l)}</button>`; }).join('');
+  const summary = ['due','type','epic','req','product'].map(k => fake[k] ? `<span class="pill gray">${k==='epic'?esc(epicOf(fake[k])?.t):k==='type'?typeOf(fake[k]).l:k==='due'?(dueP(fake.due).replace(/<[^>]+>/g,'')):esc(fake[k])}</span>` : '').join('') + (d.tags||[]).map(g => `<span class="pill gray">#${g}</span>`).join('');
+  return `<div class="qa ${S.qa.detail?'open':''}" id="qa">
+    <div class="qa-row">${ic('plus')}<input id="qa-in" placeholder="할일 입력 후 Enter   ·   @요청자  #태그  !높음  내일" onkeydown="if(event.key==='Enter'&&!event.isComposing)qaAdd(this)">
+      <button class="toggle" role="switch" aria-checked="${S.qa.detail}" onclick="qaDetail()" title="상세 입력 (Ctrl+Shift+D)"><span class="switch"></span>상세</button>
+      <button class="btn pri" onclick="qaAdd($('#qa-in'))">추가</button></div>
+    ${summary ? `<div class="qa-preview">${summary}<span style="font-size:11px;color:var(--dim);align-self:center;margin-left:4px">${ic('pin','i s')} 기본값</span></div>` : ''}
+    <div class="qa-detail"><div><div class="qa-props">
+      <span class="k">${ic('cal')}납기</span><div class="chips">${chipRow('due')}<input type="date" value="${d.due||''}" onchange="qaSetV('due',this.value||null)"></div>
+      <span class="k">${ic('tag')}유형</span><div class="chips">${chipRow('type')}</div>
+      ${prefEpic ? '' : `<span class="k">${ic('stack')}에픽</span><div class="chips">${chipRow('epic')}<button class="chip add" onclick="newEpic()">${ic('plus','i s')}새 에픽</button></div>`}
+      <span class="k">${ic('person')}요청자</span><div class="chips">${chipRow('req')}</div>
+      <span class="k">${ic('cube')}제품</span><div class="chips">${chipRow('product')}</div>
+      <span class="k">${ic('flag')}우선순위</span><div class="chips">${chipRow('pri')}</div>
+      <span class="k">${ic('hash')}태그</span><div class="chips">${chipRow('tags')}</div>
+      <div class="qa-foot"><button class="toggle" role="switch" aria-checked="${S.qa.remember}" onclick="S.qa.remember=!S.qa.remember;store.set('qaRemember',S.qa.remember);rerender()"><span class="switch"></span></button>
+        <span class="pin">${ic('pin','i s')}마지막 선택을 다음 할일 기본값으로</span><span style="flex:1"></span><button onclick="qaReset()">기본값 비우기</button></div>
+    </div></div></div></div>`;
+}
+function qaSet(key, i){ const [v] = propOpts(key)[i]; const d = S.qa.draft;
+  if (key === 'tags'){ d.tags = d.tags || []; d.tags.includes(v) ? d.tags.splice(d.tags.indexOf(v), 1) : d.tags.push(v); }
+  else d[key] = (key !== 'pri' && String(d[key]) === String(v)) ? null : v;
+  qaPersist(); keepQaFocus(); }
+function qaSetV(k, v){ S.qa.draft[k] = v; qaPersist(); keepQaFocus(); }
+function qaPersist(){ if (S.qa.remember) store.set('qaDefaults', S.qa.draft); }
+function keepQaFocus(){ const v = $('#qa-in')?.value || ''; rerender(); const i = $('#qa-in'); if (i){ i.value = v; } }
+function qaDetail(){ S.qa.detail = !S.qa.detail; store.set('qaDetail', S.qa.detail); $('#qa').classList.toggle('open', S.qa.detail); $('#qa .toggle').setAttribute('aria-checked', S.qa.detail); $('#qa-in').focus(); }
+function qaReset(){ S.qa.draft = {due:null, req:null, product:null, type:null, epic:null, pri:2, tags:[]}; store.set('qaDefaults', S.qa.draft); keepQaFocus(); toast('기본값을 비웠어요'); }
+function qaAdd(inp){
+  let v = inp.value.trim(); if (!v) return; const t = {...defaultsFromDraft()}; let m;
+  if (S.view === 'epic') t.epic = S.arg;
+  if ((m = v.match(/@(\S+)/))) { t.req = m[1]; v = v.replace(m[0], ''); }
+  v = v.replace(/#(\S+)/g, (_, g) => { t.tags.push(g); return ''; });
+  if (/(^|\s)!(\s|$)/.test(v)) { t.pri = 1; v = v.replace(/(^|\s)!(\s|$)/, ' '); }
+  for (const [k, n] of [['오늘',0],['내일',1],['모레',2]]) if (new RegExp(`(^|\\s)${k}(\\s|$)`).test(v)) { t.due = addDays(TODAY, n); v = v.replace(k, ''); }
+  const id = nextId(); TODOS.push({...t, id, title: v.replace(/\s+/g, ' ').trim(), status:'todo', memo:''});
+  inp.value = ''; flashSave(); rerender(); $('#qa-in')?.focus();
+  const r = $(`.trow[data-id="${id}"]`); r?.animate([{background:'rgba(94,230,244,.14)'},{background:'transparent'}], {duration:1400}); r?.scrollIntoView({block:'nearest'});
+  toast(`할일 #${id} 추가`, () => { TODOS = TODOS.filter(x => x.id !== id); rerender(); });
+}
+V.todos = () => {
+  crumb([{t:'워크스페이스'},{t:'할일'}]); tbx(`<button class="btn sm" title="AI에게 요청문 복사" onclick="toast('요청문을 클립보드에 복사했어요')">${ic('sparkle','i s')}AI</button>`);
+  const f = S.f, open = TODOS.filter(t => t.status !== 'done');
+  const ok = t => (f.status.has(t.status) || (S.showDone && t.status === 'done')) && (!f.type.size || f.type.has(t.type)) && (!f.epic.size || f.epic.has(t.epic))
+    && (!f.req.size || f.req.has(t.req)) && (!f.q || (t.title + ' ' + (t.tags||[]).join(' ')).toLowerCase().includes(f.q.toLowerCase()));
+  const list = TODOS.filter(ok).sort((a, b) => (a.due||'9').localeCompare(b.due||'9') || a.pri - b.pri);
+  const live = list.filter(t => t.status !== 'done');
+  const chip = (g, v, l, sw) => `<button class="chip" aria-pressed="${f[g].has(v)}" onclick="S.f.${g}.has(${JSON.stringify(v).replace(/"/g,"'")})?S.f.${g}.delete(${JSON.stringify(v).replace(/"/g,"'")}):S.f.${g}.add(${JSON.stringify(v).replace(/"/g,"'")});rerender()">${sw?`<span class="sw" style="background:${sw}"></span>`:''}${l}</button>`;
+  let body;
+  if (S.listMode === 'epic'){
+    body = [...EPICS, {id:null, t:'에픽 없음', c:'var(--dim)'}].map(e => { const l = live.filter(t => (t.epic||null) === e.id); if (!l.length) return '';
+      const [a, b] = e.id ? epicProg(e.id) : [0, 0];
+      return `<div class="ghead"><span class="eb"><i style="background:${e.c}"></i>${esc(e.t)}</span>${e.id?`<span class="bar" style="width:70px"><i style="width:${b?a/b*100:0}%;background:${e.c}"></i></span><span class="mono">${a}/${b}</span>`:''}<span class="ln"></span>${e.id?`<button class="btn quiet sm" onclick="go('epic','${e.id}')">페이지 ${ic('chev','i s')}</button>`:''}</div>${l.map(t => row(t, {noEpic:true})).join('')}`; }).join('');
+  } else {
+    body = [['지남', t => t.due && dd(t.due) < 0, 'r'], ['오늘', t => t.due && dd(t.due) === 0, 'y'], ['이번 주', t => t.due && dd(t.due) > 0 && dd(t.due) <= 6, ''],
+      ['나중에', t => t.due && dd(t.due) > 6, ''], ['날짜 없음', t => !t.due, '']].map(([n, fn, c]) => { const l = live.filter(fn);
+      return l.length ? `<div class="ghead ${c}">${n} <span class="mono">${l.length}</span><span class="ln"></span></div>${l.map(t => row(t)).join('')}` : ''; }).join('');
+  }
+  $('#content').innerHTML = `<div class="page">
+    <div class="hero"><div class="grow"><div class="eyebrow">할일</div><h1 class="h1">해야 할 일 ${open.length}개</h1>
+      <p class="lead">진행 중 <b>${open.filter(t=>t.status==='doing').length}</b> · 보류 <b>${open.filter(t=>t.status==='hold').length}</b> · 납기 지남 <b class="r">${open.filter(t=>t.due&&dd(t.due)<0).length}</b></p></div>
+      <div class="seg" role="group" aria-label="묶음">${[['due','납기순'],['epic','에픽별']].map(([k,l]) => `<button aria-pressed="${S.listMode===k}" onclick="S.listMode='${k}';rerender()">${l}</button>`).join('')}</div></div>
+    ${qaHTML()}
+    <div class="filters">
+      <div class="fgroup"><span class="k">상태</span>${chip('status','todo','대기')}${chip('status','doing','진행 중')}${chip('status','hold','보류')}</div><span class="vsep"></span>
+      <div class="fgroup"><span class="k">유형</span>${TYPES.map(t => chip('type', t.k, t.l, t.c)).join('')}</div><span class="vsep"></span>
+      <div class="fgroup"><span class="k">요청자</span>${PEOPLE.map(p => chip('req', p, p)).join('')}</div>
+      <label class="fsearch">${ic('search','i s')}<input placeholder="제목 · 태그" value="${esc(f.q)}" oninput="S.f.q=this.value;rerender();const i=$('.fsearch input');i.focus();i.setSelectionRange(99,99)"></label>
+    </div>
+    <section class="panel"><div id="list">${body || `<div class="empty"><b>조건에 맞는 할일이 없어요</b>필터를 끄거나 위에서 새로 추가하세요.</div>`}</div>
+      <button class="ghead" style="width:100%;cursor:pointer;padding-bottom:var(--py)" onclick="S.showDone=!S.showDone;rerender()">${ic('chev','i s')} 완료 ${TODOS.filter(t=>t.status==='done').length} ${S.showDone?'숨기기':'보기'}<span class="ln"></span></button>
+      ${S.showDone ? TODOS.filter(t => t.status === 'done').map(t => row(t)).join('') : ''}
+      <div class="panel-foot"><span>${ic('note','i s')}호버 · 메모 미리보기</span><span>클릭 · 상세 패널</span><span>더블클릭 · 페이지로</span>${S.keys.app?'<span><kbd>J</kbd><kbd>K</kbd> 이동 <kbd>X</kbd> 완료 <kbd>E</kbd> 편집</span>':''}</div></section>
+  </div>`;
+};
+
+/* ═════════ inspector (side) ═════════ */
+function openInsp(id, keep){
+  const t = TODOS.find(x => x.id === id); if (!t) return; S.insp = {id}; hidePeek();
+  $$('.trow.sel').forEach(r => r.classList.remove('sel')); $$(`.trow[data-id="${id}"]`).forEach(r => r.classList.add('sel'));
+  const el = $('#insp'); const y = keep ? $('.insp-b', el)?.scrollTop : 0;
+  el.innerHTML = `<div class="insp-in"><div class="insp-h"><div class="grow"><div class="k">#${t.id} · ${STATUS[t.status][0]}</div>
+      <h3 contenteditable="plaintext-only" spellcheck="false" onblur="setTitle(${id},this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">${esc(t.title)}</h3></div>
+      <button class="ib" title="페이지로 크게 열기" onclick="go('task',${id})">${ic('expand','i s')}</button><button class="ib" title="닫기 Esc" onclick="closeInsp()">${ic('x','i s')}</button></div>
+    <div class="insp-b">${['status','due','pri','type','epic','req','product','tags'].map(k => propRow(t, k)).join('')}
+      <div class="sec-h">메모<span class="ln"></span></div>${rte(t.memo, '메모 — Ctrl+. 글머리, Ctrl+1 체크', h => { t.memo = h; })}
+      <div style="display:flex;gap:8px;margin-top:18px"><button class="btn sm" onclick="go('task',${id})">${ic('expand','i s')}페이지로 열기</button><span style="flex:1"></span><button class="btn quiet sm" style="color:var(--red)" onclick="delTodo(${id})">${ic('trash','i s')}휴지통</button></div>
+    </div></div>`;
+  el.classList.add('open'); if (keep) $('.insp-b', el).scrollTop = y;
+}
+function setTitle(id, v){ const t = TODOS.find(x => x.id === id); v = v.trim(); if (v && v !== t.title){ t.title = v; flashSave(); rerender(); } }
+function closeInsp(silent){ S.insp = null; $('#insp').classList.remove('open'); $$('.trow.sel').forEach(r => r.classList.remove('sel')); if (!silent && S.view === 'board') renderMx(); }
+function delTodo(id){ const i = TODOS.findIndex(x => x.id === id), [t] = TODOS.splice(i, 1); closeInsp(); if (S.view === 'task') go('todos'); else rerender();
+  toast('휴지통으로 옮겼어요', () => { TODOS.splice(i, 0, t); rerender(); }); }
+
+/* ═════════ VIEW: 할일 페이지 ═════════ */
+V.task = () => {
+  const t = TODOS.find(x => x.id === S.arg); if (!t) return go('todos'); const ep = epicOf(t.epic);
+  crumb([{t:'할일', go:"go('todos')"}, ...(ep ? [{t:ep.t, go:`go('epic','${ep.id}')`}] : []), {t:t.title}]);
+  tbx(`<button class="btn sm" onclick="toast('요청문을 클립보드에 복사했어요')">${ic('sparkle','i s')}AI</button>`);
+  $('#content').innerHTML = `<div class="page"><article class="doc">
+    <div class="eyebrow ${ep?'':'muted'}" style="${ep?`color:${ep.c}`:''}">${ep?esc(ep.t):'할일'} · #${t.id}</div>
+    <div style="display:flex;gap:14px;align-items:flex-start"><button class="check" style="margin-top:22px;width:24px;height:24px" aria-pressed="${t.status==='done'}" onclick="setTask(${t.id},'status',${t.status==='done'?"'todo'":"'done'"})"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+      <h1 class="doc-title" contenteditable="plaintext-only" spellcheck="false" onblur="setTitle(${t.id},this.textContent)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">${esc(t.title)}</h1></div>
+    <div class="propgrid">${['status','due','type','epic','pri','req','product','tags'].map(k => propRow(t, k)).join('')}</div>
+    ${rte(t.memo, '여기에 메모·회의 내용·결과를 정리하세요. Ctrl+. 글머리 · Ctrl+1 체크 · Ctrl+Alt+H 형광펜', h => { t.memo = h; })}
+    <div class="sec-h">하위 할일 <span class="mono" style="font-size:11px">${(t.subs||[]).filter(s=>s.d).length}/${(t.subs||[]).length}</span><span class="ln"></span></div>
+    <div class="subs">${(t.subs||[]).map((s, i) => `<div class="trow ${s.d?'done':''}" style="border:0"><button class="check" aria-pressed="${s.d}" onclick="TODOS.find(x=>x.id===${t.id}).subs[${i}].d=!${s.d};flashSave();rerender()"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><span class="ttitle" style="font-weight:500">${esc(s.t)}</span></div>`).join('')}
+      <div class="jadd" style="padding-left:6px">${ic('plus','i s')}<input placeholder="하위 할일 추가" onkeydown="if(event.key==='Enter'&&this.value.trim()){const t=TODOS.find(x=>x.id===${t.id});(t.subs=t.subs||[]).push({t:this.value.trim(),d:false});flashSave();rerender();setTimeout(()=>$('.subs input').focus())}"></div></div>
+    <div class="sec-h">기록<span class="ln"></span></div>
+    <ul class="activity"><li><time>11/24 09:12</time>상태 → 진행 중</li><li><time>11/22 17:40</time>납기 변경 11/20 → 11/21</li><li><time>11/18 10:03</time>일지에서 만듦 (11월 18일)</li></ul>
+  </article></div>`;
+};
+
+/* ═════════ VIEW: 에픽 페이지 ═════════ */
+V.epic = () => {
+  const e = epicOf(S.arg); if (!e) return go('todos'); const path = findNode(e.id) || [{t:e.t}];
+  crumb(path.map(n => ({t:n.t}))); tbx('');
+  const l = TODOS.filter(t => t.epic === e.id), [a, b] = epicProg(e.id), live = l.filter(t => t.status !== 'done');
+  const byType = TYPES.map(ty => [ty, l.filter(t => t.type === ty.k).length]).filter(x => x[1]);
+  $('#content').innerHTML = `<div class="page">
+    <div class="hero"><div class="grow"><div class="eyebrow" style="color:${e.c}">할일 목록 · 에픽</div>
+      <h1 class="h1" contenteditable="plaintext-only" spellcheck="false" style="outline:0" onblur="epicOf('${e.id}').t=this.textContent.trim();findNode('${e.id}').at(-1).t=this.textContent.trim();renderTree();flashSave()">${esc(e.t)}</h1>
+      <p class="lead">${esc(e.desc)}</p></div></div>
+    <div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="metric"><div class="top">진행률 ${ic('pulse')}</div><div class="val"><strong style="color:${e.c}">${b?Math.round(a/b*100):0}</strong><span>%</span></div><div class="mbar"><i style="width:${b?a/b*100:0}%;background:${e.c}"></i></div><span class="ft">${a}/${b} 완료</span></div>
+      <div class="metric"><div class="top">마감 ${ic('cal')}</div><div class="val"><strong>${e.end?`D-${dd(e.end)}`:'—'}</strong></div><span class="ft">${e.end||'정하지 않음'}</span></div>
+      <div class="metric"><div class="top">유형 ${ic('tag')}</div><div class="chips" style="margin-top:12px">${byType.map(([ty, n]) => `<span class="type" style="color:${ty.c};background:${ty.bg}">${ty.l} ${n}</span>`).join('') || '<span style="color:var(--dim)">—</span>'}</div></div>
+    </div>
+    ${qaHTML(e.id)}
+    <section class="panel"><div class="panel-head"><h2>${ic('todo')}할일 <small>${live.length}</small></h2></div>
+      <div id="list">${live.map(t => row(t, {noEpic:true})).join('') || '<div class="empty"><b>아직 할일이 없어요</b>위 입력창에 쓰면 이 에픽으로 들어가요.</div>'}</div>
+      ${l.length - live.length ? `<div class="ghead">완료 ${l.length - live.length}<span class="ln"></span></div>${l.filter(t => t.status === 'done').map(t => row(t, {noEpic:true})).join('')}` : ''}
+    </section></div>`;
+};
+function newEpic(){
+  const id = 'ep' + Date.now().toString(36), colors = ['#729eff','#ff8ba1','#5ee6f4','#ffd27b','#ac91ff','#64e4ae'];
+  EPICS.push({id, t:'새 에픽', c:colors[EPICS.length % colors.length], desc:'목표와 범위를 적어 두세요.', end:null});
+  const mi = findNode('mi').at(-1); mi.kids.push({id, t:'새 에픽', ty:'epic'}); mi.open = true;
+  closeModals(); go('epic', id); setTimeout(() => { const h = $('.h1'); h.focus(); getSelection().selectAllChildren(h); }, 60);
+}
+function addPageMenu(btn){
+  hidePeek(); const p = $('#pop'); POP = {opts:[], onPick(){}, key:'page'};
+  p.innerHTML = `<div class="pt">새 페이지 — MI 공정업무 아래</div><div class="pm">
+    ${[['stack','할일 목록 (에픽)','할일을 묶어 진행률·마감을 관리','newEpic()'],['doc','노트','글·표·단 나누기','closePop();toast(\'노트를 만들었어요\')'],
+       ['board','평가 현황판','Lot × 설비 단계 관리 (P4)','closePop();go(\'board\')'],['code','HTML 페이지','interactive 강의·계산기','closePop();toast(\'HTML 페이지를 만들었어요\')']]
+      .map(([i, t, s, fn]) => `<button onclick="${fn}"><span class="ic">${ic(i,'i s')}</span><span><b style="font-weight:600">${t}</b><small>${s}</small></span></button>`).join('')}</div>`;
+  const b = btn.getBoundingClientRect(); p.style.left = (b.right + 8) + 'px'; p.style.top = b.top + 'px'; requestAnimationFrame(() => p.classList.add('show'));
+}
+
+/* ═════════ VIEW: 노트 (간단) ═════════ */
+V.note = () => {
+  const path = findNode(S.arg); const n = path.at(-1); crumb(path.map(x => ({t:x.t}))); tbx('');
+  $('#content').innerHTML = `<div class="page"><article class="doc"><div class="eyebrow muted">노트</div>
+    <h1 class="doc-title" contenteditable="plaintext-only" spellcheck="false">${esc(n.t)}</h1>
+    ${rte(n.id==='evm'?'<h3>목적</h3>3사 설비의 <mark>검출력·반복도·scan time</mark> 비교.<ul><li>반복도: 3회, CV ≤ 5%</li><li>리뷰: 설비별 랜덤 100개</li></ul><div class="tl done">평가 템플릿 확정</div><div class="tl">scan time 계산식 검증</div>':'', '바로 쓰기 시작하세요', h => { n.html = h; })}
+  </article></div>`;
+};
+
+/* ═════════ VIEW: 월간 일지 ═════════ */
+V.journal = () => {
+  crumb([{t:'일지'},{t:'2026년 11월'}]); tbx('');
+  const weeks = [0,1,2,3,4].map(w => addDays('2026-11-02', w*7));
+  let h = `<div class="jh"></div>` + weeks.map((w, i) => `<div class="jh ${w <= TODAY && TODAY <= addDays(w,6)?'cur':''}"><b>${45+i}주차</b>${w.slice(5).replace('-','/')} – ${addDays(w,4).slice(5).replace('-','/')}</div>`).join('');
+  [1,2,3,4,5].forEach(wd => { h += `<div class="jd">${WD[wd]}</div>`;
+    weeks.forEach(w => { const k = addDays(w, wd-1), out = pd(k).getMonth() !== 10, txt = JOURNAL[k] || '';
+      const auto = S.jAuto ? TODOS.filter(t => t.due === k && t.status !== 'done') : [];
+      h += `<div class="jc ${k===TODAY?'today':''} ${out?'out':''}" data-k="${k}" onclick="editCell(this)"><span class="dn">${pd(k).getDate()}</span>
+        ${txt.split('\n').filter(Boolean).map(l => { const m = l.match(/^- \[( |x)\] (.*)$/); const tx = (m ? m[2] : l.replace(/^- /, '')).replace(/ → 할일 #\d+$/, '');
+          return m ? `<div class="ln ${m[1]==='x'?'x':''}"><span class="cb"></span><span>${esc(tx)}</span></div>` : `<div class="ln"><span class="b"></span><span>${esc(tx)}</span></div>`; }).join('')}
+        ${auto.length ? `<div class="auto">${auto.map(t => `<div class="${dd(k)<0?'r':''}">◷ ${esc(t.title)}</div>`).join('')}</div>` : ''}</div>`; }); });
+  $('#content').innerHTML = `<div class="page wide">
+    <div class="hero"><div class="grow"><div class="eyebrow">월간 일지</div><h1 class="h1">2026년 11월</h1><p class="lead">가로는 주차, 세로는 요일. 칸을 누르면 바로 써져요.</p></div></div>
+    <div class="jtools"><button class="ib bd">${ic('chevl','i s')}</button><button class="btn sm">오늘</button><button class="ib bd">${ic('chev','i s')}</button><span class="vsep"></span>
+      <button class="chip" aria-pressed="${S.jAuto}" onclick="S.jAuto=!S.jAuto;rerender()">납기 할일 표시</button></div>
+    <div class="jscroll"><div class="jgrid" style="grid-template-columns:46px repeat(5,minmax(190px,1fr))">${h}</div></div></div>`;
+};
+function editCell(c){ if ($('textarea', c)) return; const k = c.dataset.k, ta = document.createElement('textarea'); ta.value = JOURNAL[k] || ''; c.appendChild(ta); ta.focus();
+  ta.oninput = () => { JOURNAL[k] = ta.value; flashSave(); }; ta.onblur = () => rerender(); ta.onkeydown = e => e.key === 'Escape' && ta.blur(); }
+
+/* ═════════ VIEW: 평가 현황판 ═════════ */
+V.board = () => {
+  crumb([{t:'MI 공정업무'},{t:'3사 평가 현황판'}]); tbx(`<button class="btn sm">엑셀</button>`);
+  const all = cells(), by = STAGES.map((_, i) => all.filter(c => c.st === i).length);
+  $('#content').innerHTML = `<div class="page wide">
+    <div class="hero"><div class="grow"><div class="eyebrow" style="color:var(--violet)">평가 현황판</div><h1 class="h1">2026 3사 평가</h1>
+      <p class="lead">칸을 누르면 상세 · <kbd>Shift</kbd> 클릭으로 여러 칸 선택 · 숫자키 1–6 단계 변경</p></div>
+      <button class="chip" aria-pressed="${S.bOnly}" onclick="S.bOnly=!S.bOnly;rerender()">오래 기다림만</button></div>
+    <section class="panel bsum"><div class="bstat"><div><strong>${Math.round(by[5]/all.length*100)}%</strong><span>정리 완료</span></div><div><strong>${all.length-by[5]}</strong><span>남은 칸</span></div>
+      <div><strong style="color:var(--yellow)">${all.filter(c=>wl(c)===1).length}</strong><span>기준 초과</span></div><div><strong style="color:var(--red)">${all.filter(c=>wl(c)===2).length}</strong><span>2배 초과</span></div><div><strong>D-9</strong><span>마감 12/3</span></div></div>
+      <div class="prog">${by.map((n, i) => n ? `<i class="s${i}" style="flex:${n}"></i>` : '').join('')}</div>
+      <div class="legend">${STAGES.map((s, i) => `<span><i class="s${i}"></i>${s.l}<b>${by[i]}</b></span>`).join('')}</div></section>
+    <section class="panel"><div class="bwrap"><table class="mx" id="mx"></table></div></section></div>`;
+  renderMx();
+};
+function renderMx(){
+  const m = $('#mx'); if (!m) return;
+  let h = `<tr><th></th><th></th>${EQS.map(e => { const l = cells().filter(c => c.eq === e); return `<th><b>${e}</b><small>${Math.round(l.filter(c=>c.st===5).length/l.length*100)}%</small></th>`; }).join('')}</tr>`;
+  LOTS.forEach(([lot, mos, mc], li) => { if (li) h += `<tr class="gap"><td></td></tr>`;
+    [1,2,3].forEach(w => { h += `<tr>${w===1?`<td class="lot" rowspan="3"><b>${lot}</b><span class="pill ${mc}">${mos}</span></td>`:''}<td class="wf">W${w}</td>`;
+      EQS.forEach(e => { const k = `${lot}|${w}|${e}`, c = CELLS[k];
+        if (!c){ h += `<td><div class="tile x"><small>제외</small></div></td>`; return; }
+        const l = wl(c), sel = S.sel.has(k) || S.insp?.cell === k;
+        h += `<td><button class="tile s${c.st} ${sel?'sel':''} ${S.bOnly&&!l?'dim':''}" onclick="cellClick(event,'${k}')"><b>${STAGES[c.st].l}</b><small>${c.st===5?'':c.wait+'시간째'}</small>${l?`<span class="wd" style="background:${l===2?'var(--red)':'var(--yellow)'}"></span>`:''}</button></td>`; });
+      h += `</tr>`; }); });
+  m.innerHTML = h;
+}
+function cellClick(e, k){
+  if (e.shiftKey || e.ctrlKey || S.sel.size){ if (S.insp?.cell && !S.sel.size) S.sel.add(S.insp.cell); S.sel.has(k) ? S.sel.delete(k) : S.sel.add(k); closeInsp(true); renderMx(); renderSelbar(); return; }
+  openCell(k);
+}
+function openCell(k){
+  const c = CELLS[k]; S.insp = {cell:k}; renderMx(); const l = wl(c);
+  $('#insp').innerHTML = `<div class="insp-in"><div class="insp-h"><div class="grow"><div class="k">${c.eq}</div><h3>${c.lot} · W${c.w}</h3></div><button class="ib" onclick="closeInsp()">${ic('x','i s')}</button></div>
+    <div class="insp-b">${l?`<div class="callout ${l===2?'r':'y'}">${ic('hour','i s')}${STAGES[c.st].l}에서 ${c.wait}시간째 · 기준 ${STAGES[c.st].w}시간</div>`:''}
+      <div class="stage-list">${STAGES.map((s, i) => `<button class="stage-btn" aria-pressed="${i===c.st}" onclick="setStage('${k}',${i})"><span class="sw s${i}"></span><span class="grow">${s.l}</span><kbd>${i+1}</kbd></button>`).join('')}</div>
+      <div class="sec-h">메모<span class="ln"></span></div>${rte(c.memo||'', '이슈 · 메모', h => { c.memo = h; })}</div></div>`;
+  $('#insp').classList.add('open');
+}
+function setStage(k, i){ const c = CELLS[k], p = [c.st, c.wait]; c.st = i; c.wait = 0; flashSave(); rerender(); openCell(k);
+  toast(`${STAGES[i].l}(으)로 변경`, () => { c.st = p[0]; c.wait = p[1]; rerender(); openCell(k); }); }
+function renderSelbar(){ const b = $('#selbar'); if (!S.sel.size || S.view !== 'board') return b.classList.remove('show');
+  b.innerHTML = `<b style="font-size:12.5px;margin-right:8px;white-space:nowrap">${S.sel.size}칸</b>${STAGES.map((s, i) => `<button class="st" onclick="bulk(${i})"><i class="s${i}"></i>${s.l}</button>`).join('')}<button class="ib" onclick="S.sel.clear();renderMx();renderSelbar()">${ic('x','i s')}</button>`;
+  b.classList.add('show'); }
+function bulk(i){ const ks = [...S.sel]; ks.forEach(k => { CELLS[k].st = i; CELLS[k].wait = 0; }); S.sel.clear(); flashSave(); rerender(); renderSelbar(); toast(`${ks.length}칸 → ${STAGES[i].l}`); }
+
+/* ═════════ settings sheet ═════════ */
+const APP_KEYS = [['새 할일','N'],['검색 · 명령','/ 또는 Ctrl+K'],['목록 위·아래','K · J'],['완료 표시','X'],['상세 열기 · 편집','Enter · E'],['페이지로 열기','Shift+Enter'],['상세 입력 토글','Ctrl+Shift+D'],['사이드바','['],['밀도 바꾸기','Ctrl+Shift+.'],['단축키 목록','?'],['닫기','Esc']];
+function openSettings(tab){ closePop(); hidePeek(); renderSettings(); $('#scrim').classList.add('show'); $('#sheet').classList.add('show'); if (tab === 'keys') setTimeout(() => $('#set-keys')?.scrollIntoView({block:'start'}), 50); }
+function renderSettings(){
+  const d = S.density; const lines = {compact:[3,3,3,3,3], normal:[5,5,5,5], cozy:[8,8,8]};
+  $('#sheet').innerHTML = `<div class="sheet-h"><h2>설정</h2><button class="ib" onclick="closeModals()">${ic('x','i s')}</button></div><div class="sheet-b">
+    <div class="set-sec"><h3>화면 밀도</h3><div class="dens-prev">${[['compact','컴팩트','표·목록을 촘촘하게'],['normal','기본','균형'],['cozy','여유','넉넉한 간격']].map(([k,l,s]) => `<button aria-pressed="${d===k}" onclick="setDensity('${k}')">
+      <div class="lines" style="gap:${{compact:3,normal:6,cozy:10}[k]}px">${lines[k].map(() => '<i></i>').join('')}</div><b>${l}</b><small>${s}</small></button>`).join('')}</div>
+      <div class="note-w">상단 바의 ${ic('density','i s')} 버튼이나 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> 로도 바꿀 수 있어요. 할일 목록·일지 칸·현황판 칸 높이에 함께 적용돼요.</div></div>
+    <div class="set-sec" id="set-keys"><h3>단축키</h3>
+      <div class="set-row"><div class="grow"><b>웹 전용 단축키</b><small>N, /, J·K, X 처럼 이 앱 안에서만 쓰는 키. 끄면 브라우저 기본 동작.</small></div><button class="switch" role="switch" aria-checked="${S.keys.app}" onclick="toggleKeys()"></button></div>
+      <div class="set-row"><div class="grow"><b>메모 편집기 · 원노트 단축키</b><small>Ctrl+. 글머리, Ctrl+1 체크, Ctrl+Alt+H 형광펜 등</small></div><button class="switch" role="switch" aria-checked="${S.keys.editor}" onclick="S.keys.editor=!S.keys.editor;store.set('keys',S.keys);renderSettings();rerender()"></button></div>
+      <div class="kcols" style="margin-top:8px"><table class="kt">${APP_KEYS.map(([a,b]) => `<tr class="${S.keys.app?'':'off'}"><td>${a}</td><td><kbd>${b}</kbd></td></tr>`).join('')}</table>
+        <table class="kt">${RTE_KEYS.map(([a,b]) => `<tr class="${S.keys.editor?'':'off'}"><td>${a}</td><td><kbd>${b}</kbd></td></tr>`).join('')}</table></div>
+      <div class="note-w">브라우저가 먼저 가져가는 키(Ctrl+N·T·W 등)는 바꿀 수 없어요. Ctrl+1이 탭 이동으로 넘어가면 Ctrl+Enter를 쓰세요. <code>run.bat</code>이 Edge 앱 모드(--app)로 열면 더 많은 키를 앱이 받을 수 있어요.</div></div>
+    <div class="set-sec"><h3>할일 기본값</h3>
+      <div class="set-row"><div class="grow"><b>마지막 선택을 기본값으로</b><small>빠른 추가·일지 승격 때 납기·요청자·제품·유형·에픽을 그대로 채워요.</small></div><button class="switch" role="switch" aria-checked="${S.qa.remember}" onclick="S.qa.remember=!S.qa.remember;store.set('qaRemember',S.qa.remember);renderSettings()"></button></div>
+      <div class="set-row"><div class="grow"><b>현재 기본값</b><small>${['due','type','epic','req','product'].map(k => S.qa.draft[k] ? (k==='epic'?epicOf(S.qa.draft[k])?.t:k==='type'?typeOf(S.qa.draft[k]).l:S.qa.draft[k]) : null).filter(Boolean).join(' · ') || '없음'}</small></div><button class="btn sm" onclick="qaReset();renderSettings()">비우기</button></div></div>
+    <div class="set-sec"><h3>월간 일지</h3><div class="set-row"><div class="grow"><b>납기 할일 자동 표시</b><small>파일에는 쓰지 않고 화면에만 보여요.</small></div><button class="switch" role="switch" aria-checked="${S.jAuto}" onclick="S.jAuto=!S.jAuto;renderSettings()"></button></div></div>
+  </div>`;
+}
+function closeModals(){ $('#scrim').classList.remove('show'); $('#sheet').classList.remove('show'); $('#palette').classList.remove('show'); }
+
+/* ═════════ palette ═════════ */
+let PAL = [], pi = 0;
+function palItems(q){
+  const it = [];
+  const walk = (ns, tr) => ns.forEach(n => { it.push({g:'페이지', t:n.t, sub:tr.join(' / '), run:() => openNode(n.id)}); n.kids && walk(n.kids, [...tr, n.t]); }); walk(TREE, []);
+  TODOS.filter(t => t.status !== 'done').forEach(t => it.push({g:'할일', t:t.title, sub:'#'+t.id, run:() => go('task', t.id)}));
+  [['새 할일','N',newTodo],['새 에픽 페이지','',newEpic],['밀도 바꾸기','Ctrl+Shift+.',cycleDensity],['단축키 켜기/끄기','',() => toggleKeys()],['설정','',openSettings]].forEach(([t, k, run]) => it.push({g:'명령', t, sub:k, run}));
+  const s = q.trim().toLowerCase(); return s ? it.filter(i => (i.t + i.sub).toLowerCase().includes(s)) : it.filter(i => i.g !== '할일').slice(0, 14);
+}
+function renderPal(){ PAL = palItems($('#pq').value); pi = Math.min(pi, Math.max(0, PAL.length-1)); let g = '';
+  $('#pres').innerHTML = PAL.map((x, i) => (x.g !== g ? `<div class="gl">${g = x.g}</div>` : '') + `<button class="it ${i===pi?'on':''}" onmousemove="if(pi!==${i}){pi=${i};renderPal()}" onclick="palRun(${i})"><span class="grow">${esc(x.t)}</span><small>${esc(x.sub)}</small></button>`).join('') || '<div class="empty"><b>결과 없음</b></div>';
+  $('#pres .on')?.scrollIntoView({block:'nearest'}); }
+function openPalette(){ hidePeek(); closePop(); $('#scrim').classList.add('show'); $('#palette').classList.add('show'); $('#pq').value = ''; pi = 0; renderPal(); setTimeout(() => $('#pq').focus(), 20); }
+function palRun(i){ const x = PAL[i]; closeModals(); x && x.run(); }
+$('#pq').oninput = () => { pi = 0; renderPal(); };
+$('#pq').onkeydown = e => { if (e.key === 'ArrowDown'){ pi = Math.min(PAL.length-1, pi+1); renderPal(); e.preventDefault(); } if (e.key === 'ArrowUp'){ pi = Math.max(0, pi-1); renderPal(); e.preventDefault(); } if (e.key === 'Enter') palRun(pi); };
+
+/* ═════════ global keys ═════════ */
+function moveCur(d){ const rows = $$('#list .trow[data-id]'); if (!rows.length) return; rows.forEach(r => r.classList.remove('cur'));
+  S.cur = Math.max(0, Math.min(rows.length-1, S.cur + d)); const r = rows[S.cur]; r.classList.add('cur'); r.scrollIntoView({block:'nearest'}); showPeek(+r.dataset.id, r); }
+const curId = () => { const r = $$('#list .trow[data-id]')[S.cur]; return r ? +r.dataset.id : null; };
+addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable;
+  if (e.key === 'Escape'){ if ($('#scrim').classList.contains('show')) return closeModals(); if (POP) return closePop(); if (typing) return document.activeElement.blur();
+    if (S.sel.size){ S.sel.clear(); renderMx(); return renderSelbar(); } if (S.insp) return closeInsp(); hidePeek(); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); return openPalette(); }
+  if (!S.keys.app) return;
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === '>' || e.key === '.')){ e.preventDefault(); return cycleDensity(); }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd' && $('#qa')){ e.preventDefault(); return qaDetail(); }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  if (k === '/'){ e.preventDefault(); openPalette(); }
+  else if (k === 'n' || k === 'N' || k === 'ㅜ'){ e.preventDefault(); newTodo(); }
+  else if (k === '?'){ openSettings('keys'); }
+  else if (k === '['){ toggleRail(); }
+  else if (k === 'j' || k === 'ㅓ'){ moveCur(1); }
+  else if (k === 'k' || k === 'ㅏ'){ moveCur(-1); }
+  else if ((k === 'x' || k === 'ㅌ') && curId()){ const b = $$('#list .trow[data-id]')[S.cur].querySelector('.check'); toggleDone(curId(), b); }
+  else if (k === 'Enter' && curId()){ e.preventDefault(); e.shiftKey ? go('task', curId()) : openInsp(curId()); }
+  else if ((k === 'e' || k === 'ㄷ') && curId()){ openInsp(curId()); setTimeout(() => $('#insp h3')?.focus(), 380); }
+  else if (S.view === 'board' && S.insp?.cell && /^[1-6]$/.test(k)) setStage(S.insp.cell, +k - 1);
+});
+
+syncKeyBtn();
+go('today');
+</script>
+</body>
+</html>
