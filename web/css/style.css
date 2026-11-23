@@ -53,6 +53,10 @@ body { display: flex; font: 14px/1.5 "Malgun Gothic", "Segoe UI", sans-serif; co
 .jcell.out { background: var(--bg); opacity: .55; }
 .jcell.weekend { background: #fbf7f7; }
 .jcell.today { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-weak); background: var(--accent-weak); }
+.jcell.editable { cursor: text; }
+.jcell-view { min-height: 56px; }
+.jedit { width: 100%; min-height: 80px; border: 1px solid var(--accent); border-radius: 4px; padding: 4px; font: inherit; resize: none; overflow: hidden; background: #fff; }
+.jstatus { color: var(--muted); font-size: 12px; margin-left: auto; }
 .jdate { font-size: 12px; color: var(--muted); }
 .jcell.today .jdate { color: var(--accent); font-weight: 700; }
 .jline { white-space: pre-wrap; word-break: break-word; }

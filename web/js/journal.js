@@ -74,7 +74,64 @@ export async function renderJournal(container, month) {
   });
 
   const grid = el("div", "jgrid");
-  const note = el("div", "meta", "보기 전용 — 편집은 다음 단계(P2-02b)에서 추가됩니다.");
+  const note = el("div", "meta", "칸을 클릭하면 편집합니다. 입력 후 잠시 멈추면 자동 저장됩니다.");
+  const status = el("span", "jstatus");
+  head.append(status);
+
+  // Saves run one after another so an older PUT can never overwrite a newer one.
+  let chain = Promise.resolve();
+  function save(key, dd, text) {
+    status.className = "jstatus";
+    status.textContent = "저장 중…";
+    chain = chain
+      .then(() => api.saveDay(month, dd, text))
+      .then(() => {
+        if (text.trim()) days[key] = text; else delete days[key];
+        status.textContent = "저장됨";
+      })
+      .catch((e) => {
+        status.className = "jstatus error";
+        status.textContent = `저장 실패: ${e.message}`;
+      });
+    return chain;
+  }
+
+  function makeEditable(cell, key, dd) {
+    const view = el("div", "jcell-view");
+    const paint = () => {
+      view.replaceChildren(days[key] ? bodyLines(days[key]) : el("div", "jempty", ""));
+    };
+    paint();
+    cell.append(view);
+    cell.classList.add("editable");
+    view.addEventListener("click", () => {
+      const ta = document.createElement("textarea");
+      ta.className = "jedit";
+      ta.value = days[key] || "";
+      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+      let timer = null;
+      let dirty = false;
+      const flush = () => {
+        clearTimeout(timer);
+        if (dirty) { dirty = false; return save(key, dd, ta.value); }
+      };
+      ta.addEventListener("input", () => {
+        dirty = true;
+        fit();
+        clearTimeout(timer);
+        timer = setTimeout(flush, 700);
+      });
+      ta.addEventListener("blur", async () => {
+        await flush();
+        paint();
+        ta.replaceWith(view);
+      });
+      ta.addEventListener("keydown", (e) => { if (e.key === "Escape") ta.blur(); });
+      view.replaceWith(ta);
+      fit();
+      ta.focus();
+    });
+  }
 
   function paintGrid() {
     const weeks = weeksOf(month);
@@ -90,7 +147,7 @@ export async function renderJournal(container, month) {
         const inMonth = d.getMonth() === m - 1;
         const cell = el("div", "jcell" + (inMonth ? "" : " out") + (key === today ? " today" : "") + (r >= 5 ? " weekend" : ""));
         cell.append(el("div", "jdate", String(d.getDate())));
-        if (inMonth && days[key]) cell.append(bodyLines(days[key]));
+        if (inMonth) makeEditable(cell, key, d.getDate());
         grid.append(cell);
       }
     }

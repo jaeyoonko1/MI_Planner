@@ -16,5 +16,6 @@ export const api = {
   tree: () => request("GET", "/api/pages/tree").then((d) => d.tree),
   page: (path) => request("GET", `/api/pages${q(path)}`),
   journal: (month) => request("GET", `/api/journal/${encodeURIComponent(month)}`),
+  saveDay: (month, dd, content) => request("PUT", `/api/journal/${encodeURIComponent(month)}/${dd}`, { content }),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
 };
