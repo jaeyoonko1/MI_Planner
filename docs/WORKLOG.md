@@ -2,6 +2,14 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P1-02
+- 한 일: app/db.py(connect, 마이그레이션 러너, init_db), migrations/001_init.sql(tasks, settings), 앱 시작 시 자동 마이그레이션(lifespan)
+- 바뀐 파일: app/db.py, app/main.py, migrations/001_init.sql, tests/test_db.py, tests/test_health.py, project_flow.html
+- 테스트: pytest 4 passed (멱등 적용, 신규 파일만 적용, 실패 시 롤백)
+- 다음에 할 것 / 막힌 것:
+  - tasks.eval_id의 FK는 evaluations 테이블이 생기는 P4에서 추가 (SQLite는 컬럼 FK 추가가 번거로워 그때 테이블 재생성 필요)
+  - P1-03 vault 모듈 + 페이지 트리 API
+
 ## 2026-11-24 · Claude Code(Sonnet) · P1-01
 - 한 일: .venv 생성(Python 3.12), FastAPI 골격 + /api/health, 정적 web/ 마운트, run.bat, pytest 세팅
 - 바뀐 파일: app/main.py, app/__init__.py, web/index.html, tests/test_health.py, pytest.ini, run.bat, requirements.txt, requirements-dev.txt, project_flow.html

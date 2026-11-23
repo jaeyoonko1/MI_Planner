@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app import db
+
 APP_VERSION = "0.1.0"
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title="MI_Planner", version=APP_VERSION)
+def create_app(db_path: Path = db.DEFAULT_DB_PATH) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        db.init_db(db_path)  # apply pending migrations on startup
+        yield
+
+    app = FastAPI(title="MI_Planner", version=APP_VERSION, lifespan=lifespan)
+    app.state.db_path = db_path
 
     @app.get("/api/health")
     def health() -> dict:
