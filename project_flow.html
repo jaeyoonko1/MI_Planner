@@ -102,7 +102,7 @@ const FLOW = {
     { id: "P4", name: "평가 현황판 (3순위)", goal: "다음 설비사 평가를 이걸로 진행", tasks: [
       { id: "P4-01", title: "평가 데이터 모델 리뷰 + 5,000칸 렌더 시험", tool: "Opus", size: "S", done: true,
         desc: "SPEC 5장 eval_* 테이블 검토, 현황판 렌더링 방식 결정" },
-      { id: "P4-02", title: "평가 테이블 마이그레이션 + 템플릿 API + 마스터 템플릿", tool: "Sonnet", size: "M", done: false,
+      { id: "P4-02", title: "평가 테이블 마이그레이션 + 템플릿 API + 마스터 템플릿", tool: "Sonnet", size: "M", done: true,
         desc: "단계(편집 가능)·값 항목 JSON, 마스터: 검사대기→…→정리완료" },
       { id: "P4-03", title: "평가 만들기 마법사", tool: "Sonnet", size: "M", done: false,
         desc: "템플릿 선택 → 설비·Lot·웨이퍼 붙여넣기 → 제외 조합 끄기 → 칸 생성 + board 페이지 생성" },
@@ -111,7 +111,7 @@ const FLOW = {
       { id: "P4-05", title: "칸 패널 + 다중 선택 일괄 단계 전환", tool: "Sonnet", size: "M", done: false,
         desc: "단계 버튼, 값 입력, 메모, eval_stage_log 기록" },
       { id: "P4-06", title: "단계별 대기 시간 + 경고 색", tool: "Codex", size: "S", done: false,
-        desc: "stage_at 기준 경과 시간, 단계별 warn_hours, 테스트" },
+        desc: "최신 eval_stage_log 기준 경과 시간, 단계별 warn_hours, 테스트" },
       { id: "P4-07", title: "템플릿 편집 화면 + 엑셀 내보내기", tool: "Codex", size: "M", done: false,
         desc: "단계·값 항목 편집, '새 마스터로 저장', xlsx 내보내기" },
       { id: "P4-08", title: "MOS 붙여넣기 어댑터 + '오늘'에 밀린 단계", tool: "Sonnet", size: "M", done: false,

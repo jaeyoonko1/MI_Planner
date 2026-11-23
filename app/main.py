@@ -10,8 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from app import db, memo
 from fastapi.exceptions import RequestValidationError
 
+from app.repositories.eval_templates import TemplateError
 from app.repositories.tasks import TaskError
 from app.routers import dashboard as dashboard_router
+from app.routers import eval_templates
 from app.routers import html_pages
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
@@ -51,6 +53,7 @@ def create_app(
     app.include_router(structure_router.router)
     app.include_router(settings_router.router)
     app.include_router(dashboard_router.router)
+    app.include_router(eval_templates.router)
 
     @app.middleware("http")
     async def revalidate_static(request, call_next):
@@ -66,6 +69,10 @@ def create_app(
 
     @app.exception_handler(VaultError)
     async def on_vault_error(_, exc: VaultError) -> JSONResponse:
+        return JSONResponse({"error": str(exc)}, status_code=exc.status)
+
+    @app.exception_handler(TemplateError)
+    async def on_template_error(_, exc: TemplateError) -> JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=exc.status)
 
     @app.exception_handler(TaskError)

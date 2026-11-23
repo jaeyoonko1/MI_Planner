@@ -294,6 +294,8 @@ vault/
 - `fields`: 칸에 넣는 값 항목 `[{key, label, type}]`, type = `number | text | okng | check`
   마스터 기본값 `[가정]`: 반복도(okng), scan time(number, 분), 디펙 모수(number), 분류 완료(check), 이슈(text)
 - 평가 생성 시 템플릿을 **복사**해서 그 평가에서만 고친다 (마스터는 안 바뀜). "이 평가 구성을 새 마스터로 저장" 버튼.
+- P4-02 마이그레이션 006이 기본 마스터 하나를 설치한다. 기본 경고 시간은 `null`(경고 비활성)이다. 단계 색은 `#RRGGBB`, 경고 시간은 양수 또는 `null`이다. 단계는 하나 이상이며 단계 키와 값 항목 키는 각 목록에서 고유하다.
+- 템플릿 API: `GET /api/eval-templates` → `{items: [{id, name, is_master, stages, fields}]}`(마스터 먼저). `POST /api/eval-templates`는 `{name, stages, fields?, is_master?}`를 받아 생성된 항목을 201로 돌려준다. `PATCH /api/eval-templates/{id}`는 보낸 항목만 고치고 전체 갱신 항목을 돌려준다. 단계·값 항목은 배열 단위로 바꾼다. `is_master: true`는 하나의 트랜잭션에서 기존 마스터를 교체하고, 현재 마스터만 해제하는 요청은 409를 돌려준다.
 
 **평가 만들기 (마법사)**
 1. 템플릿 선택 2. 설비 목록 붙여넣기 3. Lot·웨이퍼 붙여넣기(`LOT-TEST-001  1,2,3` 형식 또는 엑셀 2열) 4. 제외할 조합 끄기 → 칸 자동 생성.
@@ -420,50 +422,52 @@ vault/
 | due_date | TEXT | 납기 |
 | planned_date | TEXT | 하기로 한 날 |
 | parent_task_id | INTEGER FK | 선택 (하위 할일) |
-| eval_id | INTEGER FK | 선택 |
+| eval_id | INTEGER | 기존 할일의 선택적 평가 연결. 006에서 기존 값과 API 호환을 유지한다. |
 | page_path | TEXT | 선택 (vault 상대 경로) |
 | note | TEXT | |
 | mark | TEXT | `star` / `urgent` / NULL — 일지 줄의 ★·! 표시 (003, P2B-05). 완료 여부는 `status` |
 
-### eval_templates
+### eval_templates (006)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
+| id | INTEGER PK | |
 | name | TEXT NOT NULL | |
-| is_master | INTEGER | 0/1 |
+| is_master | INTEGER | 0/1, 활성 마스터 최대 하나 |
 | stages | TEXT(JSON) | `[{key,label,color,warn_hours}]` |
 | fields | TEXT(JSON) | `[{key,label,type}]` |
 
-### evaluations
+### evaluations (006)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
+| id | INTEGER PK | |
 | name | TEXT NOT NULL | 예: 2026 3사 검출성 평가 |
-| page_path | TEXT | board 페이지 |
+| page_path | TEXT UNIQUE | board 페이지 |
 | stages, fields | TEXT(JSON) | 템플릿에서 복사한 이 평가 전용 구성 |
 | status | TEXT | `active` / `done` / `hold` |
 | start_date, due_date | TEXT | |
 
 ### eval_equipment
-`evaluation_id FK, name TEXT, vendor TEXT, sort INTEGER`
+`id INTEGER PK, evaluation_id FK, name TEXT, vendor TEXT, sort INTEGER` (평가 안에서 이름 고유).
 
 ### eval_lots / eval_wafers
-`eval_lots: evaluation_id FK, lot_no TEXT, sort INTEGER`
-`eval_wafers: lot_id FK, wafer_no TEXT, sort INTEGER`
+- `eval_lots: id INTEGER PK, evaluation_id FK, lot_no TEXT, sort INTEGER` (평가 안에서 Lot 번호 고유).
+- `eval_wafers: id INTEGER PK, evaluation_id INTEGER, lot_id INTEGER, wafer_no TEXT, sort INTEGER` (Lot 안에서 웨이퍼 번호 고유). `(lot_id, evaluation_id)`는 같은 평가에 속한 Lot을 참조한다.
 
 ### eval_cells  ← 현황판 핵심
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
-| evaluation_id | INTEGER FK | |
-| equipment_id | INTEGER FK | |
-| wafer_id | INTEGER FK | |
+| id | INTEGER PK | |
+| evaluation_id | INTEGER | 설비·웨이퍼와 평가가 같은지 복합 FK로 검증 |
+| equipment_id | INTEGER | `(equipment_id, evaluation_id)` FK |
+| wafer_id | INTEGER | `(wafer_id, evaluation_id)` FK |
 | stage_key | TEXT | 현재 단계 (NULL = 시작 전) |
-| stage_at | TEXT | 현재 단계 진입 시각 |
-| values | TEXT(JSON) | `{field_key: value}` |
+| field_values | TEXT(JSON) | `{field_key: value}`, 기본 빈 객체 |
 | excluded | INTEGER | 0/1 (없는 조합) |
 | note | TEXT | |
 UNIQUE(equipment_id, wafer_id)
 
 ### eval_stage_log
-`cell_id FK, from_stage TEXT, to_stage TEXT, at TEXT` — 대기 시간·이력 계산의 원천.
+`id INTEGER PK, cell_id FK, from_stage TEXT, to_stage TEXT, at TEXT` — 진입 시각과 대기 시간은 최근 이력(`at DESC, id DESC`)으로 계산한다. 설정 변경과 이력 추가를 같은 트랜잭션에서 처리하므로 `stage_at`은 따로 저장하지 않는다.
 
 ### lot_status (MOS)
 `lot_no TEXT, step TEXT, hold INTEGER, location TEXT, raw TEXT(JSON), source TEXT('paste'|'dcoll'), captured_at TEXT`

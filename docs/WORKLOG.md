@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P4-02
+- 한 일: 006 평가 스키마, 기본 마스터, 템플릿 조회·생성·수정 API를 추가했다. 마스터 교체를 한 트랜잭션에서 처리하고, 복합 FK가 서로 다른 평가의 설비·Lot·웨이퍼 혼합을 막는다. 단계 진입 시각은 이력으로만 읽는다.
+- 바뀐 파일: migrations/006_evaluations.sql, app/main.py, app/(repositories, routers)/eval_templates.py, tests/(test_eval_templates, test_db, test_task_fields).py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 156 passed. 기존 DB 업그레이드, 마스터 시드·교체·잘못된 입력, 템플릿 수정 후 평가 사본 보존, 교차 평가·중복 칸 거부 및 단계 이력 정리를 임시 DB에서 확인했다.
+- 다음에 할 것 / 막힌 것: P4-03에서 템플릿 스냅샷으로 평가·셀과 board 페이지를 생성한다. P4-05에서 단계 변경과 이력을 함께 기록하고 P4-06에서 최근 이력으로 대기 시간을 계산한다. 기존 할일의 `eval_id`는 이미 저장된 값과 API 호환을 위해 유지했다.
+
 ## 2026-11-24 · Codex · P3-03 (저장 단계 완료)
 - 한 일: D-20에 따라 최상위 `<!-- column -->`을 단 경계로 문서화했다. 노트 페이지의 `PUT /api/pages/layout`에서 표시 모드와 2~4개 열 너비를 검증해 `_page.json`의 `note_layout`에 저장한다. 단 설정 저장과 앱의 페이지 자동 저장·이동이 같은 메타데이터를 덮어쓰지 않도록 직렬화했다.
 - 바뀐 파일: app/(vault.py, routers/pages.py), tests/test_pages.py, web/test/mdconv.html, docs/(SPEC, WORKLOG).
