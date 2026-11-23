@@ -497,15 +497,23 @@ export function mountEditor(cfg) {
   window.addEventListener("resize", onScroll);
   cleanups.push(() => window.removeEventListener("resize", onScroll));
 
-  // ---- checklist click, folding chevron, Enter, shortcuts
+  // ---- checklist click, heading folding, Enter, shortcuts
+  const foldableHeading = "h1[data-fk],h2[data-fk],h3[data-fk]";
+  const onHeadingChevron = (e) => e.target.matches(foldableHeading) && e.offsetX < 16;
   ed.addEventListener("click", (e) => {
     const t = e.target;
     if (t.tagName === "LI" && t.parentElement.classList.contains("cl") && e.offsetX < 24) {
       t.setAttribute("data-chk", t.getAttribute("data-chk") === "1" ? "0" : "1");
       schedule();
-    } else if (/^H[1-3]$/.test(t.tagName) && t.dataset.fk && e.offsetX < 22) {
+    } else if (e.detail <= 1 && onHeadingChevron(e)) {
       toggleFold(t);
     }
+  });
+  ed.addEventListener("dblclick", (e) => {
+    const heading = e.target.closest(foldableHeading);
+    if (heading?.parentElement !== ed || onHeadingChevron(e)) return;
+    e.preventDefault();
+    toggleFold(heading);
   });
   ed.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
