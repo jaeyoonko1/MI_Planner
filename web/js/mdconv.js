@@ -18,6 +18,7 @@
 import { IMG_ATTR_RE, imgCssWidth, imgSuffix, parseImgAttr } from "./memocore.js";
 import { listTree, segment } from "./mdblocks.js";
 import { STEP } from "./lineeditor-core.js";
+import { cellText, parseNoteTable } from "./note-table-model.js";
 
 export const SIZES = [11, 13, 15, 18, 22, 28]; // px presets (6 steps)
 export const BASE_PX = 15;
@@ -97,12 +98,17 @@ function rawHtml(b, at) {
     if (body.length && /^ {0,3}(?:`{3,}|~{3,})\s*$/.test(body[body.length - 1])) body.pop();
     inner = `<pre>${lang ? `<span class="rb-tag">${esc(lang)}</span>` : ""}<code>${esc(body.join("\n"))}</code></pre>`;
   } else if (b.kind === "table") {
-    const rows = lines.map((l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim()));
-    const sep = rows.length > 1 && rows[1].every((c) => /^:?-+:?$/.test(c) || c === "");
-    const cell = (tag) => (c) => `<${tag}>${esc(c)}</${tag}>`;
-    const head = sep ? `<thead><tr>${rows[0].map(cell("th")).join("")}</tr></thead>` : "";
-    const body = (sep ? rows.slice(2) : rows).map((r) => `<tr>${r.map(cell("td")).join("")}</tr>`).join("");
-    inner = `<table>${head}<tbody>${body}</tbody></table>`;
+    const table = parseNoteTable(b.src);
+    if (table) {
+      const rowHtml = (row, tag) => Array.from({ length: table.width }, (_, index) =>
+        `<${tag}>${esc(cellText(row.cells[index]))}</${tag}>`
+      ).join("");
+      const head = rowHtml(table.rows[0], "th");
+      const body = table.rows.slice(1).map((row) => `<tr>${rowHtml(row, "td")}</tr>`).join("");
+      inner = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    } else {
+      inner = `<code class="rb-plain">${esc(b.src)}</code>`;
+    }
   } else if (b.kind === "quote") {
     inner = `<blockquote>${lines.map((l) => esc(l.replace(/^ {0,3}> ?/, ""))).join("<br>")}</blockquote>`;
   } else if (b.kind === "hr") {

@@ -34,3 +34,12 @@ def test_note_column_layout_cases():
         capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
     assert res.returncode == 0, res.stdout + res.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_note_table_cases():
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_note_tables.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr

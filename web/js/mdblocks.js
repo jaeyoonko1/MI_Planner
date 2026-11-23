@@ -8,6 +8,8 @@
 // the journal marks [ ] [x] [*] [!]). Everything else is "raw": code fences, tables, quotes, HTML comments,
 // rules, #### headings. Raw blocks are shown read-only and written back verbatim.
 
+import { hasTablePipe, tableWidth } from "./note-table-model.js";
+
 export const MARKS = [" ", "x", "*", "!"];
 
 const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -15,7 +17,6 @@ const HR_RE = /^ {0,3}([-*_])(?: *\1){2,} *$/;
 const HEAD_RE = /^(#{1,3})[ \t]+(.*)$/;
 const DEEP_HEAD_RE = /^#{4,}(?:[ \t]|$)/;
 const TABLE_RE = /^\s*\|/;
-const TABLE_SEPARATOR = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$/;
 const QUOTE_RE = /^ {0,3}>/;
 const LIST_RE = /^([ \t]*)([-*+]|\d+[.)])(?:[ \t]+(.*))?$/;
 
@@ -59,10 +60,17 @@ function blockEnd(lines, i) {
     while (j < lines.length && !lines[j].includes("-->")) j++;
     return { end: Math.min(j, lines.length - 1), kind: "comment" };
   }
-  const tableHeader = line.includes("|") && TABLE_SEPARATOR.test(lines[i + 1] || "");
+  const startsOtherBlock = value => FENCE_RE.test(value) || QUOTE_RE.test(value)
+    || HEAD_RE.test(value) || DEEP_HEAD_RE.test(value) || LIST_RE.test(value)
+    || value.trimStart().startsWith("<!--");
+  const tableHeader = !startsOtherBlock(line) && tableWidth(line, lines[i + 1]);
   if (tableHeader || TABLE_RE.test(line)) {
     let j = tableHeader ? i + 1 : i;
-    while (j + 1 < lines.length && (tableHeader ? lines[j + 1].includes("|") : TABLE_RE.test(lines[j + 1]))) j++;
+    while (j + 1 < lines.length && !startsOtherBlock(lines[j + 1])) {
+      const next = lines[j + 1];
+      if (!(tableHeader ? hasTablePipe(next) : TABLE_RE.test(next))) break;
+      j++;
+    }
     return { end: j, kind: "table" };
   }
   if (QUOTE_RE.test(line)) {

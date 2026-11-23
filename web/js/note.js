@@ -6,6 +6,7 @@
 import { api } from "./api.js";
 import { getFolds, setFolds } from "./foldstore.js";
 import { keyAction } from "./lineeditor-core.js";
+import { bindNoteTables } from "./note-table.js";
 import { editorKeys } from "./lineeditor.js";
 import { runNoteLineAction } from "./note-lines.js";
 import { mountNoteColumns } from "./note-columns.js";
@@ -238,6 +239,9 @@ export function mountEditor(cfg) {
   };
   if (cfg.foldScope) getFolds(cfg.foldScope).then((s) => { folded = s; applyFolds(); });
 
+  const noteTables = bindNoteTables(ed, () => { applyFolds(); schedule(); });
+  noteTables.refresh();
+
   // ---- toolbar
   const BTN = [
     ["본문", () => run("formatBlock", "div"), "Ctrl+Alt+0"],
@@ -247,6 +251,7 @@ export function mountEditor(cfg) {
     ["• 목록", () => lineAction("bullet"), "Ctrl+."],
     ["1. 목록", () => run("insertOrderedList"), ""],
     ["☑ 체크", () => lineAction("check"), ""],
+    ["표 추가", noteTables.insert, ""],
     ["B", () => run("bold"), "Ctrl+B"],
     ["I", () => run("italic"), "Ctrl+I"],
     ["U", () => run("underline"), "Ctrl+U"],
@@ -587,6 +592,7 @@ export function mountEditor(cfg) {
     // Replace the text from outside (another view saved). The caller decides when it is safe (not typing).
     setMd(md) {
       loadInto(ed, md || "", cfg.fileUrl);
+      noteTables.refresh();
       last = htmlToMd(ed);
       hideBar(true);
       markEmpty();

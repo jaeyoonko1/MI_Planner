@@ -5,6 +5,7 @@
 <script type="module">
 import { mdToHtml, htmlToMd, loadInto } from "/js/mdconv.js";
 import { runNoteLineAction } from "/js/note-lines.js";
+import { bindNoteTables } from "/js/note-table.js";
 const load = (md) => { const d = document.createElement("div"); loadInto(d, md); return d; };
 // untouched: the file is opened and saved without edits
 const rt = (md) => htmlToMd(load(md));
@@ -159,6 +160,20 @@ ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")]
   const editor = load(md);
   editor.querySelector("h1").append(" 수정");
   ok(htmlToMd(editor) === md.replace("왼쪽", "왼쪽 수정"), "column boundary and fenced example survive edits");
+}
+{
+  const original = "제목\r\n\r\nA | B\r\n:--- | ---:\r\nX\\|Y | 10\r\nQ | 2\r\n\r\n본문\n";
+  const editor = load(original);
+  let changes = 0;
+  bindNoteTables(editor, () => changes++).refresh();
+  const input = editor.querySelector('textarea[data-row="1"][data-column="0"]');
+  ok(input?.value === "X|Y" && htmlToMd(editor) === original, "table mount preserves original mixed EOL and pipes");
+  if (input) {
+    input.value = "수정 | 값";
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    ok(changes === 1 && htmlToMd(editor) === original.replace("X\\|Y | 10", "| 수정 \\| 값 | 10 |"),
+       "table edit changes only the selected row");
+  }
 }
 const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");
