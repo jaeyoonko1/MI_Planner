@@ -2,6 +2,14 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P1-05 (일부)
+- 한 일: scripts/seed_sample.py — 가짜 데이터 샘플 vault 시드(멱등). SPEC의 초기 트리(일지, MI 공정업무 등) 재현
+- 바뀐 파일: scripts/seed_sample.py, scripts/__init__.py, tests/test_seed.py
+- 테스트: pytest 17 passed
+- 다음에 할 것 / 막힌 것:
+  - **web/vendor/ 배치는 미완료**: Tabulator 파일(JS/CSS)을 외부에서 내려받아야 해서 사용자 승인 필요. 표를 처음 쓰는 P2-04 전에 하면 됨. 그래서 P1-05는 done 처리하지 않음
+  - 시드 실행: .venv\Scripts\python scripts\seed_sample.py
+
 ## 2026-11-24 · Claude Code(Sonnet) · P1-04
 - 한 일: web/ 프론트 셸 — 사이드바 페이지 트리(접기 상태 localStorage 저장), 해시 라우팅(#/page/<경로>), 칩 버튼 컴포넌트(chips.js), 페이지 추가 폼, 페이지 보기(읽기 전용)
 - 바뀐 파일: web/index.html, web/css/style.css, web/js/{main,api,tree,chips}.js, project_flow.html
