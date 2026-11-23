@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MI_Planner · Project Flow</title>
+<script>
+/* =====================================================================
+   FLOW 데이터 — 작업 목록의 원본 (AGENTS.md / DECISIONS.md D-06)
+   에이전트: 작업을 끝내면 해당 task의 done 을 true 로 바꾸고 updated 날짜를 갱신.
+   tool 값: "Opus" | "Sonnet" | "Codex" | "직접" | "사내LLM"
+   size 값: "S"(한 사이클 미만) | "M"(한 사이클) | "L"(두 사이클 이상 → 쪼개기 권장)
+   ===================================================================== */
+const FLOW = {
+  project: "MI_Planner",
+  updated: "2026-11-24",
+  phases: [
+    { id: "P0", name: "준비 · 설계", goal: "무엇을 만들지 확정하고 작업 환경을 갖춘다", tasks: [
+      { id: "P0-01", title: "프로젝트 폴더·기본 문서 생성", tool: "Opus", size: "S", done: true,
+        desc: "AGENTS.md, CLAUDE.md, README, SPEC, DECISIONS, WORKLOG, project_flow.html" },
+      { id: "P0-02", title: "목표 갱신 + 1차 질의응답 → SPEC v0.2", tool: "Opus", size: "S", done: true,
+        desc: "범위 재정의: 계층 페이지 워크스페이스. 우선순위 일지·할일 → 노트 → 평가 현황판" },
+      { id: "P0-03", title: "남은 미결 질문 답하기 (Q-01, Q-07~Q-12)", tool: "직접", size: "S", done: true,
+        desc: "pip·브라우저, 레시피 형식·FTP, DOI, 사내 LLM API, 원노트 이관, plan 링크, PPT 템플릿. 모르는 건 '나중'으로 둬도 됨 (P2 시작엔 Q-01만 필요)" },
+      { id: "P0-04", title: "설계 확정 리뷰 → SPEC v1.0", tool: "Opus", size: "M", done: true,
+        desc: "vault 폴더 형식, 일지 파일 형식, 데이터 모델을 Opus로 검토. GPT로 교차 검토 한 번" },
+      { id: "P0-05", title: "git init + 첫 커밋, Python 가상환경", tool: "직접", size: "S", done: false,
+        desc: "C:\\CODEX\\MI_Planner 에서 git init → 첫 커밋. py -3.11 -m venv .venv" },
+    ]},
+    { id: "P1", name: "뼈대", goal: "run.bat으로 앱이 뜨고 페이지 트리가 보인다", tasks: [
+      { id: "P1-01", title: "FastAPI 골격 + requirements + run.bat + /api/health", tool: "Sonnet", size: "S", done: true,
+        desc: "run.bat이 venv 활성화 → uvicorn 실행 → 브라우저 자동 열기. pytest 기본 세팅" },
+      { id: "P1-02", title: "SQLite 연결 + 마이그레이션 러너 + 001_init.sql", tool: "Sonnet", size: "S", done: false,
+        desc: "우선 tasks, settings 테이블만. 마이그레이션 적용 이력 테이블" },
+      { id: "P1-03", title: "vault 모듈 + 페이지 트리 API", tool: "Sonnet", size: "M", done: false,
+        desc: "app/vault.py: 트리 읽기, 페이지 생성·이름 변경·이동·순서·휴지통. 경로 탈출 방지 테스트 필수" },
+      { id: "P1-04", title: "프론트 셸: 사이드바 트리 + 라우팅 + 칩 버튼 컴포넌트", tool: "Sonnet", size: "M", done: false,
+        desc: "트리 접기·하위 페이지 추가·드래그 이동, 해시 라우팅, 공통 토글 칩(D-12)" },
+      { id: "P1-05", title: "vendor 배치 + 샘플 vault 시드", tool: "Codex", size: "S", done: false,
+        desc: "Tabulator를 web/vendor/에. scripts/seed_sample.py로 원노트 구조 흉내 낸 가짜 페이지 생성" },
+    ]},
+    { id: "P2", name: "일지 · 할일 (1순위)", goal: "원노트 일지를 이걸로 대체 — 실사용 시작", tasks: [
+      { id: "P2-01", title: "일지 파일 형식 + 파서/저장", tool: "Sonnet", size: "S", done: false,
+        desc: "## YYYY-MM-DD 섹션 단위 읽기·쓰기, 월 페이지 자동 생성. 파서 테스트" },
+      { id: "P2-02", title: "월간 일지 그리드 화면", tool: "Sonnet", size: "L", done: false,
+        desc: "열=주, 행=요일, 칸 편집·자동 저장, 오늘 강조, 주말 접기. 크면 보기/편집 두 세션으로 쪼개기" },
+      { id: "P2-03", title: "할일 API (CRUD + 필터)", tool: "Sonnet", size: "M", done: false,
+        desc: "요청자·납기·우선순위·상태·연결(평가/페이지), 하위 할일" },
+      { id: "P2-04", title: "할일 화면 (버튼 필터 + 인라인 편집)", tool: "Codex", size: "M", done: false,
+        desc: "상태·우선순위·납기 임박·요청자 칩 필터, 빠른 추가(N)" },
+      { id: "P2-05", title: "일지 자동 표시 옵션 + 줄→할일 승격", tool: "Sonnet", size: "M", done: false,
+        desc: "설정 on/off(D-13), 납기 할일을 칸에 읽기 전용 표시. 체크박스 줄 → 할일 생성 후 링크 남김" },
+      { id: "P2-06", title: "'오늘' 화면", tool: "Sonnet", size: "S", done: false,
+        desc: "오늘 일지 칸 + 오늘·납기 임박 할일. 평가 칸은 자리만 (P4-08에서 채움)" },
+      { id: "P2-07", title: "회사 PC 시험 설치 + 1주일 실사용", tool: "직접", size: "S", done: false,
+        desc: "이식 위험을 일찍 확인. 불편한 점을 WORKLOG에 적고 P3 우선순위 조정" },
+    ]},
+    { id: "P3", name: "노트 (2순위)", goal: "원노트 계층 노트를 대체", tasks: [
+      { id: "P3-01", title: "노트 편집기 방식 결정 (spike)", tool: "Opus", size: "M", done: false,
+        desc: "빌드 없이 vendor 가능한 위지윅 편집기 후보 비교. 서식(D-15)·단·표가 편집→저장→열기 왕복에서 유지되는지 검증 → DECISIONS 기록" },
+      { id: "P3-02", title: "마크다운 노트 보기·편집 기본", tool: "Sonnet", size: "M", done: false,
+        desc: "열기·편집·자동 저장, 이미지 붙여넣기 → files/" },
+      { id: "P3-03", title: "단 추가 + 열 너비 조절 + 스크롤/맞춤 모드", tool: "Sonnet", size: "L", done: false,
+        desc: "2~4단, 경계 드래그로 비율 저장, 페이지별 모드 버튼(D-14). 쪼개서 진행" },
+      { id: "P3-04", title: "서식 툴바 + 단축키 (원노트 수준)", tool: "Sonnet", size: "M", done: false,
+        desc: "글자 크기·굵게·기울임·밑줄·취소선·형광펜·글자색, 프리셋, Ctrl+B/I/U·Ctrl+Alt+H. 허용 목록 밖 서식은 저장 시 제거" },
+      { id: "P3-05", title: "제목 더블클릭 접기", tool: "Codex", size: "S", done: false,
+        desc: "접힘 상태는 보기 설정으로 저장, 파일 내용은 안 바꿈" },
+      { id: "P3-06", title: "표 블록 (엑셀형 편집)", tool: "Sonnet", size: "M", done: false,
+        desc: "Tabulator 기반 셀 편집·정렬·엑셀 복붙, 저장은 마크다운 표" },
+      { id: "P3-07", title: "HTML 페이지 타입", tool: "Sonnet", size: "S", done: false,
+        desc: "iframe sandbox 표시, 외부 요청 있으면 경고 배지, 간단한 상태 저장 API" },
+      { id: "P3-08", title: "전체 검색 + [[링크]]·백링크", tool: "Codex", size: "M", done: false,
+        desc: "단축키 /, 제목·본문 검색, 페이지 링크 자동 완성" },
+      { id: "P3-09", title: "원노트 이관 가능성 시험 (회사 PC)", tool: "사내LLM", size: "S", done: false,
+        desc: "OneNote COM API로 페이지 1개를 XML로 꺼내 → vault 노트로 변환. 서식·표·이미지 보존 정도 확인 → P8-04 방식 결정" },
+    ]},
+    { id: "P4", name: "평가 현황판 (3순위)", goal: "다음 설비사 평가를 이걸로 진행", tasks: [
+      { id: "P4-01", title: "평가 데이터 모델 리뷰 + 5,000칸 렌더 시험", tool: "Opus", size: "S", done: false,
+        desc: "SPEC 5장 eval_* 테이블 검토, 현황판 렌더링 방식 결정" },
+      { id: "P4-02", title: "평가 테이블 마이그레이션 + 템플릿 API + 마스터 템플릿", tool: "Sonnet", size: "M", done: false,
+        desc: "단계(편집 가능)·값 항목 JSON, 마스터: 검사대기→…→정리완료" },
+      { id: "P4-03", title: "평가 만들기 마법사", tool: "Sonnet", size: "M", done: false,
+        desc: "템플릿 선택 → 설비·Lot·웨이퍼 붙여넣기 → 제외 조합 끄기 → 칸 생성 + board 페이지 생성" },
+      { id: "P4-04", title: "현황판 화면 + 보기 버튼", tool: "Sonnet", size: "L", done: false,
+        desc: "설비별·Lot별·단계별·남은 것만·값 보기 칩, 단계 색, 진행률 막대. 쪼개서 진행" },
+      { id: "P4-05", title: "칸 패널 + 다중 선택 일괄 단계 전환", tool: "Sonnet", size: "M", done: false,
+        desc: "단계 버튼, 값 입력, 메모, eval_stage_log 기록" },
+      { id: "P4-06", title: "단계별 대기 시간 + 경고 색", tool: "Codex", size: "S", done: false,
+        desc: "stage_at 기준 경과 시간, 단계별 warn_hours, 테스트" },
+      { id: "P4-07", title: "템플릿 편집 화면 + 엑셀 내보내기", tool: "Codex", size: "M", done: false,
+        desc: "단계·값 항목 편집, '새 마스터로 저장', xlsx 내보내기" },
+      { id: "P4-08", title: "MOS 붙여넣기 어댑터 + '오늘'에 밀린 단계", tool: "Sonnet", size: "M", done: false,
+        desc: "열 매핑 한 번 지정 → lot_status 저장, 현황판 배지. 오늘 화면 Top N, 일지 자동 표시 연결" },
+    ]},
+    { id: "P5", name: "MI 정보", goal: "Plan · Step · DOI를 한 곳에서 찾고 연결", tasks: [
+      { id: "P5-01", title: "Plan / Step: process plan 엑셀 가져오기 + 표", tool: "Sonnet", size: "M", done: false,
+        desc: "openpyxl, 열 매핑 한 번 지정 → 재가져오기 시 갱신. 가짜 엑셀 샘플로 개발" },
+      { id: "P5-02", title: "DOI 라이브러리 (이미지 카드 + 표)", tool: "Sonnet", size: "M", done: false,
+        desc: "doi·doi_images, 제품·step·결함 종류 버튼 필터, 그리드/표 전환, plan/step 연결 (D-18)" },
+      { id: "P5-03", title: "DOI PPT 가져오기", tool: "Sonnet", size: "M", done: false,
+        desc: "python-pptx로 슬라이드별 이미지·텍스트 추출 → 초안 → 확인 화면" },
+      { id: "P5-04", title: "DOI 공유 패키지 내보내기·가져오기", tool: "Codex", size: "S", done: false,
+        desc: "폴더(이미지 + doi.json) 단위, 가져온 항목은 출처 표시·읽기 전용" },
+    ]},
+    { id: "P6", name: "RCP 관리", goal: "필터한 레시피의 파라미터를 설비·라인별로 비교 (읽기 전용)", tasks: [
+      { id: "P6-01", title: "RCP 관리 설계 (FTP·필터·파서·안전장치)", tool: "Opus", size: "M", done: false,
+        desc: "recipe_* 테이블, 범용 파서·매핑 인터페이스(D-19), D-11 안전장치" },
+      { id: "P6-02", title: "FTP 수집 + 이름 필터 + 로컬 캐시", tool: "Sonnet", size: "M", done: false,
+        desc: "ftplib, 소스(설비·라인·경로) 등록, 필터 예: 'aabb' 포함" },
+      { id: "P6-03", title: "범용 XML/INI/TXT 파서 + 설비사 매핑 파일", tool: "Sonnet", size: "M", done: false,
+        desc: "→ {파라미터 경로: 값}. parsers/<vendor>.json으로 표시 항목·이름·단위 지정 (D-19). 가짜 샘플로 테스트" },
+      { id: "P6-04", title: "파라미터 비교 표 + 스냅샷 이력", tool: "Codex", size: "M", done: false,
+        desc: "설비·라인 간 차이 강조, 수집마다 스냅샷 → 변경 감지 diff" },
+      { id: "P6-05", title: "레시피 수정·업로드 (선택)", tool: "Opus", size: "L", done: false,
+        desc: "백업 → diff 미리보기 → 확인 → 업로드 → 로그. 기본 꺼짐. 설계 Opus, 구현은 쪼개서 Sonnet" },
+    ]},
+    { id: "P7", name: "LLM 연동", goal: "사내 LLM이 파일·데이터를 읽고 채운다", tasks: [
+      { id: "P7-01", title: "에이전트용 CLI (app/cli.py)", tool: "Sonnet", size: "M", done: false,
+        desc: "할일·평가·MOS 조회/수정 명령. AGENTS.md에 사용법 추가" },
+      { id: "P7-02", title: "skills/ 구조 + skill-maker 스킬", tool: "Opus", size: "M", done: false,
+        desc: "대화하면서 새 스킬을 만드는 메타 스킬. OpenCode·Claude Code 공통 형식" },
+      { id: "P7-03", title: "'AI에게 요청' 복사 버튼", tool: "Sonnet", size: "S", done: false,
+        desc: "현재 페이지 경로 + 선택 데이터 + 스킬 이름을 요청문으로 복사" },
+      { id: "P7-04", title: "status-brief · fill-table 스킬", tool: "Opus", size: "M", done: false,
+        desc: "'지금 이 설비 뭐 해야 돼?', '이 표 채워줘 raw data는 여기'" },
+      { id: "P7-05", title: "pptx-company 스킬", tool: "사내LLM", size: "M", done: false,
+        desc: "사내 PPT 템플릿 기반 (Q-12). 'ㅇㅇ 형식으로 만들어줘'" },
+      { id: "P7-06", title: "paper-patent 스킬", tool: "Opus", size: "M", done: false,
+        desc: "링크·레퍼런스 → 사내 논문·특허·기술자산화 초안 (이론/시뮬/실험/데이터/시각화/논리)" },
+      { id: "P7-07", title: "lecture-html 스킬 + 스터디 로드맵", tool: "Opus", size: "M", done: false,
+        desc: "대학원 수준 interactive HTML 강의 (광학·고체물리·선형대수·AI·영상처리), 오프라인 규칙 포함" },
+      { id: "P7-08", title: "recipe-parser-maker 스킬", tool: "사내LLM", size: "M", done: false,
+        desc: "회사에서 실제 레시피 샘플 → parsers/<vendor>.json(필요 시 .py) 생성·테스트" },
+      { id: "P7-09", title: "사내 LLM API 직접 연동 (채팅 패널)", tool: "사내LLM", size: "L", done: false,
+        desc: "app/llm.py + config/local.json(주소·키·모델·프록시). 회사에서 확인된 Python 예제 코드 기준. 쪼개서 진행" },
+      { id: "P7-10", title: "MOS dcoll 수집 스크립트", tool: "사내LLM", size: "M", done: false,
+        desc: "회사 PC에서 lot_status에 source='dcoll'로 적재" },
+    ]},
+    { id: "P8", name: "이식 · 운영", goal: "회사 PC에서 오프라인으로 오래 쓴다", tasks: [
+      { id: "P8-01", title: "오프라인 설치 패키지 (wheels + install.bat)", tool: "Codex", size: "M", done: false,
+        desc: "install.bat: 사내 프록시 주소 입력 → pip 설치, 실패한 패키지만 wheel로 (D-01)" },
+      { id: "P8-02", title: "자동 백업 (data + vault zip) + 설정 화면", tool: "Codex", size: "S", done: false,
+        desc: "하루 1회, 30개 보관, 연도별 일지 보관 폴더" },
+      { id: "P8-03", title: "사내 OpenCode가 AGENTS.md로 작업 가능한지 확인", tool: "사내LLM", size: "S", done: false,
+        desc: "작은 작업 하나 맡겨보고 규칙 준수 확인 → 유지보수 주체 결정" },
+      { id: "P8-04", title: "원노트 통째 이관", tool: "사내LLM", size: "L", done: false,
+        desc: "P3-09 결과 방식으로 노트북 전체 → vault 페이지 트리. 섹션 단위로 쪼개서 진행" },
+      { id: "P8-05", title: "KLARF 뷰어 연결", tool: "Sonnet", size: "S", done: false,
+        desc: "평가 칸·Lot에서 KLARF 결과 폴더·뷰어 바로 열기" },
+    ]},
+  ],
+};
+</script>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
+    --accent: #2f6fde; --accent-soft: #e8f0fd; --done: #1f9d61; --done-soft: #e6f6ee;
+    --opus: #8a4fd8; --sonnet: #2f6fde; --codex: #10846e; --self: #b4690e; --inhouse: #64748b;
+    --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1b1f27; --text: #e6e8ec; --muted: #9aa3b2; --line: #2b313c;
+      --accent: #6a9cf5; --accent-soft: #1f2a3d; --done: #3ccf8e; --done-soft: #17302a;
+      --opus: #b48cf0; --sonnet: #6a9cf5; --codex: #3cc4a6; --self: #e0a050; --inhouse: #9aa3b2;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 60px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -.01em; }
+  header .sub { color: var(--muted); margin-top: 4px; font-size: 13px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+
+  .summary { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; padding: 18px 20px; margin-top: 18px; }
+  .bar { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--done); border-radius: 99px; transition: width .3s; }
+  .summary .pct { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary .meta { color: var(--muted); font-size: 13px; margin-top: 8px; }
+
+  .stepper { display: flex; gap: 6px; margin-top: 14px; overflow-x: auto; padding-bottom: 4px; }
+  .step { flex: 1 0 120px; padding: 10px 12px; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); position: relative; text-align: left; color: var(--text); font: inherit; }
+  .step:hover { border-color: var(--accent); }
+  .step .sid { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .step .sname { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .step .mini { height: 4px; background: var(--line); border-radius: 99px; margin-top: 8px; overflow: hidden; }
+  .step .mini > i { display: block; height: 100%; background: var(--done); }
+  .step.current { border-color: var(--accent); background: var(--accent-soft); }
+  .step.complete .sid::after { content: " ✓"; color: var(--done); }
+
+  .grid2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  .panel { padding: 16px 18px; }
+  .panel h2 { margin: 0 0 4px; font-size: 15px; }
+  .panel .hint { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+  .next-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-top: 1px dashed var(--line); }
+  .next-item:first-of-type { border-top: 0; }
+  .slot { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+    font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+  .legend { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; align-items: center; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 22px 0 10px; }
+  .toolbar input[type=search] { flex: 1 1 200px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); font: inherit; }
+  .chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 6px 11px; border-radius: 99px;
+    cursor: pointer; font: inherit; font-size: 13px; }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  .phase { margin-top: 12px; overflow: hidden; }
+  .phase-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; user-select: none; }
+  .phase-head .caret { transition: transform .2s; color: var(--muted); }
+  .phase.collapsed .caret { transform: rotate(-90deg); }
+  .phase-head .pid { font-weight: 700; color: var(--accent); min-width: 28px; }
+  .phase-head .pname { font-weight: 700; }
+  .phase-head .pgoal { color: var(--muted); font-size: 13px; flex: 1; }
+  .phase-head .pcount { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .phase.complete .pid { color: var(--done); }
+  .phase.collapsed .tasks { display: none; }
+  .tasks { border-top: 1px solid var(--line); }
+
+  .task { display: grid; grid-template-columns: 28px 62px 1fr auto auto; gap: 10px; align-items: start; padding: 11px 18px;
+    border-top: 1px solid var(--line); }
+  .task:first-child { border-top: 0; }
+  .task.done { background: var(--done-soft); }
+  .task.done .ttitle { text-decoration: line-through; color: var(--muted); }
+  .task input[type=checkbox] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--done); cursor: pointer; }
+  .tid { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); padding-top: 2px; }
+  .ttitle { font-weight: 600; }
+  .tdesc { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  .tmemo-toggle { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; font-size: 12px; padding: 0; margin-top: 4px; }
+  .tmemo { width: 100%; margin-top: 6px; min-height: 54px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); padding: 8px; font: inherit; font-size: 13px; resize: vertical; }
+  .override { font-size: 11px; color: var(--self); margin-left: 6px; font-weight: 500; }
+
+  .badge { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; border: 1px solid currentColor; }
+  .b-Opus { color: var(--opus); } .b-Sonnet { color: var(--sonnet); } .b-Codex { color: var(--codex); }
+  .b-직접 { color: var(--self); } .b-사내LLM { color: var(--inhouse); }
+  .size { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; }
+  .size.L { color: var(--self); border-color: var(--self); }
+
+  footer { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  footer .btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 8px 14px; border-radius: 8px;
+    cursor: pointer; font: inherit; font-size: 13px; }
+  footer .btn:hover { border-color: var(--accent); }
+  footer .note { color: var(--muted); font-size: 12px; flex-basis: 100%; margin-top: 6px; }
+  .empty { padding: 30px; text-align: center; color: var(--muted); }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 9px 16px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: .92; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MI_Planner · Project Flow</h1>
+    <div class="sub" id="sub"></div>
+  </header>
+
+  <section class="card summary">
+    <div>
+      <div class="bar"><i id="totalBar"></i></div>
+      <div class="meta" id="totalMeta"></div>
+    </div>
+    <div class="pct" id="totalPct">0%</div>
+  </section>
+
+  <nav class="stepper" id="stepper"></nav>
+
+  <div class="grid2">
+    <section class="card panel">
+      <h2>다음 5시간 사이클</h2>
+      <div class="hint">남은 작업을 순서대로 3개 보여줍니다. 목표: Claude 2회 + Codex 1회.</div>
+      <div id="nextList"></div>
+    </section>
+    <section class="card panel">
+      <h2>도구 배분 규칙</h2>
+      <div class="hint">CLAUDE.md · AGENTS.md · DECISIONS D-07과 같은 내용</div>
+      <div class="legend">
+        <span class="badge b-Opus">Opus</span><span>설계 · 큰 판단 (채팅, 구현하지 않는 날)</span>
+        <span class="badge b-Sonnet">Sonnet</span><span>Claude Code 기본 구현</span>
+        <span class="badge b-Codex">Codex</span><span>테스트 · 디버깅 · 반복 작업 (별도 한도)</span>
+        <span class="badge b-직접">직접</span><span>사용자 확인 · 결정 · 실사용</span>
+        <span class="badge b-사내LLM">사내LLM</span><span>회사 PC에서 OpenCode</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <input type="search" id="q" placeholder="작업 검색 (ID, 제목, 설명)">
+    <button class="chip" data-open="1" id="openOnly">미완료만</button>
+    <span id="toolChips"></span>
+  </div>
+
+  <main id="phases"></main>
+
+  <footer>
+    <button class="btn" id="expandAll">모두 펼치기</button>
+    <button class="btn" id="collapseDone">완료 단계 접기</button>
+    <button class="btn" id="exportBtn">진행상황 내보내기 (JSON)</button>
+    <button class="btn" id="importBtn">가져오기</button>
+    <button class="btn" id="copyAgent">AI에게 보낼 상태 복사</button>
+    <button class="btn" id="resetBtn">브라우저 체크 초기화</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+    <div class="note">
+      체크 원본은 이 파일 상단의 FLOW 데이터(에이전트가 갱신)이고, 여기서 누른 체크·메모는 이 브라우저에만 저장됩니다.
+      원본과 다르게 체크한 항목에는 <span class="override">브라우저</span> 표시가 붙습니다. PC를 옮길 때는 JSON으로 내보내세요.
+    </div>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const KEY = "mi_planner_flow_v2";
+  const TOOLS = ["Opus", "Sonnet", "Codex", "직접", "사내LLM"];
+  const mem = { overrides: {}, memos: {}, collapsed: {} };
+
+  // ---- storage (file:// 에서도 대부분 동작, 실패하면 메모리에만) ----
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) { const s = JSON.parse(raw); return { overrides: s.overrides || {}, memos: s.memos || {}, collapsed: s.collapsed || {} }; }
+    } catch (e) { /* storage unavailable */ }
+    return structuredClone(mem);
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
+
+  let state = load();
+  const ui = { q: "", openOnly: false, tools: new Set(TOOLS), memoOpen: new Set() };
+
+  const allTasks = () => FLOW.phases.flatMap(p => p.tasks.map(t => ({ ...t, phase: p })));
+  const isDone = t => Object.prototype.hasOwnProperty.call(state.overrides, t.id) ? state.overrides[t.id] : !!t.done;
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = id => document.getElementById(id);
+
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 1600); }
+
+  function phaseStats(p) { const d = p.tasks.filter(isDone).length; return { done: d, total: p.tasks.length, pct: p.tasks.length ? Math.round(d / p.tasks.length * 100) : 0 }; }
+  function currentPhase() { return FLOW.phases.find(p => p.tasks.some(t => !isDone(t))) || null; }
+
+  function renderSummary() {
+    const all = allTasks(); const d = all.filter(isDone).length; const pct = Math.round(d / all.length * 100);
+    $("totalBar").style.width = pct + "%"; $("totalPct").textContent = pct + "%";
+    const cur = currentPhase();
+    $("totalMeta").textContent = `${d} / ${all.length} 작업 완료 · 현재 단계: ${cur ? cur.id + " " + cur.name : "전체 완료 🎉"}`;
+    $("sub").textContent = `FLOW 데이터 갱신일 ${FLOW.updated} · 작업 ID를 AI에게 그대로 전달하세요 (예: "P1-01 진행해줘")`;
+
+    const cid = cur && cur.id;
+    $("stepper").innerHTML = FLOW.phases.map(p => {
+      const s = phaseStats(p);
+      return `<button class="step ${p.id === cid ? "current" : ""} ${s.pct === 100 ? "complete" : ""}" data-jump="${p.id}">
+        <div class="sid">${p.id} · ${s.done}/${s.total}</div><div class="sname">${esc(p.name)}</div>
+        <div class="mini"><i style="width:${s.pct}%"></i></div></button>`;
+    }).join("");
+  }
+
+  function renderNext() {
+    const next = allTasks().filter(t => !isDone(t)).slice(0, 3);
+    $("nextList").innerHTML = next.length ? next.map((t, i) => `
+      <div class="next-item"><span class="slot">${i + 1}</span>
+        <div style="flex:1"><div><span class="tid">${t.id}</span> <b>${esc(t.title)}</b></div>
+        <div class="tdesc">${esc(t.desc)}</div></div>
+        <span class="badge b-${t.tool}">${t.tool}</span></div>`).join("")
+      : `<div class="empty">남은 작업이 없습니다.</div>`;
+  }
+
+  function renderChips() {
+    $("toolChips").innerHTML = TOOLS.map(t => `<button class="chip ${ui.tools.has(t) ? "on" : ""}" data-tool="${t}">${t}</button>`).join(" ");
+    $("openOnly").classList.toggle("on", ui.openOnly);
+  }
+
+  function matches(t) {
+    if (ui.openOnly && isDone(t)) return false;
+    if (!ui.tools.has(t.tool)) return false;
+    if (ui.q) { const q = ui.q.toLowerCase(); if (!(t.id + " " + t.title + " " + t.desc).toLowerCase().includes(q)) return false; }
+    return true;
+  }
+
+  function renderPhases() {
+    const html = FLOW.phases.map(p => {
+      const tasks = p.tasks.filter(matches);
+      if (!tasks.length && (ui.q || ui.openOnly || ui.tools.size < TOOLS.length)) return "";
+      const s = phaseStats(p);
+      const collapsed = state.collapsed[p.id] && !ui.q;
+      return `<section class="card phase ${collapsed ? "collapsed" : ""} ${s.pct === 100 ? "complete" : ""}" id="ph-${p.id}">
+        <div class="phase-head" data-toggle="${p.id}">
+          <span class="caret">▾</span><span class="pid">${p.id}</span><span class="pname">${esc(p.name)}</span>
+          <span class="pgoal">${esc(p.goal)}</span><span class="pcount">${s.done}/${s.total}</span>
+        </div>
+        <div class="tasks">${tasks.map(renderTask).join("")}</div>
+      </section>`;
+    }).join("");
+    $("phases").innerHTML = html || `<div class="card empty">조건에 맞는 작업이 없습니다.</div>`;
+  }
+
+  function renderTask(t) {
+    const done = isDone(t);
+    const overridden = Object.prototype.hasOwnProperty.call(state.overrides, t.id) && state.overrides[t.id] !== !!t.done;
+    const memo = state.memos[t.id] || "";
+    const open = ui.memoOpen.has(t.id);
+    return `<div class="task ${done ? "done" : ""}">
+      <input type="checkbox" data-check="${t.id}" ${done ? "checked" : ""} aria-label="${t.id} 완료">
+      <span class="tid">${t.id}</span>
+      <div>
+        <div class="ttitle">${esc(t.title)}${overridden ? '<span class="override">브라우저</span>' : ""}</div>
+        <div class="tdesc">${esc(t.desc)}</div>
+        <button class="tmemo-toggle" data-memo="${t.id}">${open ? "메모 닫기" : (memo ? "메모 보기 ✎" : "+ 메모")}</button>
+        ${open ? `<textarea class="tmemo" data-memotext="${t.id}" placeholder="막힌 점, 결정 사항, 링크 등">${esc(memo)}</textarea>` : ""}
+      </div>
+      <span class="size ${t.size}">${t.size}</span>
+      <span class="badge b-${t.tool}">${t.tool}</span>
+    </div>`;
+  }
+
+  function render() { renderSummary(); renderNext(); renderChips(); renderPhases(); }
+
+  // ---- events ----
+  document.addEventListener("change", e => {
+    const id = e.target.dataset.check;
+    if (!id) return;
+    const t = allTasks().find(x => x.id === id);
+    const v = e.target.checked;
+    if (v === !!t.done) delete state.overrides[id]; else state.overrides[id] = v;
+    save(); render();
+  });
+
+  document.addEventListener("input", e => {
+    const id = e.target.dataset.memotext;
+    if (!id) return;
+    const v = e.target.value;
+    if (v) state.memos[id] = v; else delete state.memos[id];
+    save();
+  });
+
+  document.addEventListener("click", e => {
+    const el = e.target.closest("[data-toggle],[data-jump],[data-tool],[data-memo]");
+    if (!el) return;
+    if (el.dataset.toggle) { const id = el.dataset.toggle; state.collapsed[id] = !state.collapsed[id]; save(); renderPhases(); }
+    else if (el.dataset.jump) {
+      const id = el.dataset.jump; if (state.collapsed[id]) { state.collapsed[id] = false; save(); renderPhases(); }
+      const sec = $("ph-" + id); if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    else if (el.dataset.tool) {
+      const t = el.dataset.tool;
+      if (ui.tools.size === TOOLS.length) { ui.tools = new Set([t]); }       // 첫 클릭: 그 도구만
+      else if (ui.tools.has(t)) { ui.tools.delete(t); if (!ui.tools.size) ui.tools = new Set(TOOLS); }
+      else ui.tools.add(t);
+      renderChips(); renderPhases();
+    }
+    else if (el.dataset.memo) {
+      const id = el.dataset.memo; ui.memoOpen.has(id) ? ui.memoOpen.delete(id) : ui.memoOpen.add(id); renderPhases();
+      const ta = document.querySelector(`[data-memotext="${id}"]`); if (ta) ta.focus();
+    }
+  });
+
+  $("q").addEventListener("input", e => { ui.q = e.target.value.trim(); renderPhases(); });
+  $("openOnly").addEventListener("click", () => { ui.openOnly = !ui.openOnly; renderChips(); renderPhases(); });
+  $("expandAll").addEventListener("click", () => { state.collapsed = {}; save(); renderPhases(); });
+  $("collapseDone").addEventListener("click", () => {
+    FLOW.phases.forEach(p => { if (phaseStats(p).pct === 100) state.collapsed[p.id] = true; }); save(); renderPhases();
+  });
+
+  $("exportBtn").addEventListener("click", () => {
+    const data = { project: FLOW.project, exportedAt: new Date().toISOString(), ...state };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `mi_planner_progress_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast("내보냈습니다");
+  });
+  $("importBtn").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const s = JSON.parse(await f.text());
+      state = { overrides: s.overrides || {}, memos: s.memos || {}, collapsed: s.collapsed || {} };
+      save(); render(); toast("가져왔습니다");
+    } catch (err) { toast("파일을 읽지 못했습니다"); }
+    e.target.value = "";
+  });
+  $("resetBtn").addEventListener("click", () => {
+    state.overrides = {}; save(); render(); toast("브라우저 체크를 FLOW 원본으로 되돌렸습니다 (메모는 유지)");
+  });
+
+  // AI 세션 시작 시 붙여넣을 요약: 브라우저에서 바꾼 체크를 FLOW에 반영하도록 요청
+  $("copyAgent").addEventListener("click", async () => {
+    const changed = Object.entries(state.overrides).map(([id, v]) => `${id}: done=${v}`);
+    const next = allTasks().filter(t => !isDone(t)).slice(0, 3).map(t => `${t.id} ${t.title} [${t.tool}]`);
+    const memos = Object.entries(state.memos).map(([id, m]) => `${id}: ${m.replace(/\n/g, " / ")}`);
+    const text = [
+      "MI_Planner 진행 상황 (project_flow.html에서 복사)",
+      changed.length ? "▶ project_flow.html의 FLOW에 반영해줘:\n" + changed.join("\n") : "▶ 브라우저 변경 없음",
+      "▶ 다음 작업:\n" + (next.join("\n") || "없음"),
+      memos.length ? "▶ 메모:\n" + memos.join("\n") : "",
+    ].filter(Boolean).join("\n\n");
+    try { await navigator.clipboard.writeText(text); toast("복사했습니다 — AI 채팅에 붙여넣으세요"); }
+    catch (e) { prompt("아래 내용을 복사하세요", text); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

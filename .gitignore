@@ -1,0 +1,19 @@
+# data
+data/*.db
+data/*.db-*
+backups/
+vault/
+recipe_cache/
+config/local.json
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# misc
+*.log
+.DS_Store
+Thumbs.db
