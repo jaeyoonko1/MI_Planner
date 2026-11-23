@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2-03
+- 한 일: /api/todos CRUD + 필터(상태·우선순위 다중, 요청자, 납기 임박/지남, 하기로 한 날, 연결, 하위, 검색). 하위 할일 순환 방지. 검증 오류(422)도 {"error"} 형식으로 통일. 스키마 변경 없음(001의 tasks 사용)
+- 바뀐 파일: app/repositories/tasks.py(+__init__), app/routers/tasks.py, app/main.py(라우터·오류 핸들러), tests/test_todos.py, docs/SPEC.md, project_flow.html
+- 테스트: pytest 32 passed
+- 다음에 할 것 / 막힌 것:
+  - P2-04 화면은 `requesters` 목록으로 요청자 칩을 만들면 됨
+  - eval_id는 평가 테이블(P4)이 생기기 전까지 FK 검증 없음
+  - app/repositories/tasks.py의 open_conn은 미사용 (정리 가능)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-02 (보기 전용)
 - 한 일: 월간 일지 그리드(열=주, 행=요일, 오늘 강조, 월 밖 날짜 흐리게, 주말 접기/펼치기 칩, 이전달/다음달/오늘). 체크박스 줄은 ☐/☑ 모양으로만 표시. journal 타입 페이지에서 자동으로 그리드 표시
 - 바뀐 파일: web/js/journal.js(신규), web/js/api.js, web/js/main.js, web/css/style.css, project_flow.html, .claude/launch.json(미리보기용)
