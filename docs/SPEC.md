@@ -390,6 +390,13 @@ vault/
 - `PUT /api/structure/view` `{mode, levels:[key | "new:<tmp>"], new_fields:[{tmp,label}], styles}` — 전부 검증한 뒤 새 분류(`c1`, `c2`… choice 항목)를 만들고 설정을 한 번에 저장(적용 = 원자적, 취소 = 서버 호출 없음). 오류: 중복·예약 이름 409/400, 계층 8단계 초과, 알 수 없는 아이콘·색(`layers grid box person flag ring` × `violet mint blue peach pink yellow`).
 - `GET /api/structure/classes` → 분류별 `{used_by, rules[], in_view, archived, builtin, groupable}`; `GET /api/structure/classes/{key}/impact` → `{used_by, total_tasks, options:[{value,label,count,rules[]}], rules[], in_view}`. 삭제·보관·선택지 이동은 기존 `/api/todos/fields` API(`DELETE`, `?purge=true`, `PATCH option_moves`)를 그대로 쓴다.
 
+**구조 작업표·자유 배치·복사 (P2B-08, 마이그레이션 `005_structure_free.sql`)**
+- 자유 배치 위치는 `structure_nodes`(id, parent_id, label, field_key?, field_value?, position)와 `structure_items`(task_id, node_id, position)에만 저장한다. vault 페이지 트리와 별개. 그룹은 선택적으로 분류 값에 묶이며(`field_key/field_value`), 그 아래에 놓인 이슈는 그 값을 받는다. 처음 열 때 현재 계층(`structure_view.levels`)을 그룹으로 한 번 복제하고(`settings.structure_free_seeded`) 이후 편집은 유지한다.
+- `GET /api/structure/free` → `{nodes:[…], items:[{task_id,node_id,position}]}` (배치 안 된 이슈는 최상위 끝).
+- `POST /api/structure/free/move` `{kind:"group"|"issue", id, parent_id|null, before?:{kind,id}}` → `{free, changed:[task_id…]}`. 그룹은 하위와 함께 이동하고 자기 하위로 옮기면 400 `순환`. 옮긴 이슈(그룹이면 하위 이슈 전체)는 새 경로의 분류 값을 받는다. 이슈 ID 불변. 분류 보기에서의 이동은 `PATCH /api/todos/{id}`의 `props`.
+- `POST /api/structure/free/groups` `{label, parent_id|null}` → `free` (분류 값에 묶이지 않은 그룹).
+- `POST /api/structure/copy` — `{kind:"issue", task_id}`(제목 + " · 복사본"), `{kind:"group", field_key, value, task_ids}`(분류 보기: choice 분류의 새 선택지 "X · 복사본"을 만들고 그 값으로 복사. `field_key:"epic"`이면 다른 유형 가지의 같은 에픽 이슈 전부 포함), `{kind:"node", node_id}`(자유 배치: 선택한 하위 트리만, 바인딩된 그룹은 새 선택지). 응답 `{created:[새 id…], map, option?, node_id?, free?}`. 복사본은 새 ID이며 상태·메모·props는 값 복사(원본과 독립). 계획일·페이지·평가 연결은 복사하지 않는다.
+
 ### tasks
 | 컬럼 | 타입 | 설명 |
 |---|---|---|

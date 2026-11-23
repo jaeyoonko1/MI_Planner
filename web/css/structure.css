@@ -15,31 +15,78 @@
 .lvchip { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line-2); background: var(--raise); color: var(--text); }
 .lvchip.issue { border-style: dashed; color: var(--text-2); }
 .freebadge { display: inline-flex; align-items: center; height: 28px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; font-weight: 600; background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-bd); }
-.hedit { margin-left: auto; }
 .notice { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 14px; border-radius: 12px; font-size: 12.5px; }
 .notice.warn { background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-bd); }
 .notice span { flex: 1; }
 .notice .btn { background: transparent !important; }
 
-/* grouped read view */
-.sview .srows { padding: 6px 0; max-height: 66vh; overflow: auto; }
-.srow { display: flex; align-items: center; gap: 8px; min-height: calc(var(--row-h) - 2px); padding: 0 var(--px) 0 calc(var(--px) + var(--d) * 22px); border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); font-size: 12.5px; }
+/* compact worksheet (P2B-08) */
+.hbar .grow, .stools .grow { flex: 1; }
+.lvdrag { cursor: grab; position: relative; transition: background .15s, box-shadow .15s, opacity .15s; }
+.lvdrag:hover { background: var(--hover); }
+.lvdrag .grip { width: 11px; height: 11px; color: var(--dim); margin-left: -3px; }
+.lvdrag.dragging { opacity: .4; }
+.lvdrag.drop-before { box-shadow: -3px 0 0 var(--cyan); }
+.lvdrag.drop-after { box-shadow: 3px 0 0 var(--cyan); }
+.modesw .chip { height: 28px; }
+.hedit { margin-left: 0; }
+.stools { display: flex; align-items: center; gap: 6px; padding: 9px var(--px); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.stools .vr { width: 1px; height: 18px; background: var(--line-2); margin: 0 4px; }
+.stools .tbtn { gap: 6px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); }
+.stools .tbtn:hover:not(:disabled) { background: var(--hover); filter: none; }
+.stools .tbtn[hidden] { display: none; }
+.slive { font-size: 11.5px; color: var(--warn-fg); }
+.slive:empty { display: none; }
+.sinfo { font: 11px var(--mono); color: var(--dim); }
+.sview { container-type: inline-size; --cols: minmax(0, 1fr) 118px 84px 88px 104px; }
+.sview.noprod { --cols: minmax(0, 1fr) 118px 92px 104px; }
+.shead, .srow { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 8px; padding: 0 var(--px); }
+@container (max-width: 640px) { .shead, .srow { --cols: minmax(0, 1fr) 112px 88px 96px; } .sview .h-prod, .sview .c-prod { display: none; } }
+.shead { height: 30px; border-bottom: 1px solid var(--line); font-size: 10.5px; font-weight: 650; letter-spacing: .08em; color: var(--dim); background: var(--panel); }
+.sview .srows { max-height: 62vh; overflow: auto; overscroll-behavior: contain; }
+.srow { position: relative; min-height: calc(var(--row-h) - 2px); border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); font-size: 12.5px; cursor: default; outline: none; transition: background .12s; }
 .srow:hover { background: var(--row-hover); }
+.srow[aria-selected="true"] { background: var(--sel-bg); box-shadow: inset 2px 0 0 var(--blue); }
+.srow:focus-visible { box-shadow: inset 0 0 0 2px var(--cyan); }
 .srow.grp { background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
+.srow.grp[aria-selected="true"] { background: var(--sel-bg); }
+.srow .c1 { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: calc(var(--d, 0) * 20px); }
 .srow .fold { width: 22px; height: 22px; display: grid; place-items: center; border: 0; background: none; border-radius: 6px; color: var(--dim); padding: 0; flex: none; cursor: pointer; }
+.srow .fold.sp { cursor: default; }
 .srow button.fold:hover { background: var(--hover); color: var(--text); }
 .srow .fold svg { transition: transform .2s var(--ease); stroke-width: 2.4; }
 .srow .fold[aria-expanded="true"] svg { transform: rotate(90deg); }
-.gname { font-weight: 650; letter-spacing: -.02em; }
+.srow .grip { width: 14px; display: grid; place-items: center; color: var(--dim); cursor: grab; opacity: 0; flex: none; margin-left: auto; transition: opacity .15s; }
+.srow:hover .grip, .srow:focus-visible .grip { opacity: .8; }
+.gname { font-weight: 650; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gname.none { color: var(--muted); font-weight: 560; }
-.lvname { color: var(--dim); font-size: 10.5px; }
-.srow .grow { flex: 1; }
-.roll { width: 46px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; flex: none; }
+.lvname { color: var(--dim); font-size: 10.5px; white-space: nowrap; }
+.rollc { display: flex; align-items: center; gap: 8px; }
+.roll { width: 52px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; flex: none; }
 .roll i { display: block; height: 100%; background: var(--green); border-radius: 3px; transition: width .3s var(--ease); }
-.cnt { font: 11px var(--mono); color: var(--muted); min-width: 34px; text-align: right; }
-.srow.issue .stitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 520; }
+.cnt { font: 11px var(--mono); color: var(--muted); min-width: 34px; }
+.srow .tid { font: 11px var(--mono); color: var(--dim); flex: none; }
+.srow.issue .stitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 520; cursor: text; border-radius: 5px; padding: 1px 4px; margin-left: -4px; }
+.srow.issue .stitle:hover { background: var(--hover); }
 .srow.issue.done .stitle { color: var(--dim); text-decoration: line-through; }
-.smeta { display: flex; gap: 6px; flex: none; }
+.sedit { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 1px solid var(--sel-bd); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; font-weight: 520; }
+.c-tx { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.srow.dragging { opacity: .45; }
+.srow.drop-in { box-shadow: inset 0 0 0 1.5px var(--cyan); background: color-mix(in srgb, var(--cyan) 9%, transparent); }
+.srow.drop-before::before, .srow.drop-after::after { content: ""; position: absolute; left: var(--px); right: var(--px); height: 2px; border-radius: 2px; background: var(--cyan); pointer-events: none; }
+.srow.drop-before::before { top: -1px; }
+.srow.drop-after::after { bottom: -1px; }
+.srow.drop-bad { box-shadow: inset 0 0 0 1.5px var(--red); background: var(--red-bg); cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .srow .fold svg, .roll i { transition: none; } }
+
+/* move sheet */
+.dest { display: grid; gap: 2px; padding: 6px 0; }
+.dest-btn { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 12px 0 calc(10px + var(--d, 0) * 18px); border: 1px solid transparent; border-radius: 9px; background: none; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; transition: background .12s; }
+.dest-btn:hover:not(:disabled) { background: var(--hover); }
+.dest-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.dest-btn:disabled { color: var(--dim); cursor: default; }
+.dest-btn .dest-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dest-btn svg { width: 15px; height: 15px; flex: none; }
 
 /* sheet (native dialog) */
 .sheet { padding: 0; border: 1px solid var(--line-2); border-radius: 20px; background: var(--pop-bg); color: var(--text); width: min(560px, calc(100vw - 32px)); max-height: min(780px, calc(100vh - 40px)); box-shadow: var(--shadow-pop); overflow: hidden; }

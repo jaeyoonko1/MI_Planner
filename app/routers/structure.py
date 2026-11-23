@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from app.repositories import structure as repo
+from app.repositories import structure_copy, structure_free
 from app.routers.tasks import get_conn
 
 router = APIRouter(prefix="/api/structure")
@@ -28,3 +29,23 @@ def classes(conn=Depends(get_conn)) -> dict:
 @router.get("/classes/{key}/impact")
 def class_impact(key: str, conn=Depends(get_conn)) -> dict:
     return repo.impact(conn, key)
+
+
+@router.get("/free")
+def get_free(conn=Depends(get_conn)) -> dict:
+    return structure_free.get_free(conn)
+
+
+@router.post("/free/move")
+def free_move(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    return structure_free.move(conn, body)
+
+
+@router.post("/free/groups", status_code=201)
+def free_add_group(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    return structure_free.add_group(conn, body)
+
+
+@router.post("/copy", status_code=201)
+def copy(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    return structure_copy.copy(conn, body)

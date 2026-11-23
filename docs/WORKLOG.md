@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-08
+- 한 일: **컴팩트 구조 작업표** — 한 행에 계층 이름·상태/완료 수·제품·요청자·납기, 그룹 완료 수 = 고유 이슈 완료/전체(진행 막대 포함), 모두 펼치기·접기와 그룹별 접기, 행 선택·방향키·F2 제목 수정·더블클릭 상세, 좁은 폭에서 제품 열 자동 숨김(컨테이너 쿼리). **분류 기준**: 계층 칩 끌기·Alt+←/→로 단계 순서 변경(전체 관점이 바뀜, 되돌리기), 이슈를 그룹에 놓거나 '이동…' 창(버튼 목록)으로 옮기면 그 그룹의 분류 값이 바뀜(되돌리기). **자유 배치**(분류 기준/자유 배치 토글 칩): 그룹을 하위와 함께 끌어 이동(가운데=하위, 위쪽 가장자리=앞), Alt+↑↓←→ 키보드 이동, 순환은 드롭 불가 표시+서버 400, '그룹 추가'. 위치는 마이그레이션 005 테이블(`structure_nodes/items`)에만 저장, vault 페이지 트리와 분리. **복사**: 이슈/에픽(다른 유형 가지의 같은 에픽 이슈 포함)/자유 배치 그룹(선택 하위 트리만)을 새 ID로, 원본과 독립. D-27.
+- 바뀐 파일: migrations/005_structure_free.sql, app/repositories/(structure_free.py, structure_copy.py), app/routers/structure.py, web/(index.html 아이콘, css/structure.css, js/structure·structmodel·structmove·api.js), tests/(test_structure_layout.py 신규, test_db·test_task_fields 마이그레이션 목록), docs/(SPEC, DECISIONS D-27), project_flow.html.
+- 테스트: pytest 90 passed(신규 11: 시드·vault 분리, 이슈 이동 값 변경·ID 유지, 그룹 이동, 순환 거부·무변경, 순서, 그룹 추가, 이슈 복사 독립성·새 ID, 에픽 복사 범위, 유형 그룹 복사 검증, 자유 그룹 복사 하위 트리, ID 안정). 브라우저(격리 DB, 1024px, 다크·라이트, 콘솔 오류 없음)에서 접기/펼치기, 계층 칩 순서 변경, 이슈 그룹 이동+토스트, 에픽 복사(5개 이슈), 자유 배치 전환·그룹 이동·순환 거부 표시·Alt 키 이동·그룹 복사·이동 창·그룹 추가·제목 수정·이슈 복사 확인.
+- 다음에 할 것 / 막힌 것:
+  - 실제 마우스 드래그는 합성 DragEvent로만 확인(Edge에서 사람이 한 번 시험 필요). 1280px·컴팩트/여유 밀도 눈 확인 못 함(미리보기 창 캡처가 크롭됨).
+  - 자유 배치 이동은 되돌리기 없음(분류 기준 이동·계층 순서만 있음). 그룹 이름 바꾸기·삭제, 자유 배치 그룹 위치 규칙은 범위 밖. 분류 기준의 '이동…'은 이미 있는 그룹만 목적지(빈 선택지 그룹은 안 보임).
+  - 새 이슈가 자유 배치에서는 최상위 끝에 놓임(복사본은 원본 옆). 최상위로 옮기면 분류 값은 그대로(변경 없음). 복사 이름은 자동("· 복사본")이며 분류 관리에서 바꿈.
+  - 사람(person) 분류와 미분류 그룹은 복사 불가(안내 표시). 복사 중 새 선택지 생성 후 실패하면 선택지가 남을 수 있음(드묾).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-07
 - 한 일: **구조 화면 `#/structure`**(사이드바 '구조') — 계층 바(모양+이름 칩, 에픽 › 유형 › 이슈), 분류별 묶음 읽기 보기(접기·완료율), 규칙이 깨지면 자유 배치 + 사유 안내. **계층 편집 창**(네이티브 dialog): 분류 기준/자유 배치 칩, 끌기·↑↓·Alt+↑↓ 순서 변경, 기존 분류 추가, 새 분류 만들기, 모양 6종×색 6종 선택(모양·이름 병기), '보기에서 제외', 적용(원자적 PUT)/취소(서버 호출 없음). **분류 관리 `#/structure/classes`**: 영향 이슈 수·선택지별 건수·위치 규칙 참조, 이름 바꾸기, 선택지 추가/삭제(비우기·옮기기), 구조 보기에서만 제외, 보관·복원, 값까지 완전 삭제(확인 창, 규칙 참조·기본 항목은 차단). 서버: 마이그레이션 004(epic·type 시드), `app/repositories/structure.py`·`routers/structure.py`, 설정은 `settings.structure_view`(재시작 후 복원). D-26.
 - 바뀐 파일: migrations/004, app/(repositories/structure.py, routers/structure.py, main.py), web/(index.html, css/structure.css·theme.css, js/structure·leveldialog·classes·sheet·levels·api·main·shell.js), tests/(test_structure.py 신규, test_db·test_task_fields 기대값), docs/(SPEC, DECISIONS D-26), project_flow.html.

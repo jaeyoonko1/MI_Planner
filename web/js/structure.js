@@ -1,141 +1,599 @@
-// Structure screen (P2B-07): the hierarchy bar + a grouped read view of issues, and the classification manager tab.
-// The full compact work table (re-ordering, free layout, copy) is P2B-08.
+// Structure screen (P2B-07 / P2B-08): hierarchy bar + compact worksheet (one row = hierarchy name, status / done count,
+// product, requester, due) and the classification manager tab. Two modes share one row tree (structmodel.js):
+//  - classification view: handle drag changes the whole perspective; dropping an issue on a group rewrites its values
+//  - free layout: groups move with their children (cycles rejected); positions are stored apart from the page tree
 import { api } from "./api.js";
 import { renderClasses } from "./classes.js";
+import { hub } from "./hub.js";
+import { openInspector } from "./inspector.js";
 import { openLevelEditor } from "./leveldialog.js";
 import { issueIcon, levelIcon } from "./levels.js";
-import { dueInfo, el, emptyState, errorState, skeleton, svg } from "./ui.js";
+import { buildFieldTree, buildFreeTree, flatten, isInside, visibleRows } from "./structmodel.js";
+import { openAddGroupSheet, openMoveSheet } from "./structmove.js";
+import { toast } from "./toast.js";
+import { dueInfo, el, emptyState, errorState, fmtMD, skeleton, svg } from "./ui.js";
 
 const STATUS = { todo: "할일", doing: "진행", hold: "보류", done: "완료" };
-const folded = new Set(); // group ids folded in this tab session
+let folded = new Set(); // folded group ids (tab session)
+let selected = ""; // selected row id
+let activeRefresh = null; // the mounted worksheet's task reload (hub subscriber)
 
-function valueLabel(field, value) {
-  if (value === undefined || value === null || value === "") return null;
-  const o = field?.options?.find((x) => x.value === value);
-  return o ? o.label : String(value);
+const labelOf = (field, v) => (v === undefined || v === null || v === "" ? "" : field?.options?.find((o) => o.value === v)?.label ?? String(v));
+
+function gripCell() {
+  const g = el("span", "grip");
+  g.append(svg("grip", "i s"));
+  return g;
 }
 
-// Group issues level by level. Missing value -> "미분류" (last). Counts are unique issues.
-function group(tasks, levels, fields, path = "") {
-  if (!levels.length) return tasks.map((t) => ({ task: t }));
-  const [lv, ...rest] = levels;
-  const field = fields[lv.key];
-  const buckets = new Map();
-  for (const t of tasks) {
-    const v = t.props?.[lv.key];
-    const name = valueLabel(field, v);
-    const k = name ?? "";
-    if (!buckets.has(k)) buckets.set(k, []);
-    buckets.get(k).push(t);
+function iconBtn(id, label, text) {
+  const b = el("button", "btn sm tbtn");
+  b.type = "button";
+  b.append(svg(id, "i"), el("span", "", text ?? label));
+  b.title = label;
+  return b;
+}
+
+async function renderTree(container, initialView, reloadScreen) {
+  let view = initialView;
+  let tasks = [], fields = {}, free = null, tree = [], index = new Map(), rowEls = new Map();
+  let dragging = null;
+
+  const free_ = () => view.mode === "free";
+  const levelByKey = () => Object.fromEntries([...view.levels, ...view.available].map((l) => [l.key, l]));
+  const productKey = () => Object.values(fields).find((f) => f.key === "product" || f.label === "제품")?.key ?? null;
+
+  async function fetchAll() {
+    const [t, f] = await Promise.all([api.todos({}), api.todoFields()]);
+    tasks = t.items;
+    fields = Object.fromEntries(f.map((x) => [x.key, x]));
+    free = free_() ? await api.structureFree() : null;
   }
-  const order = (field?.options ?? []).map((o) => o.label);
-  const names = [...buckets.keys()].filter(Boolean).sort((a, b) => {
-    const ia = order.indexOf(a), ib = order.indexOf(b);
-    return (ia < 0 ? 1e6 : ia) - (ib < 0 ? 1e6 : ib) || a.localeCompare(b, "ko");
-  });
-  if (buckets.has("")) names.push("");
-  return names.map((n) => {
-    const items = buckets.get(n);
-    const id = `${path}/${lv.key}=${n}`;
-    return { id, level: lv, name: n || "미분류", empty: !n, items, done: items.filter((t) => t.status === "done").length, children: group(items, rest, fields, id) };
-  });
-}
+  function rebuild() {
+    tree = free_() ? buildFreeTree(free, tasks, levelByKey()) : buildFieldTree(tasks, view.mode === "fields" ? view.levels : [], fields);
+    index = new Map(flatten(tree).map((n) => [n.id, n]));
+    if (!index.has(selected)) selected = "";
+  }
 
-function issueRow(t, depth) {
-  const r = el("div", "srow issue" + (t.status === "done" ? " done" : ""));
-  r.style.setProperty("--d", depth);
-  r.append(el("span", "fold"), issueIcon(), el("span", "tid", `#${t.id}`), el("span", "stitle", t.title));
-  const meta = el("span", "smeta");
-  meta.append(el("span", `pill st-${t.status}`, STATUS[t.status] ?? t.status));
-  const due = dueInfo(t.due_date, t.status === "done");
-  if (due) meta.append(el("span", `pill ${due.level}`, due.text));
-  r.append(meta);
-  return r;
-}
+  // ---- hierarchy bar -------------------------------------------------------------------
+  const bar = el("div", "hbar");
+  const toolbar = el("div", "stools");
+  const live = el("span", "slive");
+  live.setAttribute("role", "status");
+  live.setAttribute("aria-live", "polite");
+  const panel = el("section", "panel sview");
+  const head = el("div", "shead");
+  const rows = el("div", "srows");
+  rows.setAttribute("role", "treegrid");
+  rows.setAttribute("aria-label", "업무 구조");
+  const foot = el("div", "panel-foot");
+  panel.append(head, rows, foot);
+  const notice = el("div");
 
-function paintRows(host, nodes, depth, state) {
-  for (const n of nodes) {
-    if (n.task) { host.append(issueRow(n.task, depth)); continue; }
+  const saveStyles = () => Object.fromEntries(view.levels.map((l) => [l.key, { icon: l.icon, color: l.color }]));
+  const persistView = async (levels, mode = "fields") => {
+    view = await api.saveStructureView({ mode, levels, styles: saveStyles() });
+    folded = new Set();
+    selected = "";
+    await fetchAll();
+    draw();
+  };
+
+  async function reorderLevels(from, to, after) {
+    const keys = view.levels.map((l) => l.key);
+    const i = keys.indexOf(from);
+    if (i < 0 || from === to) return;
+    keys.splice(i, 1);
+    let j = keys.indexOf(to);
+    if (j < 0) return;
+    if (after) j++;
+    keys.splice(j, 0, from);
+    const before = view.levels.map((l) => l.key);
+    if (keys.join() === before.join()) return;
+    try {
+      await persistView(keys);
+      toast("계층 순서를 바꿨어요", { action: { label: "되돌리기", run: () => persistView(before) } });
+      bar.querySelector(`[data-level="${from}"]`)?.focus();
+    } catch (e) {
+      toast(`순서를 바꾸지 못했어요 · ${e.message}`, { error: true });
+    }
+  }
+
+  function drawBar() {
+    bar.replaceChildren(el("span", "k", "계층"));
+    if (free_()) {
+      bar.append(el("span", "freebadge", "자유 배치"));
+    } else {
+      view.levels.forEach((l, i) => {
+        const t = el("button", "lvchip lvdrag");
+        t.type = "button";
+        t.draggable = true;
+        t.dataset.level = l.key;
+        t.title = "끌어서 순서를 바꿔요 · Alt+←/→";
+        t.setAttribute("aria-label", `${l.label} 단계, ${i + 1}번째. Alt+왼쪽·오른쪽 화살표로 순서 변경`);
+        t.append(svg("grip", "i s grip"), levelIcon(l), l.label);
+        t.addEventListener("dragstart", (e) => { dragging = { level: l.key }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", l.key); t.classList.add("dragging"); });
+        t.addEventListener("dragend", () => { dragging = null; bar.querySelectorAll(".drop-before,.drop-after,.dragging").forEach((x) => x.classList.remove("drop-before", "drop-after", "dragging")); });
+        t.addEventListener("dragover", (e) => {
+          if (!dragging?.level || dragging.level === l.key) return;
+          e.preventDefault();
+          const r = t.getBoundingClientRect();
+          const after = e.clientX > r.left + r.width / 2;
+          t.classList.toggle("drop-after", after);
+          t.classList.toggle("drop-before", !after);
+        });
+        t.addEventListener("dragleave", () => t.classList.remove("drop-before", "drop-after"));
+        t.addEventListener("drop", (e) => {
+          if (!dragging?.level) return;
+          e.preventDefault();
+          const after = t.classList.contains("drop-after");
+          const from = dragging.level;
+          t.classList.remove("drop-before", "drop-after");
+          reorderLevels(from, l.key, after);
+        });
+        t.addEventListener("keydown", (e) => {
+          if (!e.altKey || !["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+          e.preventDefault();
+          const keys = view.levels.map((x) => x.key);
+          const n = keys[keys.indexOf(l.key) + (e.key === "ArrowLeft" ? -1 : 1)];
+          if (n) reorderLevels(l.key, n, e.key === "ArrowRight");
+        });
+        bar.append(t, el("span", "sep", "›"));
+      });
+      const t = el("span", "lvchip issue");
+      t.append(issueIcon(), "이슈");
+      bar.append(t);
+    }
+    // layout mode toggle (chips, D-12)
+    const modes = el("div", "chips modesw");
+    modes.setAttribute("role", "group");
+    modes.setAttribute("aria-label", "배치 방식");
+    for (const [k, label] of [["fields", "분류 기준"], ["free", "자유 배치"]]) {
+      const b = el("button", "chip", label);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(k === "free" ? free_() : !free_()));
+      b.addEventListener("click", () => switchMode(k));
+      modes.append(b);
+    }
+    const edit = el("button", "btn sm hedit", "계층 편집");
+    edit.type = "button";
+    edit.prepend(svg("hier", "i"));
+    edit.addEventListener("click", () => openLevelEditor(view, { onApplied: reloadScreen, openClasses: () => { location.hash = "#/structure/classes"; } }));
+    bar.append(el("span", "grow"), modes, edit);
+  }
+
+  async function switchMode(k) {
+    if ((k === "free") === free_()) return;
+    try {
+      if (k === "free") {
+        await persistView(view.levels.map((l) => l.key), "free");
+        toast("자유 배치로 바꿨어요. 그룹을 끌어 옮겨 보세요", { ms: 3200 });
+      } else if (view.free_reason || !view.levels.length) {
+        openLevelEditor({ ...view, mode: "fields" }, { onApplied: reloadScreen, openClasses: () => { location.hash = "#/structure/classes"; } });
+      } else {
+        await persistView(view.levels.map((l) => l.key), "fields");
+      }
+    } catch (e) {
+      toast(`전환하지 못했어요 · ${e.message}`, { error: true });
+    }
+  }
+
+  // ---- toolbar -------------------------------------------------------------------------
+  const bExpand = iconBtn("expand-all", "모두 펼치기");
+  const bCollapse = iconBtn("collapse-all", "모두 접기");
+  const bCopy = iconBtn("copy", "복사");
+  const bMove = iconBtn("move-to", "이동", "이동…");
+  const bOpen = iconBtn("note", "이슈 열기");
+  const bAdd = iconBtn("plus", "그룹 추가");
+  const info = el("small", "sinfo");
+  toolbar.append(bExpand, bCollapse, el("span", "vr"), bCopy, bMove, bOpen, bAdd, el("span", "grow"), live);
+  bExpand.addEventListener("click", () => { folded = new Set(); draw(); });
+  bCollapse.addEventListener("click", () => { folded = new Set(flatten(tree).filter((n) => n.kind === "group").map((n) => n.id)); draw(); });
+  bOpen.addEventListener("click", () => { const n = index.get(selected); if (n?.task) openInspector(n.task.id); });
+  bCopy.addEventListener("click", () => copySelected());
+  bMove.addEventListener("click", () => {
+    const n = index.get(selected);
+    if (!n) return;
+    openMoveSheet({ node: n, tree, free: free_(), onPick: (dest) => placeNode(n, dest, null) });
+  });
+  bAdd.addEventListener("click", () => {
+    const n = index.get(selected);
+    const parent = !n ? null : n.kind === "group" ? n : n.parent;
+    openAddGroupSheet({
+      parentLabel: parent?.label,
+      onCreate: async (label) => {
+        free = await api.structureAddGroup({ label, parent_id: parent?.nodeId ?? null });
+        if (parent) folded.delete(parent.id);
+        rebuild();
+        draw();
+        toast(`‘${label}’ 그룹을 만들었어요`);
+      },
+    });
+  });
+
+  function syncTools() {
+    const n = index.get(selected);
+    const group = n?.kind === "group";
+    const copyLabel = !n ? "복사" : n.kind === "issue" ? "이슈 복사" : n.key === "epic" ? "에픽 복사" : "그룹 복사";
+    bCopy.querySelector("span").textContent = copyLabel;
+    let why = "";
+    if (!n) why = "복사할 행을 먼저 고르세요";
+    else if (group && !free_() && (n.none || fields[n.key]?.type !== "choice")) why = n.none ? "미분류 그룹은 복사할 수 없어요" : "이 분류의 그룹은 복사할 수 없어요";
+    bCopy.disabled = Boolean(why) || !n;
+    bCopy.title = why || (n?.kind === "group" && !free_() && n.key === "epic" ? "같은 에픽의 모든 유형 가지의 이슈를 새 번호로 복사해요" : "새 번호의 독립된 복사본을 만들어요");
+    bMove.disabled = !n || (group && !free_());
+    bMove.title = group && !free_() ? "그룹은 계층 순서를 바꿔 옮겨요" : "다른 그룹으로 이동";
+    bOpen.disabled = !n || group;
+    bAdd.hidden = !free_();
+    const groups = flatten(tree).filter((x) => x.kind === "group").length;
+    info.textContent = `${tasks.length}개 이슈 · ${groups}개 그룹`;
+    if (!foot.contains(info)) foot.prepend(info);
+    const all = groups > 0 && [...index.values()].filter((x) => x.kind === "group").every((g) => folded.has(g.id));
+    bExpand.disabled = folded.size === 0;
+    bCollapse.disabled = groups === 0 || all;
+  }
+
+  // ---- rows ---------------------------------------------------------------------------
+  const pk = () => productKey();
+  function drawHead() {
+    head.replaceChildren(el("span", "", "계층 / 이슈"), el("span", "", "상태 · 완료"), ...(pk() ? [el("span", "h-prod", "제품")] : []), el("span", "", "요청자"), el("span", "", "납기"));
+    panel.classList.toggle("noprod", !pk());
+  }
+
+  function groupRow(n, depth) {
     const open = !folded.has(n.id);
     const r = el("div", "srow grp");
-    r.style.setProperty("--d", depth);
+    const first = el("div", "c1");
     const fold = el("button", "fold");
     fold.type = "button";
+    fold.tabIndex = -1;
+    fold.setAttribute("aria-label", `${n.label} ${open ? "접기" : "펼치기"}`);
     fold.setAttribute("aria-expanded", String(open));
-    fold.setAttribute("aria-label", `${n.name} ${open ? "접기" : "펼치기"}`);
     fold.append(svg("chev", "i s"));
-    const toggle = () => { open ? folded.add(n.id) : folded.delete(n.id); state.repaint(); };
-    fold.addEventListener("click", toggle);
-    r.addEventListener("dblclick", toggle);
-    const name = el("b", "gname" + (n.empty ? " none" : ""), n.name);
-    const pct = n.items.length ? Math.round((n.done / n.items.length) * 100) : 0;
-    const roll = el("span", "roll");
-    roll.setAttribute("role", "img");
-    roll.setAttribute("aria-label", `완료 ${n.done} / ${n.items.length}`);
-    const bar = el("i");
-    bar.style.width = pct + "%";
-    roll.append(bar);
-    const lvname = el("small", "lvname", n.level.label);
-    r.append(fold, levelIcon(n.level), name, lvname, el("span", "grow"), roll, el("span", "cnt", `${n.done}/${n.items.length}`));
-    host.append(r);
-    if (open) paintRows(host, n.children, depth + 1, state);
+    fold.dataset.act = "fold";
+    first.append(fold, levelIcon(n.level), el("b", "gname" + (n.none ? " none" : ""), n.label), el("small", "lvname", n.level.label));
+    if (free_()) first.append(gripCell());
+    const roll = el("span", "rollc");
+    const bar_ = el("span", "roll");
+    const fill = el("i");
+    fill.style.width = (n.items.length ? Math.round((n.done / n.items.length) * 100) : 0) + "%";
+    bar_.append(fill);
+    roll.append(bar_, el("span", "cnt", `${n.done}/${n.items.length}`));
+    roll.setAttribute("aria-label", `완료 ${n.done} / 전체 ${n.items.length}`);
+    r.append(first, roll);
+    r.setAttribute("aria-expanded", String(open));
+    return r;
   }
-}
 
-async function renderTree(container, view, onView) {
-  const [tasksRes, fieldList] = await Promise.all([api.todos({}), api.todoFields()]);
-  const fields = Object.fromEntries(fieldList.map((f) => [f.key, f]));
-  const tasks = tasksRes.items;
-  const levels = view.mode === "fields" ? view.levels : [];
+  function issueRow(n) {
+    const t = n.task;
+    const r = el("div", "srow issue" + (t.status === "done" ? " done" : ""));
+    const first = el("div", "c1");
+    first.append(el("span", "fold sp"), issueIcon(), el("span", "tid", `#${t.id}`));
+    const title = el("span", "stitle", t.title);
+    title.dataset.act = "title";
+    first.append(title);
+    if (free_()) first.append(gripCell());
+    const st = el("span", "c-st");
+    st.append(el("span", `pill st-${t.status}`, STATUS[t.status] ?? t.status));
+    const cells = [first, st];
+    if (pk()) cells.push(el("span", "c-tx c-prod", labelOf(fields[pk()], t.props?.[pk()]) || "—"));
+    cells.push(el("span", "c-tx", t.requester ? `@${t.requester}` : "—"));
+    const due = el("span", "c-due");
+    const di = dueInfo(t.due_date, t.status === "done");
+    due.append(di ? el("span", `pill ${di.level}`, t.due_date && di.level === "none" ? fmtMD(t.due_date) : di.text) : el("span", "c-tx", "—"));
+    cells.push(due);
+    r.append(...cells);
+    return r;
+  }
 
-  const bar = el("div", "hbar");
-  bar.append(el("span", "k", "계층"));
-  if (view.mode === "free") {
-    bar.append(el("span", "freebadge", "자유 배치"));
-  } else {
-    for (const l of view.levels) {
-      const t = el("span", "lvchip");
-      t.append(levelIcon(l), l.label);
-      bar.append(t, el("span", "sep", "›"));
+  function draw() {
+    const prevFocus = rows.contains(document.activeElement) ? document.activeElement.closest(".srow")?.dataset.id : null;
+    drawBar();
+    drawHead();
+    rebuild();
+    rows.replaceChildren();
+    rowEls = new Map();
+    if (!tasks.length) {
+      rows.append(emptyState({ title: "아직 이슈가 없어요", desc: "오늘·할일에서 추가하면 여기에 분류별로 모여요.", icon: "hier" }));
+    } else {
+      const vis = visibleRows(tree, folded);
+      vis.forEach(({ node: n, depth }, i) => {
+        const r = n.kind === "group" ? groupRow(n, depth) : issueRow(n);
+        r.dataset.id = n.id;
+        r.setAttribute("role", "row");
+        r.setAttribute("aria-level", String(depth + 1));
+        r.setAttribute("aria-selected", String(n.id === selected));
+        r.style.setProperty("--d", depth);
+        r.tabIndex = n.id === selected || (!selected && i === 0) ? 0 : -1;
+        r.draggable = free_() || n.kind === "issue";
+        rows.append(r);
+        rowEls.set(n.id, r);
+      });
     }
-    const t = el("span", "lvchip issue");
-    t.append(issueIcon(), "이슈");
-    bar.append(t);
+    foot.replaceChildren(
+      info,
+      el("span", "", free_() ? "그룹 가운데에 놓으면 하위로 · 가장자리는 앞뒤 순서 · Alt+방향키로 이동" : "이슈를 그룹에 놓으면 그 그룹의 분류 값으로 바뀌어요 · 계층 칩을 끌어 관점 변경"),
+      el("span", "", "Enter 상세 · F2 제목 수정 · 더블클릭 접기/펼치기"),
+    );
+    notice.replaceChildren();
+    if (view.free_reason) {
+      const w = el("div", "notice warn");
+      w.setAttribute("role", "status");
+      w.append(svg("alert", "i s"), el("span", "", view.free_reason));
+      const fix = el("button", "btn sm", "계층 다시 설정");
+      fix.type = "button";
+      fix.addEventListener("click", () => openLevelEditor({ ...view, mode: "fields" }, { onApplied: reloadScreen, openClasses: () => { location.hash = "#/structure/classes"; } }));
+      w.append(fix);
+      notice.append(w);
+    }
+    syncTools();
+    head.style.paddingRight = `calc(var(--px) + ${rows.offsetWidth - rows.clientWidth}px)`;
+    if (prevFocus && rowEls.has(prevFocus)) rowEls.get(prevFocus).focus({ preventScroll: true });
   }
-  const edit = el("button", "btn sm hedit", "계층 편집");
-  edit.type = "button";
-  edit.prepend(svg("hier", "i"));
-  edit.addEventListener("click", () => openLevelEditor(view, { onApplied: onView, openClasses: () => { location.hash = "#/structure/classes"; } }));
-  bar.append(edit);
 
-  const parts = [bar];
-  if (view.free_reason) {
-    const w = el("div", "notice warn");
-    w.setAttribute("role", "status");
-    w.append(svg("alert", "i s"), el("span", "", view.free_reason));
-    const fix = el("button", "btn sm", "계층 다시 설정");
-    fix.type = "button";
-    fix.addEventListener("click", () => openLevelEditor({ ...view, mode: "fields" }, { onApplied: onView, openClasses: () => { location.hash = "#/structure/classes"; } }));
-    w.append(fix);
-    parts.push(w);
+  function select(id, { focus = false } = {}) {
+    selected = id;
+    rows.querySelectorAll('.srow[aria-selected="true"]').forEach((x) => x.setAttribute("aria-selected", "false"));
+    rows.querySelectorAll(".srow[tabindex='0']").forEach((x) => { x.tabIndex = -1; });
+    const r = rowEls.get(id);
+    if (r) {
+      r.setAttribute("aria-selected", "true");
+      r.tabIndex = 0;
+      if (focus) r.focus();
+    }
+    syncTools();
   }
 
-  const panel = el("section", "panel sview");
-  const rows = el("div", "srows");
-  rows.setAttribute("role", "tree");
-  const foot = el("div", "panel-foot");
-  foot.append(el("span", "", `${tasks.length}개 이슈`), el("span", "", view.mode === "free" ? "자유 배치 편집은 다음 단계에서 제공돼요" : "그룹 이름 더블클릭 · 접기/펼치기"));
-  const state = {
-    repaint() {
-      rows.replaceChildren();
-      if (!tasks.length) { rows.append(emptyState({ title: "아직 이슈가 없어요", desc: "오늘·할일에서 추가하면 여기에 분류별로 모여요.", icon: "hier" })); return; }
-      paintRows(rows, group(tasks, levels, fields), 0, state);
-    },
-  };
-  state.repaint();
-  panel.append(rows, foot);
-  parts.push(panel);
-  container.replaceChildren(...parts);
+  function reveal(id) {
+    let n = index.get(id);
+    if (!n) return;
+    for (let p = n.parent; p; p = p.parent) folded.delete(p.id);
+    selected = id;
+    draw();
+    rowEls.get(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  // ---- actions ------------------------------------------------------------------------
+  const pathText = (assign) => Object.entries(assign).map(([k, v]) => `${fields[k]?.label ?? k} ${labelOf(fields[k], v) || "미분류"}`).join(" · ");
+
+  async function placeNode(node, dest, before) {
+    // dest: group node or null (top level); before: sibling node or null (end)
+    if (free_()) {
+      if (node.kind === "group" && dest && isInside(dest, node)) { say("그룹을 자기 하위로 옮길 수 없어요. 순환이 생겨요."); return; }
+      try {
+        const res = await api.structureFreeMove({
+          kind: node.kind, id: node.kind === "group" ? node.nodeId : node.task.id, parent_id: dest?.nodeId ?? null,
+          before: before ? { kind: before.kind, id: before.kind === "group" ? before.nodeId : before.task.id } : null,
+        });
+        free = res.free;
+        if (res.changed.length) await refreshTasks(true);
+        if (dest) folded.delete(dest.id);
+        rebuild();
+        reveal(node.id);
+        toast(res.changed.length ? `${res.changed.length}개 이슈의 분류 값이 바뀌었어요 · ${dest ? pathText(dest.assign) : ""}`.replace(/ · $/, "") : "위치를 옮겼어요");
+      } catch (e) {
+        toast(e.message, { error: true });
+      }
+      return;
+    }
+    // classification view: the destination group's values become the issue's values
+    const t = node.task;
+    const diff = {};
+    const prev = {};
+    for (const [k, v] of Object.entries(dest.assign)) {
+      const cur = t.props?.[k] ?? null;
+      if (cur !== v) { diff[k] = v; prev[k] = cur; }
+    }
+    if (!Object.keys(diff).length) { say("이미 이 그룹에 있어요."); return; }
+    try {
+      await hub.patchTask(t.id, { props: diff });
+      toast(`#${t.id} → ${pathText(dest.assign)}`, { action: { label: "되돌리기", run: () => hub.patchTask(t.id, { props: prev }) } });
+      selected = node.id;
+    } catch (e) {
+      toast(`옮기지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: () => placeNode(node, dest, before) } });
+    }
+  }
+
+  async function copySelected() {
+    const n = index.get(selected);
+    if (!n || bCopy.disabled) return;
+    try {
+      let res, focusId;
+      if (n.kind === "issue") {
+        res = await api.structureCopy({ kind: "issue", task_id: n.task.id });
+        focusId = `i${res.created[0]}`;
+      } else if (free_()) {
+        res = await api.structureCopy({ kind: "node", node_id: n.nodeId });
+        free = res.free;
+        focusId = `g${res.node_id}`;
+      } else {
+        res = await api.structureCopy({ kind: "group", field_key: n.key, value: n.value, task_ids: n.items.map((t) => t.id) });
+        focusId = res.created.length ? `i${res.created[0]}` : "";
+      }
+      await refreshTasks(true);
+      if (res.option) fields = Object.fromEntries((await api.todoFields()).map((x) => [x.key, x]));
+      rebuild();
+      reveal(index.has(focusId) ? focusId : n.id);
+      if (n.kind === "issue") {
+        const id = res.created[0];
+        toast(`새 이슈 #${id}로 복사했어요`, { action: { label: "열기", run: () => openInspector(id) } });
+      } else {
+        toast(`하위 이슈 ${res.created.length}개를 새 번호의 독립된 복사본으로 만들었어요${res.option ? ` · ‘${res.option.label}’` : ""}`);
+      }
+    } catch (e) {
+      toast(`복사하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: copySelected } });
+    }
+  }
+
+  async function refreshTasks(silent = false) {
+    const t = await api.todos({});
+    tasks = t.items;
+    if (!silent) { rebuild(); draw(); }
+  }
+  activeRefresh = async () => { try { await refreshTasks(); } catch { /* keep the last picture */ } };
+
+  let sayTimer = 0;
+  function say(msg) {
+    live.textContent = msg;
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(() => { live.textContent = ""; }, 3500);
+  }
+
+  function renameIssue(n, rowEl) {
+    const titleEl = rowEl.querySelector(".stitle");
+    if (!titleEl || rowEl.querySelector(".ttitle-edit")) return;
+    const t = n.task;
+    const input = el("input", "ttitle-edit sedit");
+    input.type = "text";
+    input.value = t.title;
+    input.setAttribute("aria-label", "이슈 제목");
+    rowEl.draggable = false;
+    let done = false;
+    const finish = async (save) => {
+      if (done) return;
+      done = true;
+      const v = input.value.trim();
+      rowEl.draggable = true;
+      if (save && v && v !== t.title) {
+        titleEl.textContent = v;
+        input.replaceWith(titleEl);
+        try { await hub.patchTask(t.id, { title: v }); } catch (e) {
+          titleEl.textContent = t.title;
+          toast(`저장하지 못했어요 · ${e.message}`, { error: true });
+        }
+      } else {
+        input.replaceWith(titleEl);
+        if (save && !v) toast("제목은 비울 수 없어요", { error: true });
+      }
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.isComposing) return;
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); finish(true); rowEl.focus(); }
+      if (e.key === "Escape") { e.preventDefault(); finish(false); rowEl.focus(); }
+    });
+    input.addEventListener("blur", () => finish(true));
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  // ---- events (delegated) --------------------------------------------------------------
+  const rowOf = (e) => e.target.closest?.(".srow");
+  const toggleFold = (id) => { folded.has(id) ? folded.delete(id) : folded.add(id); draw(); };
+
+  rows.addEventListener("click", (e) => {
+    const r = rowOf(e);
+    if (!r) return;
+    const n = index.get(r.dataset.id);
+    if (e.target.closest('[data-act="fold"]')) { select(n.id); toggleFold(n.id); return; }
+    select(n.id);
+    if (n.kind === "issue" && e.target.closest('[data-act="title"]') && e.detail === 1) renameIssue(n, r);
+  });
+  rows.addEventListener("dblclick", (e) => {
+    const r = rowOf(e);
+    if (!r) return;
+    const n = index.get(r.dataset.id);
+    rows.querySelector(".sedit")?.blur();
+    getSelection()?.removeAllRanges();
+    if (n.kind === "group") toggleFold(n.id);
+    else openInspector(n.task.id);
+  });
+
+  const siblingsOf = (n) => (n.parent ? n.parent.children : tree);
+  rows.addEventListener("keydown", (e) => {
+    const r = rowOf(e);
+    if (!r || e.target !== r) return;
+    const n = index.get(r.dataset.id);
+    const ids = [...rowEls.keys()];
+    const i = ids.indexOf(n.id);
+    const go = (id) => { if (id) { e.preventDefault(); select(id, { focus: true }); } };
+    if (e.altKey && free_()) {
+      const sib = siblingsOf(n), k = sib.indexOf(n);
+      let handled = true;
+      if (e.key === "ArrowUp" && k > 0) placeNode(n, n.parent, sib[k - 1]);
+      else if (e.key === "ArrowDown" && k < sib.length - 1) placeNode(n, n.parent, sib[k + 2] ?? null);
+      else if (e.key === "ArrowRight" && k > 0 && sib[k - 1].kind === "group") placeNode(n, sib[k - 1], null);
+      else if (e.key === "ArrowLeft" && n.parent) { const gp = n.parent.parent; const ps = siblingsOf(n.parent); placeNode(n, gp ?? null, ps[ps.indexOf(n.parent) + 1] ?? null); }
+      else handled = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key);
+      if (handled) e.preventDefault();
+      return;
+    }
+    if (e.key === "ArrowDown") go(ids[i + 1]);
+    else if (e.key === "ArrowUp") go(ids[i - 1]);
+    else if (e.key === "Home") go(ids[0]);
+    else if (e.key === "End") go(ids[ids.length - 1]);
+    else if (e.key === "ArrowRight" && n.kind === "group") { if (folded.has(n.id)) { e.preventDefault(); toggleFold(n.id); } else go(ids[i + 1]); }
+    else if (e.key === "ArrowLeft" && n.kind === "group" && !folded.has(n.id)) { e.preventDefault(); toggleFold(n.id); }
+    else if (e.key === "ArrowLeft" && n.parent) go(n.parent.id);
+    else if (e.key === "Enter") { e.preventDefault(); n.kind === "group" ? toggleFold(n.id) : openInspector(n.task.id); }
+    else if (e.key === " ") { e.preventDefault(); select(n.id); }
+    else if (e.key === "F2" && n.kind === "issue") { e.preventDefault(); renameIssue(n, r); }
+  });
+
+  // drag and drop: where would it land?
+  const clearDrop = () => rows.querySelectorAll(".drop-in,.drop-before,.drop-after,.drop-bad").forEach((x) => x.classList.remove("drop-in", "drop-before", "drop-after", "drop-bad"));
+  function dropPlan(target, e) {
+    const src = dragging?.node;
+    if (!src || target === src) return null;
+    if (!free_()) return target.kind === "group" ? { dest: target, before: null, mode: "in" } : target.parent ? { dest: target.parent, before: null, mode: "in", row: target.parent } : null;
+    const r = rowEls.get(target.id).getBoundingClientRect();
+    const f = (e.clientY - r.top) / r.height;
+    if (target.kind === "group") {
+      if (f < 0.28) return { dest: target.parent, before: target, mode: "before" };
+      return { dest: target, before: null, mode: "in" };
+    }
+    if (f < 0.5) return { dest: target.parent, before: target, mode: "before" };
+    const sib = siblingsOf(target);
+    return { dest: target.parent, before: sib[sib.indexOf(target) + 1] ?? null, mode: "after" };
+  }
+  rows.addEventListener("dragstart", (e) => {
+    const r = rowOf(e);
+    if (!r || r.querySelector(".sedit")) { e.preventDefault(); return; }
+    const n = index.get(r.dataset.id);
+    dragging = { node: n };
+    select(n.id);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", n.id);
+    r.classList.add("dragging");
+  });
+  rows.addEventListener("dragend", () => { dragging = null; clearDrop(); rows.querySelectorAll(".dragging").forEach((x) => x.classList.remove("dragging")); });
+  rows.addEventListener("dragover", (e) => {
+    const r = rowOf(e);
+    if (!r || !dragging?.node) return;
+    const target = index.get(r.dataset.id);
+    clearDrop();
+    const plan = dropPlan(target, e);
+    if (!plan) return;
+    if (dragging.node.kind === "group" && plan.dest && isInside(plan.dest, dragging.node)) {
+      r.classList.add("drop-bad");
+      e.dataTransfer.dropEffect = "none";
+      say("그룹을 자기 하위로 옮길 수 없어요.");
+      return;
+    }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (plan.mode === "in") (plan.row ? rowEls.get(plan.row.id) : r).classList.add("drop-in");
+    else r.classList.add(plan.mode === "before" ? "drop-before" : "drop-after");
+  });
+  rows.addEventListener("dragleave", (e) => { if (!rows.contains(e.relatedTarget)) clearDrop(); });
+  rows.addEventListener("drop", (e) => {
+    const r = rowOf(e);
+    if (!r || !dragging?.node) return;
+    e.preventDefault();
+    const target = index.get(r.dataset.id);
+    const plan = dropPlan(target, e);
+    const src = dragging.node;
+    clearDrop();
+    dragging = null;
+    if (plan) placeNode(src, plan.dest, plan.before);
+  });
+
+  await fetchAll();
+  panel.replaceChildren(toolbar, head, rows, foot);
+  container.replaceChildren(bar, notice, panel);
+  draw();
 }
 
 export async function renderStructure(container, tab = "tree") {
@@ -161,6 +619,8 @@ export async function renderStructure(container, tab = "tree") {
   page.append(hero, host);
   container.replaceChildren(page);
   host.replaceChildren(skeleton(5));
+  activeRefresh = null;
+  hub.on((info) => { if (info.kind === "task") activeRefresh?.(); });
   const load = async () => {
     try {
       if (tab === "classes") await renderClasses(host, { reload: load });
