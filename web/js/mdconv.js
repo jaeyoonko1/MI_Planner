@@ -25,6 +25,7 @@ export const COLORS = ["#1f2430", "#d93025", "#e8710a", "#188038", "#1a73e8", "#
 export const HLS = ["#fff176", "#a5f3a5", "#a5d8ff", "#ffc9de", "#ffd8a8"];
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const WIKI_TOKEN = /\[\[[^\x00\[\]\\\r\n]+\]\]/g;
 const escAttr = (s) => esc(s).replace(/"/g, "&quot;").replace(/\r/g, "&#13;");
 
 // ---------------------------------------------------------------- reader --
@@ -35,13 +36,16 @@ function inlineToHtml(text, fileUrl) {
     return `\u0000${hold.length - 1}\u0000`;
   };
   let s = text.replace(/\u0000/g, "");
-  s = s.replace(/\\([\\*`~<>[\]!#\-.+_)|])/g, (_, c) => put(esc(c)));
+  s = s.replace(/\\([\\*`~<>[\]!#\-.+_)|])/g, (_, c, offset, line) => put(
+    c === "[" && line[offset + 2] === "[" ? '<span data-wiki-literal>[</span>' : esc(c)
+  ));
   s = s.replace(new RegExp(`!\\[([^\\]]*)\\]\\((files\\/[^)\\s]+)\\)(${IMG_ATTR_RE})`, "g"), (_, alt, f, attr) => {
     const w = parseImgAttr(attr);
     const css = imgCssWidth(w);
     return put(`<img src="${escAttr(fileUrl(f))}" data-file="${escAttr(f)}" alt="${escAttr(alt)}"${w ? ` data-w="${w}"` : ""}${css ? ` style="width:${css}"` : ""}>`);
   });
   s = s.replace(/`([^`]+)`/g, (_, c) => put(`<code>${esc(c)}</code>`));
+  s = s.replace(WIKI_TOKEN, (token) => put(esc(token)));
   s = s.replace(/<(\/?)u>/gi, (_, c) => put(`<${c}u>`));
   // the journal writes a bare <mark> (default yellow); older notes wrote <mark style="background:#rrggbb">.
   // data-s remembers the styled spelling of the default colour so it is written back the way it was read.
@@ -155,8 +159,20 @@ function hex(c) {
   return "#" + [m[1], m[2], m[3]].map((v) => (+v).toString(16).padStart(2, "0")).join("");
 }
 
-const escText = (t) =>
+const escPlain = (t) =>
   t.replace(/\u00a0/g, " ").replace(/([\\*`~<])/g, "\\$1").replace(/!\[/g, "\\!\\[");
+function escText(text) {
+  let out = "", offset = 0;
+  for (const match of text.matchAll(WIKI_TOKEN)) {
+    const prefix = text.slice(offset, match.index);
+    const escapes = prefix.match(/\\+$/)?.[0].length || 0;
+    out += escapes % 2
+      ? escPlain(prefix.slice(0, -1)) + "\\" + match[0]
+      : escPlain(prefix) + match[0];
+    offset = match.index + match[0].length;
+  }
+  return out + escPlain(text.slice(offset));
+}
 
 function inl(node) {
   let s = "";
@@ -167,6 +183,10 @@ function inl(node) {
     }
     if (n.nodeType !== 1) continue;
     const t = n.tagName.toLowerCase();
+    if (n.hasAttribute("data-wiki-literal") && n.textContent === "[") {
+      s += "\\[";
+      continue;
+    }
     if (t === "br") {
       s += "\n";
       continue;

@@ -15,6 +15,7 @@ from app.repositories.tasks import TaskError
 from app.routers import dashboard as dashboard_router
 from app.routers import eval_templates
 from app.routers import html_pages
+from app.routers import search as search_router
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
 from app.routers import pages
@@ -54,6 +55,7 @@ def create_app(
     app.include_router(settings_router.router)
     app.include_router(dashboard_router.router)
     app.include_router(eval_templates.router)
+    app.include_router(search_router.router)
 
     @app.middleware("http")
     async def revalidate_static(request, call_next):

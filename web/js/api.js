@@ -13,6 +13,8 @@ async function request(method, url, body) {
 const q = (path) => `?path=${encodeURIComponent(path)}`;
 
 export const api = {
+  search: (q) => request("GET", "/api/search?" + new URLSearchParams({ q })),
+  backlinks: (path) => request("GET", "/api/search/backlinks" + q(path)).then((d) => d.pages),
   tree: () => request("GET", "/api/pages/tree").then((d) => d.tree),
   page: (path) => request("GET", `/api/pages${q(path)}`),
   externalRefs: (path) => request("GET", `/api/pages/external-refs${q(path)}`),

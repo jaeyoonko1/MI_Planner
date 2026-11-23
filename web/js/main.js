@@ -15,6 +15,8 @@ import { newTaskPage } from "./pagedialog.js";
 import { closeInspector, openInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
 import { flash, initShell, setCrumb } from "./shell.js";
+import { mountSearchPalette } from "./search-palette.js";
+import { mountBacklinks, pageHash as toHash, setWikiPages } from "./wikilinks.js";
 
 const treeEl = document.getElementById("tree");
 const viewEl = document.getElementById("view");
@@ -27,8 +29,6 @@ const TYPES = [
 ];
 
 // ---- routing: #/ (home) or #/page/<encoded path> ---------------------------
-const toHash = (path) => "#/page/" + path.split("/").map(encodeURIComponent).join("/");
-
 function currentPath() {
   const m = location.hash.match(/^#\/page\/(.+)$/);
   return m ? m[1].split("/").map(decodeURIComponent).join("/") : null;
@@ -87,6 +87,7 @@ async function movePage(from, parent, where) {
 
 async function refreshTree() {
   treeData = await api.tree();
+  setWikiPages(treeData);
   paintTree();
 }
 
@@ -143,9 +144,12 @@ async function route() {
   }
   if (!path) return showHome();
   try {
-    showPage(await api.page(path));
+    const page = await api.page(path);
+    if (currentPath() !== path) return;
+    showPage(page);
+    mountBacklinks(viewEl, page.path);
   } catch (err) {
-    viewEl.replaceChildren(el("p", "error", err.message));
+    if (currentPath() === path) viewEl.replaceChildren(el("p", "error", err.message));
   }
 }
 
@@ -243,6 +247,23 @@ document.addEventListener("keydown", (e) => {
 });
 
 initShell();
+const go = (path) => () => { location.hash = path; };
+const cycle = (target) => () => {
+  const buttons = [...document.querySelectorAll(target + " button")];
+  const at = buttons.findIndex((button) => button.getAttribute("aria-pressed") === "true");
+  buttons[(at + 1) % buttons.length]?.click();
+};
+mountSearchPalette({
+  openIssue: openInspector,
+  commands: [
+    { title: "새 할일 페이지", detail: "Ctrl+N · Alt+N", run: newTaskPage },
+    { title: "구조 보기", detail: "", run: go("#/structure") },
+    { title: "항목 관리", detail: "", run: go("#/structure/classes") },
+    { title: "페이지 위치 규칙", detail: "", run: go("#/structure/rules") },
+    { title: "테마 바꾸기", detail: "", run: cycle("#seg-theme") },
+    { title: "밀도 바꾸기", detail: "", run: cycle("#seg-density") },
+  ],
+});
 document.getElementById("btn-new-root").addEventListener("click", () => showAddForm(""));
 document.addEventListener("tree-changed", paintTree);
 document.addEventListener("tree-reload", () => refreshTree().catch((e) => flash(false, e.message)));

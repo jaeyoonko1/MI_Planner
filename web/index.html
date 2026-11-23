@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/css/lineeditor.css">
   <link rel="stylesheet" href="/css/screens.css">
   <link rel="stylesheet" href="/css/structure.css">
+  <link rel="stylesheet" href="/css/search.css">
 </head>
 <body>
   <svg class="sprite" aria-hidden="true" focusable="false">
@@ -71,6 +72,7 @@
         <span><b>MI_Planner</b><small>LOCAL WORKSPACE</small></span>
       </a>
       <div class="rail-scroll">
+        <button type="button" class="rail-search" id="search-trigger" aria-haspopup="dialog"><svg class="i s" aria-hidden="true"><use href="#search"/></svg><span>검색 · 이동 · 명령</span><kbd>/</kbd></button>
         <nav id="nav" aria-label="바로가기">
           <a href="#/today" data-screen="today"><svg class="i"><use href="#home"/></svg><span class="lbl">오늘</span></a>
           <a href="#/todos" data-screen="todos"><svg class="i"><use href="#todo"/></svg><span class="lbl">할일</span></a>

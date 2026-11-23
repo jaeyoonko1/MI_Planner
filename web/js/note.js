@@ -9,6 +9,7 @@ import { keyAction } from "./lineeditor-core.js";
 import { editorKeys } from "./lineeditor.js";
 import { runNoteLineAction } from "./note-lines.js";
 import { mountNoteColumns } from "./note-columns.js";
+import { bindWikiEditor } from "./wikilinks.js";
 import { hub } from "./hub.js";
 import { BASE_PX, COLORS, HLS, SIZES, htmlToMd, loadInto } from "./mdconv.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
@@ -574,6 +575,7 @@ export function mountEditor(cfg) {
 
   root.append(bar, ed);
   if (cfg.compact && !cfg.shared) root.append(status);
+  cleanups.push(bindWikiEditor(ed, root));
   markEmpty();
   applyFolds();
 
