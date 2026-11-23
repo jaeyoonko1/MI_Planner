@@ -128,3 +128,34 @@ def create_evaluation(conn: sqlite3.Connection, vault: Vault, data: dict[str, An
             except (OSError, VaultError) as cleanup_error:
                 error.add_note(f"Could not move the evaluation page to trash: {cleanup_error}")
         raise
+
+
+def get_board(conn: sqlite3.Connection, evaluation_id: int) -> dict[str, Any]:
+    """Return one evaluation with compact ID-keyed rows for the board screen (P4-04).
+
+    `at` is the latest stage entry time read from eval_stage_log (D-09); it is never stored on the cell.
+    """
+    evaluation = get_evaluation(conn, evaluation_id)
+    equipment = [dict(row) for row in conn.execute(
+        "SELECT id, name, vendor FROM eval_equipment WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))]
+    wafers_by_lot: dict[int, list[dict[str, Any]]] = {}
+    for row in conn.execute(
+        "SELECT id, lot_id, wafer_no FROM eval_wafers WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,)
+    ):
+        wafers_by_lot.setdefault(row["lot_id"], []).append({"id": row["id"], "wafer_no": row["wafer_no"]})
+    lots = [
+        {"id": row["id"], "lot_no": row["lot_no"], "wafers": wafers_by_lot.get(row["id"], [])}
+        for row in conn.execute(
+            "SELECT id, lot_no FROM eval_lots WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))
+    ]
+    cells = [
+        {"id": row["id"], "equipment_id": row["equipment_id"], "wafer_id": row["wafer_id"],
+         "stage_key": row["stage_key"], "excluded": bool(row["excluded"]), "values": json.loads(row["field_values"]),
+         "note": row["note"], "at": row["at"]}
+        for row in conn.execute(
+            """SELECT c.id, c.equipment_id, c.wafer_id, c.stage_key, c.excluded, c.field_values, c.note,
+                      (SELECT l.at FROM eval_stage_log l WHERE l.cell_id = c.id
+                       ORDER BY l.at DESC, l.id DESC LIMIT 1) AS at
+               FROM eval_cells c WHERE c.evaluation_id = ? ORDER BY c.id""", (evaluation_id,))
+    ]
+    return {"evaluation": evaluation, "equipment": equipment, "lots": lots, "cells": cells}

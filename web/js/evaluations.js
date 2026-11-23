@@ -1,4 +1,5 @@
 import { api } from "./api.js";
+import { renderBoard } from "./eval-board.js";
 import { parseEquipment, parseLots } from "./evaluation-input.js";
 import { button, openSheet } from "./sheet.js";
 import { chipRow, el, emptyState, errorState, skeleton, svg } from "./ui.js";
@@ -276,17 +277,6 @@ export async function renderEvaluations(host, { onAdd, pageHref }) {
   }));
 }
 
-export async function renderEvaluationPage(host, page, onError) {
-  host.replaceChildren(skeleton(3));
-  try {
-    const evaluation = await api.evaluation(page.meta.eval_id);
-    const summary = el("div", "card eval-board-summary");
-    summary.append(el("b", "", STATE[evaluation.status]), el("p", "muted", evaluationCounts(evaluation)));
-    const template = el("p", "muted", evaluation.stages.map((stage) => stage.label).join(" → "));
-    summary.append(template);
-    if (page.content) summary.append(el("div", "content", page.content));
-    host.replaceChildren(summary);
-  } catch (error) {
-    host.replaceChildren(errorState(error.message, onError));
-  }
+export function renderEvaluationPage(host, page, onError) {
+  return renderBoard(host, page, onError);
 }

@@ -57,6 +57,7 @@ export const api = {
   evalTemplates: () => request("GET", "/api/eval-templates").then((data) => data.items),
   evaluations: () => request("GET", "/api/evaluations").then((data) => data.items),
   evaluation: (id) => request("GET", "/api/evaluations/" + id),
+  evaluationBoard: (id) => request("GET", "/api/evaluations/" + id + "/board"),
   createEvaluation: (body) => request("POST", "/api/evaluations", body),
   pagePreview: (body) => request("POST", "/api/todos/page-preview", body),
   expandPage: (id, override) => request("POST", `/api/todos/${id}/page`, { override }),

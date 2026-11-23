@@ -62,6 +62,11 @@ def list_evaluations(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return {"items": repo.list_evaluations(conn)}
 
 
+@router.get("/{evaluation_id}/board")
+def get_board(evaluation_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.get_board(conn, evaluation_id)
+
+
 @router.get("/{evaluation_id}")
 def get_evaluation(evaluation_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return repo.get_evaluation(conn, evaluation_id)

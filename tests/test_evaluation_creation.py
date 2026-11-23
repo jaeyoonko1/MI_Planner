@@ -161,3 +161,37 @@ def test_clipboard_parsers():
     script = Path(__file__).resolve().parent.parent / "web/test/run_evaluation_input.mjs"
     result = subprocess.run(["node", str(script)], capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_board_endpoint_returns_compact_matrix(env):
+    client, db_path, _ = env
+    created = client.post("/api/evaluations", json=draft()).json()["evaluation"]
+    board = client.get(f"/api/evaluations/{created['id']}/board")
+    assert board.status_code == 200, board.text
+    data = board.json()
+    assert data["evaluation"]["id"] == created["id"]
+    assert [item["name"] for item in data["equipment"]] == ["EQ-A01", "EQ-A02"]
+    assert [(lot["lot_no"], [w["wafer_no"] for w in lot["wafers"]]) for lot in data["lots"]] == [
+        ("LOT-TEST-001", ["01", "02"]), ("LOT-TEST-002", ["01"])]
+    assert len(data["cells"]) == 6
+    assert sum(cell["excluded"] for cell in data["cells"]) == 1
+    assert all(cell["stage_key"] is None and cell["at"] is None and cell["values"] == {} for cell in data["cells"])
+    # The latest stage entry time comes from the log, never from the cell row (D-09).
+    with db.connect(db_path) as conn:
+        cell_id = data["cells"][0]["id"]
+        conn.execute("INSERT INTO eval_stage_log (cell_id, from_stage, to_stage, at) VALUES (?, NULL, 'closed', '2026-11-20T09:00:00')", (cell_id,))
+        conn.execute("INSERT INTO eval_stage_log (cell_id, from_stage, to_stage, at) VALUES (?, 'closed', 'review_wait', '2026-11-21T09:00:00')", (cell_id,))
+        conn.commit()
+    again = client.get(f"/api/evaluations/{created['id']}/board").json()
+    assert next(c for c in again["cells"] if c["id"] == cell_id)["at"] == "2026-11-21T09:00:00"
+    assert client.get("/api/evaluations/999/board").status_code == 404
+
+
+def test_board_for_large_evaluation_has_one_row_per_cell(env):
+    client, _, _ = env
+    lots = [{"lot_no": f"LOT-TEST-{i:03d}", "wafers": [f"{w:02d}" for w in range(1, 26)]} for i in range(1, 21)]
+    body = draft(equipment=[{"name": f"EQ-A{i:02d}"} for i in range(1, 11)], lots=lots, excluded=[])
+    evaluation = client.post("/api/evaluations", json=body).json()["evaluation"]
+    data = client.get(f"/api/evaluations/{evaluation['id']}/board").json()
+    assert len(data["cells"]) == 5000
+    assert len({(c["equipment_id"], c["wafer_id"]) for c in data["cells"]}) == 5000

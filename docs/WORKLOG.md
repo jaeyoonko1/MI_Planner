@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P4-04
+- 한 일: 평가 현황판 화면. `GET /api/evaluations/{id}/board`(설비·Lot·웨이퍼·칸 평면 목록, `at`는 단계 이력 최신 시각)와 `web/js/eval-board.js`. D-30에 따라 고정 폭 네이티브 표 + 이벤트 위임, 가상화 없음. 보기 토글 칩(설비별/Lot별/단계별, 남은 것만, 칸 표시=단계 또는 값 항목, D-12 드롭다운 없음), 요약 카드(큰 진행률·단계 분포 막대·범례·새로고침), 설비 열 머리글 진행 막대, Lot 띠, 제외 칸 빗금, 미배정 표시. 단계 색은 막대·틴트에만 쓰고 칸 텍스트에 단계 이름을 항상 표기. 빈 상태(남은 평가 없음 → 전체 보기)·오류 상태(다시 시도)·스켈레톤. 표는 role=grid, 방향키·Home/End·PageUp/Down·Ctrl+Home/End, roving tabindex, 칸별 aria-label, 보기 전환 시 live region 안내. 순수 로직은 `eval-board-model.js`(Node 시험).
+- 성능(5,000칸, Edge, 앱 내 합성 데이터): 최초 표 생성 26ms, 보기 전환·칸 표시 전환 레이아웃 포함 약 50–160ms(1초 목표 이내). 회사 PC는 미측정.
+- 바뀐 파일: app/(repositories, routers)/evaluations.py, web/js/(eval-board, eval-board-model, evaluations, api).js, web/css/evaluations.css, web/test/run_eval_board.mjs, tests/(test_evaluation_creation, test_lineeditor_js).py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 179 passed(보드 API·5,000칸 응답·최신 이력 시각·Node 모델). Edge 1280/1024px, 다크/라이트, 키보드 이동, 오류→재시도, 남은 것만 빈 상태 확인, 앱 콘솔 오류 0.
+- 다음에 할 것 / 막힌 것: 칸 선택(다중)·패널·단계 전환은 P4-05(현재 `board-cell` 이벤트만 발생). 대기 시간 경고 색은 P4-06이 `at`을 써서 추가. 단계 수가 많은 템플릿(10+)의 색 구분, 설비 10개 × 1024px 가로 스크롤은 사용하며 점검. 평가 메모(페이지 본문)는 읽기 전용 표시이며 편집기는 없음. 평가 목록 화면(#/evaluations)은 변경 없음.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P3-07 (Final 디자인 재작업)
 - 한 일: HTML 페이지를 Final 디자인·P2B 셸에 맞춤. 문서 위 툴바(격리 실행 상태 칩, 화면에 맞춤/길게 토글 칩(D-12, 선택은 localStorage), 새로고침 아이콘 버튼), 외부 요청 경고를 접이식 `details` 배지(건수 + 목록, 테마 경고 토큰)로 교체, 프레임 높이를 화면 기준으로 계산. 빈 페이지·오류는 공용 emptyState/errorState(다시 시도). 외부 요청 검사 실패는 경고 없이 계속 표시. 트리에 `HTML` 태그(코드 아이콘 유지), 아이콘 lock·refresh를 인라인 SVG 심볼로 추가. 포커스 링·aria 라벨·iframe title 지정.
 - 샌드박스: 변경 없음(`allow-scripts`만, CSP `default-src 'none'`·`connect-src 'none'`, 상태 저장은 postMessage). 이슈 페이지 링크(task_id)·경로 breadcrumb·휴지통은 기존 공용 헤더/API 그대로.
