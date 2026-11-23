@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2-01
+- 한 일: app/journal.py(## YYYY-MM-DD 파서·렌더러·set_day, 월 페이지 자동 생성), /api/journal/{yyyy-mm} GET, /{dd} PUT, Vault.exists와 create(folder_name) 추가. 시드의 일지 위치를 일지/2026/2026-11로 변경
+- 바뀐 파일: app/journal.py, app/routers/journal.py, app/vault.py, app/main.py, scripts/seed_sample.py, tests/test_journal.py, docs/SPEC.md(4.2 확정 사항), project_flow.html
+- 테스트: pytest 25 passed
+- 다음에 할 것 / 막힌 것:
+  - GET이 월 페이지를 자동 생성하는 부작용이 있음 (SPEC의 "월이 바뀌면 자동 생성" 구현). 미래 월을 조회해도 빈 페이지가 생김
+  - 같은 날짜 섹션이 파일에 두 번 있으면 파서가 하나로 합침 (사람이 직접 고친 경우 대비)
+  - /api/journal/{yyyy-mm}/auto (자동 표시)는 P2-05
+  - P2-02 월간 일지 그리드 화면 (L 크기 — 보기/편집 두 세션으로 쪼개기 권장)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P1-05 (일부)
 - 한 일: scripts/seed_sample.py — 가짜 데이터 샘플 vault 시드(멱등). SPEC의 초기 트리(일지, MI 공정업무 등) 재현
 - 바뀐 파일: scripts/seed_sample.py, scripts/__init__.py, tests/test_seed.py

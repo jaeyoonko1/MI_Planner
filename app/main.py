@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import db
+from app.routers import journal as journal_router
 from app.routers import pages
 from app.vault import DEFAULT_VAULT_PATH, Vault, VaultError
 
@@ -27,6 +28,7 @@ def create_app(
     app.state.db_path = db_path
     app.state.vault = Vault(vault_path)
     app.include_router(pages.router)
+    app.include_router(journal_router.router)
 
     @app.get("/api/health")
     def health() -> dict:

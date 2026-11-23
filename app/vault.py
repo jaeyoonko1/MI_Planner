@@ -91,11 +91,20 @@ class Vault:
             })
         return out
 
-    def create(self, parent: str, title: str, page_type: str = "note") -> dict[str, Any]:
+    def exists(self, rel: str) -> bool:
+        try:
+            self._dir(rel)
+        except VaultError:
+            return False
+        return True
+
+    def create(self, parent: str, title: str, page_type: str = "note",
+               folder_name: str | None = None) -> dict[str, Any]:
+        """Create a page. folder_name pins the folder (used for stable journal paths)."""
         if page_type not in PAGE_TYPES:
             raise VaultError("알 수 없는 페이지 종류입니다.")
         parent_dir = self._dir(parent)
-        folder = self._unique_dir(parent_dir, _safe_name(title))
+        folder = self._unique_dir(parent_dir, _safe_name(folder_name or title))
         folder.mkdir()
         siblings = [self._read_meta(d).get("order", 0) for d in self._children(parent_dir) if d != folder]
         now = _now()

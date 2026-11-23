@@ -16,7 +16,9 @@ from app.vault import DEFAULT_VAULT_PATH, Vault, VaultError  # noqa: E402
 # (title, type, body, children)
 SAMPLE = [
     ("일지", "note", "월간 일지 모음입니다.", [
-        ("2026-11", "journal", "", []),
+        ("2026", "note", "", [
+            ("2026-11", "journal", "## 2026-11-24\n- [ ] 샘플 할일 (LOT-TEST-001 리뷰)\n- EQ-A01 점검 메모\n", []),
+        ]),
     ]),
     ("MI 공정업무", "note", "", [
         ("RCP 개발", "note", "신규 레시피 개발 메모.", []),
