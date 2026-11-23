@@ -1,6 +1,7 @@
 // Monthly journal grid (view-only, P2-02). Columns = weeks, rows = weekdays.
 import { api } from "./api.js";
 import { chipGroup } from "./chips.js";
+import { editorKeys, mountLineEditor } from "./lineeditor.js";
 
 const DAY_NAMES = ["월", "화", "수", "목", "금", "토", "일"];
 
@@ -35,27 +36,15 @@ function weeksOf(month) {
 
 const LINK_MARK = "→ 할일 #";
 
-// onPromote(lineIndex) is offered for unchecked checkbox lines not yet linked to a todo.
-function bodyLines(text, onPromote) {
-  const box = el("div", "jcell-body");
-  text.split("\n").forEach((line, idx) => {
-    const row = el("div", "jline");
-    const m = line.match(/^\s*[-*]\s+\[([ xX])\]\s?(.*)$/);
-    if (m) {
-      const done = m[1] !== " ";
-      row.append(el("span", "jbox", done ? "☑" : "☐"), el("span", done ? "jdone" : "", m[2]));
-      if (!done && m[2].trim() && !m[2].includes(LINK_MARK) && onPromote) {
-        const b = el("button", "jpromote", "→할일");
-        b.title = "이 줄을 할일로 만들기";
-        b.addEventListener("click", (e) => { e.stopPropagation(); onPromote(idx); });
-        row.append(b);
-      }
-    } else {
-      row.textContent = line;
-    }
-    box.append(row);
-  });
-  return box;
+// Promote button shown on unchecked checkbox lines that are not yet linked to a todo.
+function promoteButton(raw, idx, onPromote) {
+  const m = raw.match(/^\s*[-*]\s+\[ \]\s?(.*)$/);
+  if (!m || !m[1].trim() || m[1].includes(LINK_MARK)) return null;
+  const b = el("button", "jpromote", "→할일");
+  b.type = "button";
+  b.title = "이 줄을 할일로 만들기";
+  b.addEventListener("click", (e) => { e.stopPropagation(); onPromote(idx); });
+  return b;
 }
 
 export async function renderJournal(container, month) {
@@ -89,7 +78,12 @@ export async function renderJournal(container, month) {
       }
     },
   );
-  head.append(prev, el("strong", "jtitle", `${y}년 ${m}월`), next, now, toggle, autoToggle);
+  const keysToggle = chipGroup(
+    [{ value: "on", label: "줄 단축키 켬" }, { value: "off", label: "끔" }],
+    editorKeys.on ? "on" : "off",
+    (v) => editorKeys.set(v === "on"),
+  );
+  head.append(prev, el("strong", "jtitle", `${y}년 ${m}월`), next, now, toggle, autoToggle, keysToggle);
   prev.addEventListener("click", () => renderJournal(container, shiftMonth(month, -1)).catch(showErr));
   next.addEventListener("click", () => renderJournal(container, shiftMonth(month, 1)).catch(showErr));
   now.addEventListener("click", () => {
@@ -98,31 +92,24 @@ export async function renderJournal(container, month) {
   });
 
   const grid = el("div", "jgrid");
-  const note = el("div", "meta", "칸을 클릭하면 편집합니다. 입력 후 잠시 멈추면 자동 저장됩니다.");
+  const note = el("div", "meta", "칸을 한 번 클릭하면 바로 편집, 더블클릭하면 오른쪽에 크게 열립니다. Tab 들여쓰기 · Ctrl+1 ☐☑★! · Ctrl+. 불렛 · Alt+↑↓ 이동. 입력 후 잠시 멈추면 자동 저장됩니다.");
   const status = el("span", "jstatus");
   head.append(status);
 
-  // Saves run one after another so an older PUT can never overwrite a newer one.
-  let chain = Promise.resolve();
-  function save(key, dd, text) {
-    status.className = "jstatus";
-    status.textContent = "저장 중…";
-    chain = chain
-      .then(() => api.saveDay(month, dd, text))
-      .then(() => {
-        if (text.trim()) days[key] = text; else delete days[key];
-        status.textContent = "저장됨";
-      })
-      .catch((e) => {
-        status.className = "jstatus error";
-        status.textContent = `저장 실패: ${e.message}`;
-      });
-    return chain;
+  // Each cell editor serializes its own saves; this callback only mirrors the result into `days`.
+  const editors = [];
+  function onState(kind, msg) {
+    status.className = "jstatus" + (kind === "error" ? " error" : "");
+    status.textContent = msg;
   }
+  const saveCell = (key, dd) => async (text) => {
+    await api.saveDay(month, dd, text);
+    if (text.trim()) days[key] = text; else delete days[key];
+  };
 
   async function promote(key, idx) {
     try {
-      await chain; // let pending saves land first so line indexes match the file
+      await Promise.all(editors.map((ed) => ed.flush())); // pending saves first so line indexes match the file
       const res = await api.promoteLine(key, idx);
       Object.keys(days).forEach((k) => delete days[k]);
       Object.assign(days, res.days);
@@ -146,43 +133,23 @@ export async function renderJournal(container, month) {
   }
 
   function makeEditable(cell, key, dd) {
-    const view = el("div", "jcell-view");
-    const paint = () => {
-      view.replaceChildren(days[key] ? bodyLines(days[key], (idx) => promote(key, idx)) : el("div", "jempty", ""));
-    };
-    paint();
-    cell.append(view);
+    const host = el("div", "jcell-view");
+    cell.append(host);
     cell.classList.add("editable");
-    view.addEventListener("click", () => {
-      const ta = document.createElement("textarea");
-      ta.className = "jedit";
-      ta.value = days[key] || "";
-      const fit = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
-      let timer = null;
-      let dirty = false;
-      const flush = () => {
-        clearTimeout(timer);
-        if (dirty) { dirty = false; return save(key, dd, ta.value); }
-      };
-      ta.addEventListener("input", () => {
-        dirty = true;
-        fit();
-        clearTimeout(timer);
-        timer = setTimeout(flush, 700);
-      });
-      ta.addEventListener("blur", async () => {
-        await flush();
-        paint();
-        ta.replaceWith(view);
-      });
-      ta.addEventListener("keydown", (e) => { if (e.key === "Escape") ta.blur(); });
-      view.replaceWith(ta);
-      fit();
-      ta.focus();
-    });
+    editors.push(mountLineEditor(host, {
+      value: days[key] || "",
+      save: saveCell(key, dd),
+      placeholder: "",
+      toolbar: false,
+      expand: { title: `${m}월 ${dd}일 일지` },
+      foldKey: key,
+      lineExtra: (raw, idx) => promoteButton(raw, idx, (i) => promote(key, i)),
+      onState,
+    }));
   }
 
   function paintGrid() {
+    editors.length = 0;
     const weeks = weeksOf(month);
     const rows = showWeekend ? 7 : 5;
     grid.style.gridTemplateColumns = `48px repeat(${weeks.length}, minmax(160px, 1fr))`;

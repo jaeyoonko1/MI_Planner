@@ -1,0 +1,8 @@
+<!doctype html>
+<meta charset="utf-8"><title>line editor tests</title>
+<!-- Open http://127.0.0.1:8765/test/lineeditor.html — every line should start with PASS. -->
+<pre id="out">running…</pre>
+<script type="module">
+import { runAll } from "./lineeditor_cases.js";
+document.getElementById("out").textContent = runAll().map((r) => `${r.ok ? "PASS" : "FAIL"} ${r.name}${r.err}`).join("\n");
+</script>

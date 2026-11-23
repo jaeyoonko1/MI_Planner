@@ -89,6 +89,7 @@ XML/INI/TXT 범용 파서를 내장하고, 설비사별 차이는 `parsers/<vend
 - 이유: 원노트에서 실제로 가장 많이 쓰던 입력 방식인데 SPEC에 빠져 있었음. 앱의 1순위 입력 경로.
 - 순환 순서·Alt+↑↓·하위 불렛→하위 할일 승격은 `[가정]`. `Ctrl+1`이 브라우저 탭 전환과 겹치면 `Ctrl+Alt+1`로 대체(실측 후 기록).
 - 상세: SPEC 4.2.1.
+- **구현 (P2B-02)**: `web/js/lineeditor.js` + `lineeditor-core.js`. `Ctrl+1`·`Alt+1`·`Ctrl+Alt+1` 세 가지 모두 표시 순환으로 받는다(브라우저가 가로채는 키는 도움말의 '키 확인'으로 사용자가 직접 확인). 형광펜 `Ctrl+Alt+H`/`Alt+Shift+H`, 별표 `Ctrl+Alt+S`/`Alt+Shift+S`. Tab·Shift+Tab·Enter·Backspace는 단축키 토글과 무관하게 항상 동작. 단축키 토글은 브라우저별 `localStorage`(`mi.editorKeys`). 형광펜 저장은 `<mark>…</mark>`.
 
 ### D-22 할일 항목은 사용자 정의 (고정 컬럼 폐기) — 확정 (2026-11-24)
 우선순위·요청자·제품 등은 고정 컬럼이 아니라 `task_fields`(항목 정의) + `tasks.props`(값 JSON). 선택지는 입력하며 추가, 필터·행 메타는 정의에서 자동 생성. 텍스트 `키:값` 토큰으로도 입력 가능.

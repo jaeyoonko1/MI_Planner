@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-02
+- 한 일: 공통 줄 편집기(`web/js/lineeditor.js`, 순수 로직 `lineeditor-core.js`, `web/css/lineeditor.css`)를 만들어 오늘 일지와 월간 일지 칸에 연결. 한 번 클릭 편집(클릭한 위치에 커서), 더블클릭 오른쪽 확대 시트, 형광펜(`<mark>`)·별표(`[*]`), 체크 아이콘 클릭 완료 전환, 하위 줄 접기(보기 상태, 파일엔 안 씀), D-21 불렛·Tab/Shift+Tab(윗줄+1 제한)·Ctrl+1 순환·Enter 이어받기/빈 불렛 해제·Backspace 단계 해제·Alt+↑↓ 블록 이동·Ctrl+Enter 완료. 단축키 켬/끔 토글(Tab/Enter는 항상), 브라우저 예약 키 대안(Alt+1, Ctrl+Alt+1, Alt+Shift+H/S)과 도움말의 '키 확인' 패널. 한글 IME 조합 중에는 키 처리를 건너뜀. 변경은 execCommand로 적용해 Ctrl+Z 유지.
+- 바뀐 파일: web/js/lineeditor.js, lineeditor-core.js, today.js, journal.js, web/css/lineeditor.css, web/index.html, web/test/(lineeditor_cases.js, run_lineeditor.mjs, lineeditor.html), tests/test_lineeditor_js.py, docs/DECISIONS.md, project_flow.html. API·스키마 변경 없음.
+- 테스트: pytest 45 passed (node 줄 편집 케이스 25개 포함). 브라우저 미리보기에서 실제 키 입력으로 오늘·월간 칸 편집, Tab, Ctrl+1/Alt+1 순환, 형광펜, Alt+↑ 이동, 체크 클릭, 접기, 더블클릭 시트·Esc 반영·저장 확인.
+- 다음에 할 것 / 막힌 것:
+  - 주간·메모 화면은 아직 앱에 없음(P2B-05 주간, 할일 메모/상세는 이후). 모듈은 `mountLineEditor(host, opts)`로 그대로 재사용 가능.
+  - 실제 Edge/Chrome/웨일 일반 탭에서 Ctrl+1이 탭 전환으로 가로채이는지는 미확인(미리보기 브라우저는 통과). 도움말 '키 확인'으로 사용자가 확인 후 DECISIONS에 기록.
+  - 승격은 아직 `- [ ]`만 가능(`[*]`·`[!]` 승격, 하위 불렛→하위 할일은 백엔드 작업). 제목(#)·이미지 줄·취소선·날짜 입력 단축키는 미구현. 다크 테마 토큰은 P2B-04에서 연결(CSS 변수만 사용).
+  - 편집 중 텍스트 영역은 마크다운 원문(`- [ ]`, `<mark>`)을 그대로 보여준다(WYSIWYG 아님).
+
 ## 2026-11-24 · Codex · P2B-01 최종 시안 반영
 - 오늘·주간·월간의 v4 줄 편집기와 Astra 구조 표를 같은 이슈 데이터에 연결했다. 한 번 클릭으로 바로 수정하고 더블클릭으로 오른쪽 상세 또는 날짜 확대 창을 연다.
 - 기준 파일은 web/design/prototype_final.html, docs/DESIGN.md, project_flow.html이다. P2B-01은 완료 상태이며 저장·API·vault 연결은 후속 단계다.
