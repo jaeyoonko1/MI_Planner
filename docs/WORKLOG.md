@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P3-07 (Final 디자인 재작업)
+- 한 일: HTML 페이지를 Final 디자인·P2B 셸에 맞춤. 문서 위 툴바(격리 실행 상태 칩, 화면에 맞춤/길게 토글 칩(D-12, 선택은 localStorage), 새로고침 아이콘 버튼), 외부 요청 경고를 접이식 `details` 배지(건수 + 목록, 테마 경고 토큰)로 교체, 프레임 높이를 화면 기준으로 계산. 빈 페이지·오류는 공용 emptyState/errorState(다시 시도). 외부 요청 검사 실패는 경고 없이 계속 표시. 트리에 `HTML` 태그(코드 아이콘 유지), 아이콘 lock·refresh를 인라인 SVG 심볼로 추가. 포커스 링·aria 라벨·iframe title 지정.
+- 샌드박스: 변경 없음(`allow-scripts`만, CSP `default-src 'none'`·`connect-src 'none'`, 상태 저장은 postMessage). 이슈 페이지 링크(task_id)·경로 breadcrumb·휴지통은 기존 공용 헤더/API 그대로.
+- 바뀐 파일: web/js/(htmlpage, tree, main).js, web/css/(style, structure).css, web/index.html(심볼 2개), tests/test_html_page.py.
+- 테스트: pytest 176 passed(트리 type, 휴지통 이동 시 상태 동반, 샌드박스·CSP 문자열 고정, 빈 HTML 검사 추가). 임시 vault에서 Edge 1280/1024px·다크/라이트, 상태 저장 후 새로고침 복원, 외부 요청 배지, 빈 페이지 상태 확인, 콘솔 오류 0.
+- 다음에 할 것 / 막힌 것: 빈 페이지 "다시 확인"(hashchange 재진입)·오류 상태 화면은 브라우저로 클릭 검증 못 함. 이슈 페이지가 html 타입인 경우의 헤더 배치, 문서 안 다크 테마 연동(문서는 흰 배경 유지)은 범위 밖.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P3-04 (Final 디자인 재작업)
 - 한 일: 서식 툴바를 Final 디자인으로 재구성. 토큰(라이트/다크)·밀도(컴팩트 26/기본 30/여유 34px)·인라인 SVG 아이콘·포커스 링·aria 라벨, 드롭다운 없는 토글 칩(D-12). 캐럿 위치의 굵게·기울임·밑줄·취소선·블록·목록·크기·글자색·형광펜을 `aria-pressed`로 표시하고, 같은 크기·색·형광펜을 다시 누르면 해제. 기본색 칩은 테마 기본색으로 되돌림(프리셋 #1f2430을 어두운 배경에 쓰던 문제 제거). 표 셀·읽기 전용 블록에서는 인라인 서식 버튼을 비활성화. 툴바 방향키 이동(roving tabindex)·Esc로 본문 복귀. 툴바 끝에 단축키 켬/끔 스위치(P2B-02 설정 `mi.editorKeys` 공유), 꺼지면 Ctrl+Alt+0~3·Ctrl+Shift+./,·Ctrl+Space·Ctrl+-·접기 단축키도 멈춤(Tab·Enter·Backspace·Ctrl+B/I/U는 유지). 툴팁은 단축키 상태를 따름. Ctrl+Shift+N도 서식 지우기로 받음(브라우저가 선점하면 Ctrl+Space).
 - 저장 형식: 변경 없음(프리셋 크기·색·형광펜만, 허용 목록 밖은 저장 때 제거). 툴바로 만든 서식이 편집→저장→열기→저장에서 동일함을 mdconv.html에 21건 추가.

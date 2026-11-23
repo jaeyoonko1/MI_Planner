@@ -55,3 +55,31 @@ def test_external_refs_endpoint(client) -> None:
 
 def test_clean_html_has_no_refs() -> None:
     assert find_external_refs('<img src="data:image/png;base64,AA"><a href="#a">x</a>') == []
+
+
+def test_html_page_sits_in_tree_with_type_and_issue_link(client) -> None:
+    p = _html_page(client)
+    node = next(n for n in client.get("/api/pages/tree").json()["tree"] if n["path"] == p)
+    assert node["type"] == "html" and node["task_id"] is None
+    assert client.get("/api/pages", params={"path": p}).json()["meta"]["type"] == "html"
+
+
+def test_html_page_trash_removes_state_with_page(client) -> None:
+    p = _html_page(client)
+    client.put("/api/pages/state", params={"path": p}, json={"state": {"a": 1}})
+    assert client.delete("/api/pages", params={"path": p}).status_code == 200
+    assert not (client.vault_dir / p).exists()
+    assert client.get("/api/pages/state", params={"path": p}).status_code == 404
+    assert any((client.vault_dir / ".trash").rglob("_state.json"))
+
+
+def test_sandbox_and_csp_stay_strict() -> None:
+    src = (Path(__file__).resolve().parents[1] / "web/js/htmlpage.js").read_text(encoding="utf-8")
+    assert 'setAttribute("sandbox", "allow-scripts")' in src
+    assert "allow-same-origin" not in src.replace("(no allow-same-origin)", "")
+    assert "connect-src 'none'" in src and "default-src 'none'" in src
+
+
+def test_empty_html_and_missing_refs_scan(client) -> None:
+    p = _html_page(client, "")
+    assert client.get("/api/pages/external-refs", params={"path": p}).json() == {"external": []}

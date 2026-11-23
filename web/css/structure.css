@@ -209,6 +209,7 @@
 .btn svg.i.s, .chip svg.i.s { width: 14px; height: 14px; }
 .tree-row .tag { flex: none; font: 10px var(--mono); color: var(--dim); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line); margin-left: 4px; }
 .tree-row .tag.auto { font-family: var(--font); font-size: 10px; }
+.tree-row .tag.html { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 38%, transparent); }
 .pg-link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; height: 27px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--cyan); font-size: 11.5px; text-decoration: none; }
 .pg-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pg-link:hover { background: var(--hover); border-color: var(--line-2); }

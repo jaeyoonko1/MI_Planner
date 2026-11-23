@@ -122,8 +122,11 @@ function buildNode(n, level, opts, spec) {
   ty.style.color = spec ? spec.color : "var(--dim)";
   const tags = [];
   if (n.task_id) tags.push(span("tag", "#" + n.task_id));
+  if (n.type === "html") tags.push(span("tag html", "HTML"));
   if (n.auto) tags.push(span("tag auto", "자동"));
-  tags.forEach((x) => { x.title = n.task_id && x === tags[0] ? "이슈 페이지" : "규칙이 자동으로 만든 폴더"; });
+  tags.forEach((x) => {
+    x.title = x.classList.contains("html") ? "격리 실행되는 HTML 페이지" : x.classList.contains("auto") ? "규칙이 자동으로 만든 폴더" : "이슈 페이지";
+  });
   row.append(tw, ty, span("label", n.title), ...tags, plusButton("하위 페이지 추가", () => opts.onAdd(n.path)));
   row.addEventListener("click", () => { location.hash = toHash(n.path); });
   attachDrag(row, n, spec, opts);

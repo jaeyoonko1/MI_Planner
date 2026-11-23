@@ -202,7 +202,8 @@ function showPage(page) {
   }
   if (page.meta.type === "html") {
     body.className = "html-host";
-    renderHtmlPage(body, page).catch((e) => body.replaceChildren(el("p", "error", e.message)));
+    const paint = () => renderHtmlPage(body, page).catch((e) => body.replaceChildren(errorState(e.message, paint)));
+    paint();
     return;
   }
   if (page.meta.type === "board" && page.meta.eval_id) {
