@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app import db, placement
+from app import db, memo, placement
 from app.vault import Vault
 
 router = APIRouter(prefix="/api/pages")
@@ -48,12 +48,27 @@ def tree(request: Request) -> dict:
 
 @router.get("")
 def read_page(request: Request, path: str) -> dict:
-    return _vault(request).read(path)
+    vault = _vault(request)
+    page = vault.read(path)
+    if page["meta"].get("task_id") is not None and not page["meta"].get(memo.FLAG):
+        _relink(request, lambda c: memo.before_page_write(c, vault, path))  # unify an old diverged pair first
+        page = vault.read(path)
+    return page
 
 
 @router.put("")
 def write_page(request: Request, path: str, body: PageContent) -> dict:
-    return _vault(request).write(path, body.content)
+    vault = _vault(request)
+    holder: list[int | None] = [None]
+
+    def prepare(conn) -> None:
+        holder[0] = memo.before_page_write(conn, vault, path)
+
+    _relink(request, prepare)
+    page = vault.write(path, body.content)
+    if holder[0] is not None:  # issue page: keep the issue's mirrored memo identical
+        _relink(request, lambda c: memo.after_page_write(c, holder[0], body.content))
+    return page
 
 
 @router.post("/files")

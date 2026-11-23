@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import db
+from app import db, memo
 from fastapi.exceptions import RequestValidationError
 
 from app.repositories.tasks import TaskError
@@ -32,6 +32,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         db.init_db(db_path)  # apply pending migrations on startup
+        conn = db.connect(db_path)
+        try:
+            memo.sweep(conn, app.state.vault)  # unify issue memos with their page bodies (P2B-10)
+        finally:
+            conn.close()
         yield
 
     app = FastAPI(title="MI_Planner", version=APP_VERSION, lifespan=lifespan)

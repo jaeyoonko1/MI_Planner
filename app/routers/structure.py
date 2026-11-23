@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
+from app import memo
 from app.repositories import structure as repo
 from app.repositories import structure_copy, structure_free
 from app.routers.tasks import get_conn
@@ -47,5 +48,8 @@ def free_add_group(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
 
 
 @router.post("/copy", status_code=201)
-def copy(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
-    return structure_copy.copy(conn, body)
+def copy(request: Request, body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    res = structure_copy.copy(conn, body)
+    for old, new in (res.get("map") or {}).items():  # copies get their own copy of the memo's images
+        memo.copy_files(conn, request.app.state.vault, int(old), int(new))
+    return res

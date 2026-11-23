@@ -15,3 +15,13 @@ def test_lineeditor_core_cases():
         capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
     assert res.returncode == 0, res.stdout + res.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_memo_core_cases():
+    """P2B-10: image width markdown + heading fold plan (web/test/run_memo.mjs)."""
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_memo.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr

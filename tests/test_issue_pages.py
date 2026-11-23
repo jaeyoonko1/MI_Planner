@@ -96,7 +96,7 @@ def test_second_expand_opens_existing_page_and_keeps_memo_and_journal_link(world
     assert again["page"]["content"] == "페이지에서 고침"  # never overwritten
     assert not (vault / "다른").exists()  # the second run created nothing
     got = c.get(f"/api/todos/{t['id']}").json()
-    assert got["note"] == "처음 메모" and got["id"] == t["id"]
+    assert got["note"] == "페이지에서 고침" and got["id"] == t["id"]  # memo == page body (P2B-10)
     day = c.get(f"/api/journal/{MONTH}").json()["days"][TODAY]
     assert f"할일 #{t['id']}" in day
     owners = [p for p in vault.rglob("_page.json") if f'"task_id": {t["id"]}' in p.read_text(encoding="utf-8")]

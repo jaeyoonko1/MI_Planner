@@ -2,11 +2,13 @@
 //
 // Stored format (D-15, decided in P3-01):
 //   blocks : paragraph, # ## ### headings, "- " bullets, "1. " numbers, "- [ ]/[x]" checklist,
-//            ![alt](files/name.png) images
+//            ![alt](files/name.png) images, optional width {size=small} {size=orig} {width=480} (P2B-10)
 //   inline : **bold** *italic* ~~strike~~ `code`, and ONLY these HTML tags:
 //            <u>, <mark style="background:#rrggbb">, <span style="color:#rrggbb;font-size:NNpx">
 // Anything else is dropped on save (serializer) or shown as plain text (reader).
 // Known limits: nested lists are flattened; links are kept as plain text.
+
+import { IMG_ATTR_RE, imgCssWidth, imgSuffix, parseImgAttr } from "./memocore.js";
 
 export const SIZES = [11, 13, 15, 18, 22, 28]; // px presets (6 steps)
 export const BASE_PX = 15;
@@ -25,8 +27,11 @@ function inlineToHtml(text, fileUrl) {
   };
   let s = text.replace(/\u0000/g, "");
   s = s.replace(/\\([\\*`~<>[\]!#\-.+_)])/g, (_, c) => put(esc(c)));
-  s = s.replace(/!\[([^\]]*)\]\((files\/[^)\s]+)\)/g, (_, alt, f) =>
-    put(`<img src="${escAttr(fileUrl(f))}" data-file="${escAttr(f)}" alt="${escAttr(alt)}">`));
+  s = s.replace(new RegExp(`!\\[([^\\]]*)\\]\\((files\\/[^)\\s]+)\\)(${IMG_ATTR_RE})`, "g"), (_, alt, f, attr) => {
+    const w = parseImgAttr(attr);
+    const css = imgCssWidth(w);
+    return put(`<img src="${escAttr(fileUrl(f))}" data-file="${escAttr(f)}" alt="${escAttr(alt)}"${w ? ` data-w="${w}"` : ""}${css ? ` style="width:${css}"` : ""}>`);
+  });
   s = s.replace(/`([^`]+)`/g, (_, c) => put(`<code>${esc(c)}</code>`));
   s = s.replace(/<(\/?)u>/gi, (_, c) => put(`<${c}u>`));
   s = s.replace(/<mark style="background:(#[0-9a-fA-F]{6})">/gi, (_, c) => put(`<mark style="background:${c}">`));
@@ -124,7 +129,7 @@ function inl(node) {
     }
     if (t === "img") {
       const f = n.getAttribute("data-file");
-      if (f) s += `![${(n.getAttribute("alt") || "").replace(/[\]\n]/g, "")}](${f})`;
+      if (f) s += `![${(n.getAttribute("alt") || "").replace(/[\]\n]/g, "")}](${f})${imgSuffix(n.getAttribute("data-w"))}`;
       continue;
     }
     if (t === "code") {

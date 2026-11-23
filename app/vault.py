@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_VAULT_PATH = ROOT / "vault"
 PAGE_TYPES = {"note", "html", "journal", "board", "table"}
 META = "_page.json"
+ISSUE_FILES = ".issue-files"  # images of issues that have no page yet: <vault>/.issue-files/<task id>/
 RESERVED_DIRS = {"files"}  # attachments live here, never pages
 IMAGE_EXTS = {".png", ".jpg", ".gif", ".webp", ".bmp"}  # no svg: it can carry script
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
@@ -183,9 +184,8 @@ class Vault:
         return self.read(rel)
 
     # ---- attachments (pasted images) -------------------------------------
-    def save_file(self, rel: str, name: str, data: bytes) -> str:
-        """Store an image under <page>/files/ and return its page-relative path."""
-        page = self._dir(rel)
+    @staticmethod
+    def _store(folder: Path, name: str, data: bytes) -> str:
         ext = Path(name or "").suffix.lower()
         if ext == ".jpeg":
             ext = ".jpg"
@@ -195,8 +195,7 @@ class Vault:
             raise VaultError("빈 파일입니다.")
         if len(data) > MAX_UPLOAD_BYTES:
             raise VaultError("이미지가 너무 큽니다 (최대 20MB).")
-        folder = page / "files"
-        folder.mkdir(exist_ok=True)
+        folder.mkdir(parents=True, exist_ok=True)
         stem = f"img-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         target, n = folder / f"{stem}{ext}", 2
         while target.exists():
@@ -205,14 +204,67 @@ class Vault:
         target.write_bytes(data)
         return f"files/{target.name}"
 
-    def file_path(self, rel: str, name: str) -> Path:
-        page = self._dir(rel)
+    @staticmethod
+    def _image(folder: Path, name: str) -> Path:
         if not name or name != Path(name).name or name.startswith("."):
             raise VaultError("잘못된 파일 이름입니다.")
-        target = page / "files" / name
+        target = folder / name
         if target.suffix.lower() not in IMAGE_EXTS or not target.is_file():
             raise VaultError("파일을 찾을 수 없습니다.", 404)
         return target
+
+    def save_file(self, rel: str, name: str, data: bytes) -> str:
+        """Store an image under <page>/files/ and return its page-relative path."""
+        return self._store(self._dir(rel) / "files", name, data)
+
+    def file_path(self, rel: str, name: str) -> Path:
+        return self._image(self._dir(rel) / "files", name)
+
+    # ---- images of an issue that has no page (moved into the page when it is created) ------------
+    def _issue_dir(self, task_id: int) -> Path:
+        return self.root / ISSUE_FILES / str(int(task_id))
+
+    def save_issue_file(self, task_id: int, name: str, data: bytes) -> str:
+        return self._store(self._issue_dir(task_id), name, data)
+
+    def issue_file_path(self, task_id: int, name: str) -> Path:
+        return self._image(self._issue_dir(task_id), name)
+
+    def adopt_issue_files(self, task_id: int, page_rel: str) -> None:
+        """The issue got a page: its images move into <page>/files/ (markdown refs `files/x` stay valid)."""
+        src = self._issue_dir(task_id)
+        if not src.is_dir():
+            return
+        dest = self._dir(page_rel) / "files"
+        dest.mkdir(exist_ok=True)
+        for f in src.iterdir():
+            if f.is_file() and not (dest / f.name).exists():
+                shutil.move(str(f), str(dest / f.name))
+        try:
+            src.rmdir()
+        except OSError:
+            pass  # something is left behind: keep it (nothing is deleted)
+
+    def copy_issue_files(self, page_rel: str | None, src_task_id: int, dst_task_id: int) -> None:
+        """Copy every image of the source issue (page folder or issue folder) into the new issue's folder."""
+        sources = [self._issue_dir(src_task_id)]
+        if page_rel:
+            sources.insert(0, self._dir(page_rel) / "files")
+        dest = self._issue_dir(dst_task_id)
+        for folder in sources:
+            if not folder.is_dir():
+                continue
+            for f in folder.iterdir():
+                if f.is_file() and f.suffix.lower() in IMAGE_EXTS and not (dest / f.name).exists():
+                    dest.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, dest / f.name)
+
+    def set_meta(self, rel: str, **values: Any) -> None:
+        """Add/replace keys in _page.json (used for the memo-unification stamp)."""
+        page = self._dir(rel)
+        meta = self._read_meta(page)
+        meta.update(values)
+        self._write_meta(page, meta)
 
     def update(self, rel: str, *, title: str | None = None, parent: str | None = None,
                order: int | None = None) -> dict[str, Any]:

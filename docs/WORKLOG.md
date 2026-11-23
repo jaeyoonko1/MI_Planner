@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-10
+- 한 일: **메모 = 페이지 본문 (D-29)** — 페이지가 있는 이슈는 `index.md`가 유일한 원본, `tasks.note`는 거울(`app/memo.py`: 읽기 `GET /api/todos/{id}`·쓰기 `PATCH note`·`PUT /api/pages`가 서로 맞춤, 앱 밖 파일 수정은 다음 읽기에서 반영). **기존 어긋난 메모/본문**은 서버 시작 시·첫 읽기·쓰기 직전에 한 번 병합(한쪽 비었거나 포함이면 그대로, 다르면 `## 통합 전 이슈 메모`로 이어 붙이고 원문은 `_page.json.memo_before_merge`; `memo_unified` 표시), 상세 패널을 열 때 토스트로 알림. **편집기 공용화**: `note.js`를 `mountEditor`(페이지·상세 메모 겸용)로 분리 — 상세 패널의 textarea를 같은 위지윅으로 교체(포커스 때만 서식 툴바가 펼쳐짐, 저장 상태·재시도 토스트, 열려 있는 두 화면은 한쪽 저장 후 다른 쪽이 바쁘지 않으면 자동 갱신). **이미지**: 붙여넣기/끌어놓기 → 자기 블록으로 삽입, 호버·클릭·키보드 선택 시 크기 바(자동·소형·480·720·원본 칩 + px 입력 + 원본 해상도 + 모서리 끌기 핸들), 저장은 `![](files/x.png){size=small|orig}` / `{width=480}`(자동은 접미사 없음, 본문 폭 초과 시 본문 폭으로 제한). 페이지 없는 이슈의 이미지는 `vault/.issue-files/<id>/`, 페이지가 생기면 `files/`로 이동(참조 불변). **접힘**: 제목 아래 섹션을 화살표·"모두 접기"·Ctrl+Shift+[ / ]로 접고, 상태는 `settings.memo_folds`(`t:<이슈id>`; 이슈 메모와 이슈 페이지가 같은 범위)에만 저장 — 파일·`_page.json`은 안 건드림. 이슈 복사 시 이미지도 복사.
+- 바뀐 파일: app/(memo.py 신규, vault.py, placement.py, main.py, routers/tasks·task_pages·pages·structure·settings.py), web/(js/memocore.js·foldstore.js 신규, note.js 재작성, mdconv.js, inspector.js, api.js, css/note.css·screens.css), web/test/(run_memo.mjs 신규, mdconv.html), tests/(test_memo_unify.py 신규, test_lineeditor_js.py, test_issue_pages.py 기대값 1줄: 메모=본문), docs/(SPEC, DECISIONS D-29), project_flow.html.
+- 테스트: pytest 128 passed(신규 17: 메모↔본문 양방향·삭제·거울 검색, 외부 파일 수정 우선, 어긋난 쌍 병합·재병합 없음·백업, 페이지 열기/PATCH 시 선병합, 시작 시 일괄 병합, 이미지 업로드·페이지 생성 후 이동·URL 유지·재시작 후 열기·복사본 이미지, 접힘은 설정에만 저장, node 순수 케이스 7개). `web/test/mdconv.html` 12/12 PASS(이미지 폭 왕복 포함). 브라우저(격리 DB·vault, 1024px, 다크·라이트, 콘솔 오류 없음)에서 이미지 크기 바 클릭→저장, 붙여넣기(합성 ClipboardEvent), 제목 접기→새로고침 후 유지, 상세 패널 입력↔페이지 편집기 양방향 갱신 확인.
+- 다음에 할 것 / 막힌 것:
+  - 이미지 모서리 끌기·실제 클립보드 붙여넣기·실제 마우스 호버 경로는 합성 이벤트/클릭으로만 확인(Edge에서 사람이 한 번 시험). 이미지 삽입은 DOM 직접 삽입이라 Ctrl+Z로 한 번에 안 되돌려질 수 있음.
+  - 두 화면이 동시에 열려 있을 때 같은 순간 양쪽에서 타이핑하면 마지막 저장이 이김(충돌 감지 없음). 옛 평문 메모는 마크다운으로 읽히므로 `*`·`#`로 시작하는 줄이 서식으로 바뀔 수 있음(저장 시 정규화).
+  - 페이지를 휴지통으로 보내면 이미지는 휴지통 폴더에 남고 메모 글만 이슈에 남음. 이슈 삭제 시 `.issue-files/<id>`는 남음(정리 기능 없음). 접힘 키는 제목 글자가 바뀌면 풀림.
+  - 미리보기 캡처가 창을 크롭해 화면 이동 트릭으로 확인함. 1280px·밀도 변경은 확인 못 함. 일지 줄 편집기의 줄 접기(별개 기능)는 건드리지 않음.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-09
 - 한 일: **선택적 이슈 페이지** — 이슈 추가는 레코드만, "페이지로 확장"은 같은 이슈 ID에 페이지 하나(`_page.json.task_id`)를 한 번만 연결(두 번째는 기존 페이지 열기, 메모·일지 연결 유지, 어긋난 `page_path`는 task_id로 복구). "할일 페이지 추가"(Alt+N/Ctrl+N, 할일 화면 버튼)는 이슈+페이지 동시 생성. **조건부 배치** — 첫 일치 AND 규칙 → 기본 위치(일지 아래/유형별/할일 폴더), 생성 전 경로 미리보기(새 폴더 표시)와 덮어쓰기(일지 아래·폴더 지정·직접 경로). 분류를 바꿔도 자동 이동 없음, 명시적 "위치 변경"만 이동. 실패 시 롤백(자동 폴더·페이지 제거, 이동은 원위치+meta 복원, 동시 생성은 이슈도 제거). **UI**: 페이지 시트(`pagedialog.js`), 구조 › 페이지 위치 규칙 탭(`rules.js`: 조건 칩·값 칩·변수 칩·순서·초안 미리계산·저장/되돌리기), 이슈 상세 '페이지' 행, 트리의 `#id`·`자동` 표시. D-28.
 - 바뀐 파일: app/(placement.py·routers/task_pages.py 신규, vault.py, routers/pages.py·task_fields.py, main.py), web/(js/pagedialog.js·rules.js 신규, inspector·todos·main·structure·tree·api.js, css/structure.css), tests/test_issue_pages.py(신규), docs/(SPEC, DECISIONS D-28), project_flow.html.

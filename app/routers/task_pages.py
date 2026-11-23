@@ -4,8 +4,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse
 
-from app import journal_links, placement
+from app import journal_links, memo, placement
 from app.repositories import task_fields as tf
 from app.repositories import tasks as repo
 from app.routers.tasks import get_conn
@@ -68,3 +69,16 @@ def rules_overview(request: Request, body: dict[str, Any] | None = None, conn=De
     rules = body.get("rules")
     clean = tf.validate_rules(conn, rules) if rules is not None else None
     return placement.overview(conn, _vault(request), clean, body.get("fallback"))
+
+
+@router.post("/{task_id}/files")
+async def upload_issue_file(request: Request, task_id: int, name: str = "image.png", conn=Depends(get_conn)) -> dict:
+    """Pasted/dropped image for an issue memo. Goes into the page's files/ when the issue has a page,
+    else into the issue's own folder (moved along when the page is created). Returns the markdown ref."""
+    rel = memo.save_file(conn, _vault(request), task_id, name, await request.body())
+    return {"file": rel, "url": f"/api/todos/{task_id}/file?name={rel.rsplit('/', 1)[-1]}"}
+
+
+@router.get("/{task_id}/file")
+def get_issue_file(request: Request, task_id: int, name: str, conn=Depends(get_conn)) -> FileResponse:
+    return FileResponse(memo.file_path(conn, _vault(request), task_id, name))

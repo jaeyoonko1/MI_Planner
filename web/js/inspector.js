@@ -2,9 +2,10 @@
 // journal line. Every edit goes through the hub, so lists and journal lines update at once.
 import { api } from "./api.js";
 import { hub } from "./hub.js";
+import { mountEditor } from "./note.js";
 import { openPageSheet } from "./pagedialog.js";
 import { toast } from "./toast.js";
-import { chipRow, dateChoices, debounce, el, fmtMD, svg } from "./ui.js";
+import { chipRow, dateChoices, el, fmtMD, svg } from "./ui.js";
 
 const STATUS = [["todo", "할일"], ["doing", "진행"], ["hold", "보류"], ["done", "완료"]];
 const PRIO = [[1, "높음"], [2, "보통"], [3, "낮음"]];
@@ -29,9 +30,18 @@ function ensurePanel() {
   return panel;
 }
 
+// The memo is the same rich editor as a note page (P2B-10). For an issue with a page it edits the page body itself.
+let memo = null; // { id, ctl }
+
+function dropMemo() {
+  memo?.ctl.destroy();
+  memo = null;
+}
+
 export function closeInspector() {
   if (!panel || openId == null) return;
-  commitMemo?.flush?.();
+  memo?.ctl.flush();
+  dropMemo();
   openId = null;
   unsub?.();
   unsub = null;
@@ -44,15 +54,19 @@ export function closeInspector() {
 
 export function inspectorOpenId() { return openId; }
 
-let commitMemo = null;
-
 export async function openInspector(id) {
   const p = ensurePanel();
   if (openId === null) returnFocus = document.activeElement;
+  if (memo && memo.id !== Number(id)) { await memo.ctl.flush(); dropMemo(); }
   openId = Number(id);
   unsub?.();
   try {
-    if (!hub.task(id)) hub.putTask(await api.getTodo(id));
+    // always fresh: the memo of an issue with a page is read from the page body (unifies old diverged pairs once)
+    const fresh = await api.getTodo(id);
+    hub.putTask(fresh);
+    if (fresh.memo_merged) {
+      toast("메모와 페이지 본문이 달라 하나로 합쳤어요 · 이전 메모는 '통합 전 이슈 메모' 아래에 그대로 있어요", { ms: 9000 });
+    }
     if (!fields) fields = await api.todoFields().catch(() => []);
   } catch (e) {
     toast(`상세를 열지 못했어요 · ${e.message}`, { error: true });
@@ -70,6 +84,7 @@ async function refresh() {
   if (openId == null) return;
   try { hub.putTask(await api.getTodo(openId)); } catch { /* deleted: close below */ return closeInspector(); }
   if (panel.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if (memo?.ctl.contains(document.activeElement)) { memo.ctl.syncFrom(hub.task(openId)?.note || ""); return; }
   paint(false);
 }
 
@@ -200,25 +215,33 @@ function paint(focusTitle) {
   }
 
   const memoWrap = el("div", "memo-wrap");
-  memoWrap.append(el("div", "sec-h", "메모"));
-  const memo = el("textarea", "memo-in");
-  memo.value = t.note || "";
-  memo.rows = 6;
-  memo.placeholder = "이 이슈에 대한 메모 — 입력하면 자동으로 저장돼요";
-  memo.setAttribute("aria-label", "메모");
-  memo.dataset.fk = "memo";
-  const stat = el("span", "memo-stat");
-  const save = async () => {
-    if (memo.value === (hub.task(openId)?.note || "")) return;
-    stat.textContent = "저장 중…";
-    try { await hub.patchTask(openId, { note: memo.value || null }); stat.textContent = "저장됨"; }
-    catch (e) { stat.textContent = ""; toast(`메모를 저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: save } }); }
-  };
-  const later = debounce(save, 700);
-  commitMemo = later;
-  memo.addEventListener("input", () => { stat.textContent = ""; later(); });
-  memo.addEventListener("blur", () => later.flush());
-  memoWrap.append(memo, stat);
+  const memoHead = el("div", "memo-h");
+  memoHead.append(el("div", "sec-h", "메모"));
+  if (t.page_path) {
+    const same = el("span", "memo-same", "페이지 본문과 같은 글");
+    same.title = "이 메모를 고치면 페이지 본문이 같이 바뀌어요";
+    memoHead.append(same);
+  }
+  memoWrap.append(memoHead);
+  if (!memo || memo.id !== openId) {
+    const id = openId;
+    const ctl = mountEditor({
+      content: t.note || "",
+      compact: true,
+      label: "메모",
+      placeholder: "이 이슈에 대한 메모 — 입력하면 자동으로 저장돼요 · 이미지는 붙여넣기",
+      foldScope: `t:${id}`,
+      // after the issue gets a page this URL keeps working (the server looks in the page folder first)
+      fileUrl: (rel) => `/api/todos/${id}/file?name=${encodeURIComponent(rel.replace(/^files\//, ""))}`,
+      upload: (file, name) => api.uploadTodoFile(id, file, name),
+      save: async (md) => { await hub.patchTask(id, { note: md.trim() ? md : null }); },
+      onError: (e, retry) => toast(`메모를 저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: retry } }),
+    });
+    memo = { id, ctl };
+  } else {
+    memo.ctl.syncFrom(t.note || "");
+  }
+  memoWrap.append(memo.ctl.el);
 
   const foot = el("div", "insp-f");
   const del = el("button", "btn quiet sm danger", "삭제");

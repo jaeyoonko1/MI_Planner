@@ -317,8 +317,13 @@ def expand(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dict[
         created.append(page["path"])
         if task.get("note"):
             page = vault.write(page["path"], task["note"])
+        vault.set_meta(page["path"], memo_unified=datetime.now().astimezone().isoformat(timespec="seconds"))
         _link(conn, task_id, page["path"])
         conn.commit()
+        try:  # the memo's images follow it into the page folder (nothing is deleted if this fails)
+            vault.adopt_issue_files(task_id, page["path"])
+        except OSError:
+            pass
         return {"created": True, "path": page["path"], "page": page, "placement": p, "task": repo.get(conn, task_id)}
     except BaseException:
         conn.rollback()

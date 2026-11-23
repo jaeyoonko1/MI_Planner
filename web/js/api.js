@@ -43,6 +43,12 @@ export const api = {
   classImpact: (key) => request("GET", `/api/structure/classes/${key}/impact`),
   addTodo: (data) => request("POST", "/api/todos", data),
   patchTodo: (id, data) => request("PATCH", `/api/todos/${id}`, data),
+  uploadTodoFile: async (id, file, name) => {
+    const res = await fetch(`/api/todos/${id}/files?name=${encodeURIComponent(name)}`, { method: "POST", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+    return data.file;
+  },
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
   promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
   today: () => request("GET", "/api/dashboard/today"),
