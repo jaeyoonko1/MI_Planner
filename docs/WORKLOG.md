@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P1-04
+- 한 일: web/ 프론트 셸 — 사이드바 페이지 트리(접기 상태 localStorage 저장), 해시 라우팅(#/page/<경로>), 칩 버튼 컴포넌트(chips.js), 페이지 추가 폼, 페이지 보기(읽기 전용)
+- 바뀐 파일: web/index.html, web/css/style.css, web/js/{main,api,tree,chips}.js, project_flow.html
+- 테스트: pytest 16 passed(백엔드). 프론트는 자동 테스트 없이 브라우저에서 직접 확인(트리 표시·페이지 이동·하위 추가·칩 선택·접기/펼치기)
+- 다음에 할 것 / 막힌 것:
+  - 트리에서 이름 변경·이동·삭제·드래그 순서 변경 UI는 아직 없음 (API는 있음)
+  - 제목에 금지문자(예: ':')가 있으면 폴더명에서만 빠지고 표시 제목은 그대로 유지됨
+  - P1-05 vendor 배치 + 샘플 vault 시드 (Codex 권장 작업)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P1-03
 - 한 일: app/vault.py(트리·생성·읽기/쓰기·이름변경/이동/순서·휴지통 삭제, 경로 탈출 차단), /api/pages 라우터, VaultError → {"error"} 응답
 - 바뀐 파일: app/vault.py, app/routers/pages.py, app/main.py, tests/test_pages.py, tests/test_health.py, project_flow.html

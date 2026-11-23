@@ -2,10 +2,19 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MI_Planner</title>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <h1>MI_Planner</h1>
-  <p>서버가 실행 중입니다. (P1-04에서 화면이 채워집니다)</p>
+  <aside id="sidebar">
+    <header class="side-head">
+      <a href="#/" class="brand">MI_Planner</a>
+      <button id="btn-new-root" class="icon-btn" title="최상위 페이지 추가">＋</button>
+    </header>
+    <nav id="tree" aria-label="페이지 트리"></nav>
+  </aside>
+  <main id="view"></main>
+  <script type="module" src="/js/main.js"></script>
 </body>
 </html>
