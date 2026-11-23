@@ -14,7 +14,7 @@
 
 ## 2. 세션 시작 시 읽는 순서
 1. `docs/SPEC.md` — 무엇을 만드는가 (데이터 모델, 화면, API)
-2. `docs/DESIGN.md` (UI 작업 시 필수) + `web/design/prototype_final.html`
+2. `docs/DESIGN.md` — 각 작업의 새 세션과 하위 워커가 관련 절을 읽는다. UI 변경은 `web/design/prototype_final.html`까지 읽고 구현·검증한다.
 2. `docs/DECISIONS.md` — 확정된 결정 / 아직 미결인 질문
 3. `docs/WORKLOG.md` 맨 위 1~2개 항목 — 직전 세션이 어디서 멈췄는가
 4. `project_flow.html` 상단의 `FLOW` 데이터 — 현재 단계와 다음 작업 ID
@@ -62,7 +62,7 @@ MI_Planner/
 ```
 
 ## 6. 작업 방식
-- **한 세션 = flow의 작업 1개.** 작업 ID(예: `P2-03`)를 먼저 말하고 시작한다.
+- **한 세션 = flow의 작업 1개.** 작업 ID(예: `P2-03`)를 먼저 말하고 시작한다. 다음 항목은 새 워커·새 세션 또는 `/clear` 후 시작하고, 위 읽기 순서대로 `docs/DESIGN.md`를 확인한다.
 - 시작 전: 3~7줄짜리 계획을 먼저 제시 → 구현 → 테스트 실행 → 결과 보고.
 - 작업 범위 밖은 고치지 않는다. 발견한 문제는 WORKLOG의 "다음에 할 것"에 적는다.
 - 큰 리팩터링은 그 자체가 flow의 작업일 때만 한다.
