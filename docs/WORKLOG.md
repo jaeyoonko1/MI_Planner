@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2-03
+- 한 일: /api/todos CRUD + 필터(상태·우선순위 다중, 요청자, 납기 임박/지남, 하기로 한 날, 연결, 하위, 검색). 하위 할일 순환 방지. 검증 오류(422)도 {"error"} 형식으로 통일. 스키마 변경 없음(001의 tasks 사용)
+- 바뀐 파일: app/repositories/tasks.py(+__init__), app/routers/tasks.py, app/main.py(라우터·오류 핸들러), tests/test_todos.py, docs/SPEC.md, project_flow.html
+- 테스트: pytest 32 passed
+- 다음에 할 것 / 막힌 것:
+  - P2-04 화면은 `requesters` 목록으로 요청자 칩을 만들면 됨
+  - eval_id는 평가 테이블(P4)이 생기기 전까지 FK 검증 없음
+  - app/repositories/tasks.py의 open_conn은 미사용 (정리 가능)
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2-02b (편집)
 - 한 일: 월 안의 칸 클릭 → textarea 편집, 입력 후 0.7초 뒤 자동 저장(PUT), 포커스를 잃으면 즉시 저장 후 보기로 복귀(Esc도 동일). 저장은 순서대로 한 줄로 실행, 상태 표시(저장 중/저장됨/실패). 내용을 비우면 서버가 섹션을 지움
 - 바뀐 파일: web/js/journal.js, web/js/api.js, web/css/style.css, project_flow.html(P2-02 done)

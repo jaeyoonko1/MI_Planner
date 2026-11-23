@@ -181,6 +181,10 @@ vault/
 - 2단계: **상위(평가·페이지·프로젝트) > 할일**. 필요하면 하위 체크리스트로 3단계 흉내.
 - 필드: 제목, 상태(todo/doing/done/hold), 우선순위(1~3), **요청자**, **납기**, 하기로 한 날, 연결(평가/페이지), 메모.
 - 화면: 목록 + **버튼 필터**(상태·우선순위·납기 임박·요청자), 인라인 편집.
+- **확정(P2-03) API** (`/api/todos`, 스키마 변경 없음):
+  - `GET /api/todos` → `{items, requesters}`. 필터(모두 선택, AND): `status`·`priority`(쉼표 구분 다중), `requester`, `due_within=N`(오늘~N일 뒤 납기, done 제외), `overdue=true`(납기 지남, done 제외), `planned_date`, `eval_id`, `page_path`, `parent_task_id`, `top_level=true`, `q`(제목·메모 검색). 정렬: 납기 오름차순(없으면 뒤), 우선순위, id.
+  - `POST /api/todos`(title 필수, 201), `GET /{id}`, `PATCH /{id}`(보낸 필드만 수정, null로 비우기 가능), `DELETE /{id}` → `{ok:true}`. 상위 할일 삭제 시 하위는 최상위로 풀림. 순환·자기 참조 거부.
+  - 오류: 검증 400, 없음 404, 요청 형식 오류 422 — 모두 `{"error": "..."}`.
 
 ### 4.3 평가 현황판 (board 타입, P4)
 
