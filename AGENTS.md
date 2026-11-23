@@ -3,6 +3,7 @@
 > Claude Code, Codex, 사내 OpenCode가 **모두 이 파일을 기준**으로 일한다.
 > `CLAUDE.md`는 이 파일을 불러오기만 한다. 규칙을 바꿀 때는 이 파일만 고친다.
 ## 0. UI UX 최우선
+- **UI를 건드리는 모든 작업은 먼저 `docs/DESIGN.md`를 읽고, 기준 시안 `web/design/prototype_final.html`과 일치시킨다.** 시안과 다르게 구현하려면 사용자에게 먼저 묻는다.
 - 디자인 이쁘고 수석 애플 엔지니어가 짠것 같은 모던하고 fancy 한 디자인 핋수 
 - ux 도 더이상 수정할게 없을정도로 고민하고 설계 할것 
 
@@ -13,6 +14,7 @@
 
 ## 2. 세션 시작 시 읽는 순서
 1. `docs/SPEC.md` — 무엇을 만드는가 (데이터 모델, 화면, API)
+2. `docs/DESIGN.md` (UI 작업 시 필수) + `web/design/prototype_final.html`
 2. `docs/DECISIONS.md` — 확정된 결정 / 아직 미결인 질문
 3. `docs/WORKLOG.md` 맨 위 1~2개 항목 — 직전 세션이 어디서 멈췄는가
 4. `project_flow.html` 상단의 `FLOW` 데이터 — 현재 단계와 다음 작업 ID
