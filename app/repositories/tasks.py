@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -13,6 +14,8 @@ FIELDS = (
     "parent_task_id", "eval_id", "page_path", "note",
 )
 _DATE_FIELDS = ("due_date", "planned_date")
+# Legacy columns mirrored in tasks.props under the same key (D-22, migration 002).
+MIRRORED = ("priority", "requester", "due_date", "planned_date")
 
 
 class TaskError(Exception):
@@ -56,7 +59,54 @@ def _clean(data: dict[str, Any], *, creating: bool) -> dict[str, Any]:
 
 
 def _row(row: sqlite3.Row) -> dict[str, Any]:
-    return dict(row)
+    d = dict(row)
+    try:
+        d["props"] = json.loads(d.get("props") or "{}")
+    except ValueError:
+        d["props"] = {}
+    return d
+
+
+def _prepare(
+    conn: sqlite3.Connection, data: dict[str, Any], current: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Validate columns and fold user-defined values (`props`) in; returns the columns to write.
+
+    Mirrored keys (priority, requester, due_date, planned_date) may arrive as top-level
+    fields or inside props; top-level wins. A null value removes the key."""
+    from app.repositories import task_fields as tf  # lazy: avoids an import cycle
+
+    data = dict(data)
+    incoming = data.pop("props", None)
+    if incoming is not None and not isinstance(incoming, dict):
+        raise TaskError("props는 객체여야 합니다.")
+    incoming = dict(incoming or {})
+    for k in MIRRORED:
+        if k in incoming:
+            data.setdefault(k, incoming.pop(k))
+    clean = _clean(data, creating=current is None)
+    props: dict[str, Any] = dict((current or {}).get("props") or {})
+    fields = {f["key"]: f for f in tf.list_fields(conn)} if incoming else {}
+    for k, v in incoming.items():
+        f = fields.get(k)
+        if f is None:
+            raise TaskError(f"정의되지 않은 항목입니다: {k}")
+        if v is None:
+            props.pop(k, None)
+            continue
+        if f["archived"]:
+            raise TaskError(f"보관된 항목에는 값을 쓸 수 없습니다: {f['label']}")
+        props[k] = tf.validate_value(f, v)
+    for k in MIRRORED:
+        if k in clean:
+            if clean[k] is None:
+                props.pop(k, None)
+            else:
+                props[k] = clean[k]
+    if current is None:
+        props.setdefault("priority", 2)
+    clean["props"] = json.dumps(props, ensure_ascii=False)
+    return clean
 
 
 def get(conn: sqlite3.Connection, task_id: int) -> dict[str, Any]:
@@ -82,7 +132,7 @@ def _check_parent(conn: sqlite3.Connection, task_id: int | None, parent_id: int 
 
 
 def create(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
-    clean = _clean(data, creating=True)
+    clean = _prepare(conn, data, None)
     _check_parent(conn, None, clean.get("parent_task_id"))
     now = _now()
     cols = [*clean, "created_at", "updated_at"]
@@ -95,11 +145,11 @@ def create(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def update(conn: sqlite3.Connection, task_id: int, data: dict[str, Any]) -> dict[str, Any]:
-    get(conn, task_id)
-    clean = _clean(data, creating=False)
+    current = get(conn, task_id)
+    clean = _prepare(conn, data, current)
     if "parent_task_id" in clean:
         _check_parent(conn, task_id, clean["parent_task_id"])
-    if clean:
+    if clean:  # always non-empty: props is rewritten
         sets = ", ".join(f"{k} = ?" for k in clean)
         conn.execute(
             f"UPDATE tasks SET {sets}, updated_at = ? WHERE id = ?",
@@ -129,6 +179,7 @@ def list_tasks(
     parent_task_id: int | None = None,
     top_level: bool = False,
     q: str | None = None,
+    field_filters: dict[str, list[str]] | None = None,
     today: date | None = None,
 ) -> list[dict[str, Any]]:
     """Filter tasks. due_within=N: open tasks due today..today+N days. overdue: open and past due."""
@@ -171,11 +222,44 @@ def list_tasks(
     if q:
         where.append("(title LIKE ? OR note LIKE ?)")
         args += [f"%{q}%", f"%{q}%"]
+    if field_filters:
+        _field_filters(conn, field_filters, where, args)
     sql = "SELECT * FROM tasks"
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY (due_date IS NULL), due_date, priority, id"
     return [_row(r) for r in conn.execute(sql, args)]
+
+
+def _field_filters(
+    conn: sqlite3.Connection, filters: dict[str, list[str]], where: list[str], args: list[Any]
+) -> None:
+    """User-defined field filters: key -> accepted values (OR within a field, AND across)."""
+    from app.repositories import task_fields as tf
+
+    for key, raw in filters.items():
+        field = tf.get_field(conn, key)  # 404 for unknown fields
+        path = f'$."{key}"'
+        if field["type"] in tf.OPTION_TYPES:  # match option values regardless of int/str typing
+            by_str = {str(o["value"]): o["value"] for o in field["options"]}
+            vals: list[Any] = [by_str.get(v, v) for v in raw]
+        elif field["type"] == "number":
+            try:
+                vals = [float(v) if "." in v else int(v) for v in raw]
+            except ValueError:
+                raise TaskError(f"{field['label']} 필터는 숫자여야 합니다.") from None
+        elif field["type"] == "check":
+            vals = [1 if v.lower() in ("1", "true", "yes", "on") else 0 for v in raw]
+        else:
+            vals = list(raw)
+        marks = ", ".join("?" * len(vals))
+        if field["type"] == "multi":
+            where.append(
+                f"EXISTS (SELECT 1 FROM json_each(tasks.props, ?) WHERE value IN ({marks}))"
+            )
+        else:
+            where.append(f"json_extract(tasks.props, ?) IN ({marks})")
+        args += [path, *vals]
 
 
 def requesters(conn: sqlite3.Connection) -> list[str]:

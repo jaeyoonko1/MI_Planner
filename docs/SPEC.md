@@ -352,7 +352,7 @@ vault/
 
 공통 컬럼: `id INTEGER PK`, `created_at TEXT`, `updated_at TEXT` (ISO 8601).
 
-### task_fields (P2B, 마이그레이션 `002_*.sql` 예정 — 4.2.2)
+### task_fields (P2B-03, 마이그레이션 `002_task_fields.sql` — 4.2.2)
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | key | TEXT UNIQUE | 내부 이름(영문, 변경 불가). `tasks.props`의 키 |
@@ -361,9 +361,21 @@ vault/
 | options | TEXT(JSON) | 선택지 `[{value,label,color}]` (choice·multi) |
 | sort_order | INTEGER | 표시 순서 |
 | show_filter / show_row | INTEGER | 필터 줄·행 메타 표시 여부 |
-| archived | INTEGER | 1이면 숨김(값은 보존) |
+| archived | INTEGER | 1이면 숨김(값은 보존, 새 값 쓰기 거부) |
+| builtin | INTEGER | 1이면 기본 제공(priority·requester·due_date·planned_date) |
 
-`tasks`에는 `props TEXT`(JSON) 컬럼을 추가하고 기존 priority·requester·due_date·planned_date를 옮긴다(호환 방법은 P2B에서 확정).
+`tasks`에 `props TEXT NOT NULL DEFAULT '{}'`(JSON)를 추가했다. **호환 방식(P2B-03 확정)**: 기존 `priority`·`requester`·`due_date`·`planned_date` 컬럼은 **지우지 않고** 같은 키의 `props` 값과 함께 쓰는 미러로 유지한다(마이그레이션이 기존 값을 props로 복사). 그래서 기존 SQL·필터·일지 자동 표시·대시보드가 그대로 동작한다. 쓸 때는 둘을 항상 같이 갱신한다.
+- 선택지 `{value,label,color?,parent?,archived?}`: `value`는 글자 또는 정수, `parent`는 같은 항목 안의 다른 선택지(계층, 순환 거부). 우선순위의 선택지는 1·2·3 고정(이름·색만 변경).
+- 값 검증: choice=선택지 값, multi=선택지 값 목록(중복 제거), text/person=글자, date=YYYY-MM-DD, number=숫자, check=참/거짓.
+
+**API (P2B-03, 모두 `/api/todos` 아래, 오류는 `{"error"}`)**
+- `GET /api/todos/fields?include_archived=true` → `{items}`; `POST` `{key,label,type,options?}` → 201 (key 형식 `^[a-z][a-z0-9_]{0,31}$`, 예약어·중복 거부, 중복 409); `GET /fields/{key}` (+`used_by`); `PATCH /fields/{key}` `{label,type,show_filter,show_row,archived,sort_order,options,option_moves}`; `PUT /fields/order` `{keys:[...]}`(전체 key 한 번씩).
+- 타입 변경은 기본 항목이거나 값이 있으면 409. 선택지 `＋`: `POST /fields/{key}/options` `{label,color?,parent?}` → 항목 반환.
+- 선택지 삭제: `PATCH`의 `options`에서 빼면 된다. 그 선택지를 쓰는 할일이 있으면 409 — `option_moves: {"옛값": "새값" | null}`로 옮기거나 비운다. 위치 규칙이 쓰는 선택지는 409. 지운 선택지의 하위는 한 단계 위로 올라간다.
+- 항목 삭제 `DELETE /fields/{key}`: 값이 있거나 기본 항목이면 **보관**(`archived`, 값 보존), 값이 없으면 삭제. `?purge=true`는 정의와 모든 할일 값을 완전 삭제(기본 항목이면 미러 컬럼도 비움, priority는 2). 위치 규칙이 쓰는 항목은 purge 409(`규칙 n번`).
+- 할일: 응답에 `props`(객체)가 추가된다. `POST/PATCH`는 `props`(키별 병합, null=제거)를 받는다. 기존 최상위 `priority`·`requester`·`due_date`·`planned_date`도 그대로 받으며 둘이 겹치면 최상위가 이긴다. 정의 없는 키·보관된 항목에 쓰기는 400.
+- 필터: 기존 필터는 그대로, 추가로 `?field_<key>=a,b`(한 항목 안에서는 OR, 항목끼리 AND; multi는 하나라도 포함). 없는 항목은 404.
+- 위치 규칙: `GET/PUT /api/todos/page-rules` `{rules:[{conditions:[{field,op,value?}],path}]}` → `settings.page_rules`(JSON). op는 `is`·`not`·`set`·`empty`. 저장 시 항목·선택지·템플릿 변수(`{연}` `{월}` `{에픽위치}` 또는 항목 key·이름)가 실제로 있는지 검증한다.
 
 ### tasks
 | 컬럼 | 타입 | 설명 |

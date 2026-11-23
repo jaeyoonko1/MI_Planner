@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-03
+- 한 일: 사용자 정의 필드 저장·API. `002_task_fields.sql`: `task_fields` 테이블 + `tasks.props`(JSON) 추가, 기본 항목 4개(우선순위·요청자·납기·하기로 한 날) 시드, 기존 값을 props로 복사. 기존 4개 컬럼은 props와 함께 쓰는 미러로 유지(기존 쿼리·필터·일지·대시보드 무변경). `app/repositories/task_fields.py`(정의 CRUD, 선택지 추가·삭제·옮기기·계층, 보관/purge 삭제, 규칙 검증·참조 검사)와 `app/routers/task_fields.py`. 할일 API에 `props`·`?field_<key>=` 필터 추가.
+- 바뀐 파일: migrations/002_task_fields.sql, app/repositories/task_fields.py, app/repositories/tasks.py, app/routers/task_fields.py, app/routers/tasks.py, app/main.py, tests/test_task_fields.py, tests/test_db.py, docs/SPEC.md, project_flow.html. UI는 건드리지 않음.
+- 테스트: pytest 58 passed (구버전 DB 마이그레이션, 미러 동기화, 값 검증, 필터, 선택지 삭제·이동, 보관/purge, 규칙 참조 보호 포함).
+- 다음에 할 것 / 막힌 것:
+  - 항목 관리 UI(보관·purge 확인 창, 선택지 옮기기 선택)와 필터 줄·행 메타의 자동 생성은 프론트 작업(P2B-04 이후)에서. 현재 프론트는 아직 고정 우선순위·요청자 UI.
+  - `tasks.has_page`·`page_pin`, 위치 규칙의 실제 적용(페이지 이동)은 미구현 — 규칙은 저장·검증만 한다. 선택지 이름 변경은 value 유지라 규칙에 영향 없음.
+  - `GET /api/todos`의 `requesters` 제안은 requester 컬럼 기준(보관/삭제 시 비워짐). 일반 person 항목 제안 API는 필요 시 추가.
+  - `text:값` 토큰 매핑(승격 시 `키:값`)은 journal 승격 작업에서 이 API를 사용.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-02
 - 한 일: 공통 줄 편집기(`web/js/lineeditor.js`, 순수 로직 `lineeditor-core.js`, `web/css/lineeditor.css`)를 만들어 오늘 일지와 월간 일지 칸에 연결. 한 번 클릭 편집(클릭한 위치에 커서), 더블클릭 오른쪽 확대 시트, 형광펜(`<mark>`)·별표(`[*]`), 체크 아이콘 클릭 완료 전환, 하위 줄 접기(보기 상태, 파일엔 안 씀), D-21 불렛·Tab/Shift+Tab(윗줄+1 제한)·Ctrl+1 순환·Enter 이어받기/빈 불렛 해제·Backspace 단계 해제·Alt+↑↓ 블록 이동·Ctrl+Enter 완료. 단축키 켬/끔 토글(Tab/Enter는 항상), 브라우저 예약 키 대안(Alt+1, Ctrl+Alt+1, Alt+Shift+H/S)과 도움말의 '키 확인' 패널. 한글 IME 조합 중에는 키 처리를 건너뜀. 변경은 execCommand로 적용해 Ctrl+Z 유지.
 - 바뀐 파일: web/js/lineeditor.js, lineeditor-core.js, today.js, journal.js, web/css/lineeditor.css, web/index.html, web/test/(lineeditor_cases.js, run_lineeditor.mjs, lineeditor.html), tests/test_lineeditor_js.py, docs/DECISIONS.md, project_flow.html. API·스키마 변경 없음.

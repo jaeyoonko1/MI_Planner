@@ -22,6 +22,7 @@ class TodoIn(BaseModel):
     eval_id: int | None = None
     page_path: str | None = None
     note: str | None = None
+    props: dict | None = None
 
 
 class TodoPatch(BaseModel):
@@ -35,6 +36,7 @@ class TodoPatch(BaseModel):
     eval_id: int | None = None
     page_path: str | None = None
     note: str | None = None
+    props: dict | None = None
 
 
 def get_conn(request: Request) -> Iterator:
@@ -51,6 +53,7 @@ def _csv(value: str | None) -> list[str]:
 
 @router.get("")
 def list_todos(
+    request: Request,
     conn=Depends(get_conn),
     status: str | None = Query(None, description="comma-separated"),
     priority: str | None = Query(None, description="comma-separated 1-3"),
@@ -68,11 +71,13 @@ def list_todos(
         prios = [int(p) for p in _csv(priority)]
     except ValueError:
         raise repo.TaskError("priority는 쉼표로 구분한 숫자여야 합니다.") from None
+    # user-defined fields: ?field_<key>=a,b (OR within a field, AND across fields)
+    ff = {k[6:]: _csv(v) for k, v in request.query_params.items() if k.startswith("field_")}
     items = repo.list_tasks(
         conn, status=_csv(status), priority=prios, requester=requester,
         due_within=due_within, overdue=overdue, planned_date=planned_date,
         eval_id=eval_id, page_path=page_path, parent_task_id=parent_task_id,
-        top_level=top_level, q=q,
+        top_level=top_level, q=q, field_filters=ff or None,
     )
     return {"items": items, "requesters": repo.requesters(conn)}
 
