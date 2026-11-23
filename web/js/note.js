@@ -5,8 +5,11 @@
 // Folding: headings fold their section; the state is kept in settings (foldstore.js), never in the file.
 import { api } from "./api.js";
 import { getFolds, setFolds } from "./foldstore.js";
+import { keyAction } from "./lineeditor-core.js";
+import { editorKeys } from "./lineeditor.js";
+import { runNoteLineAction } from "./note-lines.js";
 import { hub } from "./hub.js";
-import { BASE_PX, COLORS, HLS, SIZES, htmlToMd, mdToHtml } from "./mdconv.js";
+import { BASE_PX, COLORS, HLS, SIZES, htmlToMd, loadInto } from "./mdconv.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
 
 const SIZE_LABELS = ["극소", "소", "보통", "중", "대", "특대"];
@@ -70,7 +73,7 @@ export function mountEditor(cfg) {
   ed.setAttribute("aria-multiline", "true");
   ed.setAttribute("aria-label", cfg.label || "본문");
   if (cfg.placeholder) ed.dataset.ph = cfg.placeholder;
-  ed.innerHTML = mdToHtml(cfg.content || "", cfg.fileUrl);
+  loadInto(ed, cfg.content || "", cfg.fileUrl);
   document.execCommand("defaultParagraphSeparator", false, "div");
   document.execCommand("styleWithCSS", false, true);
   const cleanups = [];
@@ -89,11 +92,11 @@ export function mountEditor(cfg) {
     clearTimeout(timer);
     timer = null;
     const md = htmlToMd(ed);
-    if (md === last) return chain;
+    if (md === last && !pending) return chain;
     setStatus("저장 중…");
     pending++;
     chain = chain
-      .then(() => cfg.save(md))
+      .then(() => md === last ? undefined : cfg.save(md))
       .then(() => {
         last = md;
         setStatus(md === htmlToMd(ed) ? "저장됨" : "편집 중…");
@@ -125,17 +128,10 @@ export function mountEditor(cfg) {
     const cur = closest("h1,h2,h3");
     run("formatBlock", cur && cur.tagName === tag.toUpperCase() ? "div" : tag);
   };
-  const toggleChecklist = () => {
-    let ul = closest("ul");
-    if (!ul) {
-      run("insertUnorderedList");
-      ul = closest("ul");
-    }
-    if (!ul) return;
-    ul.classList.toggle("cl");
-    if (ul.classList.contains("cl")) {
-      [...ul.children].forEach((li) => li.getAttribute("data-chk") || li.setAttribute("data-chk", "0"));
-    }
+  const lineAction = (action) => {
+    if (!runNoteLineAction(ed, action)) return;
+    applyFolds();
+    schedule();
   };
 
   // size: apply the browser's largest size, then rewrite it to a preset px value
@@ -245,9 +241,9 @@ export function mountEditor(cfg) {
     ["제목1", () => setBlock("h1"), "Ctrl+Alt+1"],
     ["제목2", () => setBlock("h2"), "Ctrl+Alt+2"],
     ["제목3", () => setBlock("h3"), "Ctrl+Alt+3"],
-    ["• 목록", () => run("insertUnorderedList"), ""],
+    ["• 목록", () => lineAction("bullet"), "Ctrl+."],
     ["1. 목록", () => run("insertOrderedList"), ""],
-    ["☑ 체크", toggleChecklist, ""],
+    ["☑ 체크", () => lineAction("check"), ""],
     ["B", () => run("bold"), "Ctrl+B"],
     ["I", () => run("italic"), "Ctrl+I"],
     ["U", () => run("underline"), "Ctrl+U"],
@@ -502,8 +498,8 @@ export function mountEditor(cfg) {
   const onHeadingChevron = (e) => e.target.matches(foldableHeading) && e.offsetX < 16;
   ed.addEventListener("click", (e) => {
     const t = e.target;
-    if (t.tagName === "LI" && t.parentElement.classList.contains("cl") && e.offsetX < 24) {
-      t.setAttribute("data-chk", t.getAttribute("data-chk") === "1" ? "0" : "1");
+    if (t.matches("li[data-m]") && e.offsetX >= -24 && e.offsetX < 0) {
+      t.dataset.m = t.dataset.m === "x" ? " " : "x";
       schedule();
     } else if (e.detail <= 1 && onHeadingChevron(e)) {
       toggleFold(t);
@@ -515,25 +511,30 @@ export function mountEditor(cfg) {
     e.preventDefault();
     toggleFold(heading);
   });
+  let enterFromItem = null;
   ed.addEventListener("keydown", (e) => {
+    enterFromItem = null;
     if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "Escape" && !ib.hidden) { hideBar(true); return; }
-    if (e.key === "Enter" && closest("ul.cl")) {
-      setTimeout(() => {
-        const li = closest("li");
-        if (li && li.parentElement.classList.contains("cl")) li.setAttribute("data-chk", "0");
-      }, 0);
-    }
-    if (e.key === "Tab") e.preventDefault(); // nested lists are not supported yet
-    if (!(e.ctrlKey || e.metaKey)) return;
-    const k = e.key.toLowerCase();
-    if (e.shiftKey && !e.altKey && (e.code === "BracketLeft" || e.code === "BracketRight")) {
+    // Ctrl+Alt+1 is already used for heading 1 in rich text. Alt+1 remains the fallback for Ctrl+1.
+    const headingOne = (e.ctrlKey || e.metaKey) && e.altKey && (e.code === "Digit1" || e.key === "1");
+    const action = headingOne ? null : keyAction(e, editorKeys.on);
+    if (["indent", "outdent", "bullet", "cycle", "done", "star", "up", "down"].includes(action)) {
       e.preventDefault();
-      foldAtCaret(e.code === "BracketLeft");
-    } else if (e.altKey && k === "h") {
+      lineAction(action);
+      return;
+    }
+    if (action === "enter") enterFromItem = closest("li");
+    if (action === "highlight") {
       e.preventDefault();
       toggleHighlight();
       schedule();
+      return;
+    }
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.shiftKey && !e.altKey && (e.code === "BracketLeft" || e.code === "BracketRight")) {
+      e.preventDefault();
+      foldAtCaret(e.code === "BracketLeft");
     } else if (e.shiftKey && !e.altKey && (e.key === "." || e.key === ">" || e.key === "," || e.key === "<")) {
       e.preventDefault();
       stepSize(e.key === "." || e.key === ">" ? 1 : -1);
@@ -553,7 +554,12 @@ export function mountEditor(cfg) {
       schedule();
     }
   });
-  ed.addEventListener("input", () => {
+  ed.addEventListener("input", (e) => {
+    if (e.inputType === "insertParagraph" && enterFromItem) {
+      const item = closest("li");
+      if (item && item !== enterFromItem) delete item.dataset.m;
+    }
+    enterFromItem = null;
     schedule();
     applyFolds();
     if (img) placeBar();
@@ -575,7 +581,7 @@ export function mountEditor(cfg) {
     getMd: () => htmlToMd(ed),
     // Replace the text from outside (another view saved). The caller decides when it is safe (not typing).
     setMd(md) {
-      ed.innerHTML = mdToHtml(md || "", cfg.fileUrl);
+      loadInto(ed, md || "", cfg.fileUrl);
       last = htmlToMd(ed);
       hideBar(true);
       markEmpty();
@@ -585,7 +591,7 @@ export function mountEditor(cfg) {
     // Take the text another view saved, unless the user is typing here.
     syncFrom(md) {
       if (this.isBusy()) return;
-      if ((md || "").trim() !== htmlToMd(ed).trim()) this.setMd(md);
+      if ((md || "") !== htmlToMd(ed)) this.setMd(md);
     },
     isBusy: () => ed.contains(document.activeElement) || ib.contains(document.activeElement) || timer !== null || pending > 0,
     contains: (n) => root.contains(n),

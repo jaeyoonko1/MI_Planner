@@ -40,6 +40,18 @@ def test_read_write_content(client) -> None:
     assert (client.vault_dir / "h" / "index.html").is_file()
 
 
+def test_note_preserves_mixed_line_endings(client) -> None:
+    client.post("/api/pages", json={"title": "line-endings"})
+    content = "# 제목\r\n\r\n```\n한글\r```\n"
+    path = {"path": "line-endings"}
+    stored = client.vault_dir / "line-endings" / "index.md"
+    stored.write_bytes(content.encode("utf-8"))
+    assert client.get("/api/pages", params=path).json()["content"] == content
+    updated = content.replace("제목", "수정")
+    assert client.put("/api/pages", params=path, json={"content": updated}).json()["content"] == updated
+    assert stored.read_bytes() == updated.encode("utf-8")
+
+
 def test_rename_move_order(client) -> None:
     client.post("/api/pages", json={"title": "a"})
     client.post("/api/pages", json={"title": "b"})

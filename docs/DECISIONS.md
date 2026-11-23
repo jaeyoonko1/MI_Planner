@@ -104,6 +104,8 @@ XML/INI/TXT 범용 파서를 내장하고, 설비사별 차이는 `parsers/<vend
 - 상세: SPEC 4.2.1.
 - **구현 (P2B-02)**: `web/js/lineeditor.js` + `lineeditor-core.js`. `Ctrl+1`·`Alt+1`·`Ctrl+Alt+1` 세 가지 모두 표시 순환으로 받는다(브라우저가 가로채는 키는 도움말의 '키 확인'으로 사용자가 직접 확인). 형광펜 `Ctrl+Alt+H`/`Alt+Shift+H`, 별표 `Ctrl+Alt+S`/`Alt+Shift+S`. Tab·Shift+Tab·Enter·Backspace는 단축키 토글과 무관하게 항상 동작. 단축키 토글은 브라우저별 `localStorage`(`mi.editorKeys`). 형광펜 저장은 `<mark>…</mark>`.
 
+- **노트·이슈 메모 (P3-02R)**: 표시 순환은 Ctrl+1·Alt+1. Ctrl+Alt+1은 Final 시안의 제목 1 단축키로 유지한다. 다른 블록 편집 시 읽기 전용 블록과 기존 구분 줄바꿈을 보존한다.
+
 ### D-22 할일 항목은 사용자 정의 (고정 컬럼 폐기) — 확정 (2026-11-24)
 우선순위·요청자·제품 등은 고정 컬럼이 아니라 `task_fields`(항목 정의) + `tasks.props`(값 JSON). 선택지는 입력하며 추가, 필터·행 메타는 정의에서 자동 생성. 텍스트 `키:값` 토큰으로도 입력 가능.
 - 이유: 보고 싶은 항목이 그때그때 바뀐다. P2-03의 `priority`·`requester` 컬럼은 그걸 못 해서 마이그레이션 필요(P2B에서 호환 방식 확정).

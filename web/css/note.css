@@ -9,11 +9,17 @@
 .note-editor img { max-width: 100%; border-radius: 4px; }
 .note-editor code { background: var(--bg); border-radius: 4px; padding: 0 4px; font-family: Consolas, monospace; }
 .note-editor ul, .note-editor ol { margin: 4px 0; padding-left: 24px; }
-.note-editor ul.cl { list-style: none; padding-left: 4px; }
-.note-editor ul.cl > li { position: relative; padding-left: 26px; }
-.note-editor ul.cl > li::before { content: "☐"; position: absolute; left: 0; cursor: pointer; color: var(--muted); }
-.note-editor ul.cl > li[data-chk="1"]::before { content: "☑"; color: var(--accent); }
-.note-editor ul.cl > li[data-chk="1"] { color: var(--muted); text-decoration: line-through; }
+.note-editor > [data-indent] { padding-inline-start: calc(var(--note-depth) * 22px); }
+.note-editor li[data-m] { list-style: none; position: relative; }
+.note-editor li[data-m]::before { content: "☐"; position: absolute; left: -20px; cursor: pointer; color: var(--muted); }
+.note-editor li[data-m="x"]::before { content: "☑"; color: var(--accent); }
+.note-editor li[data-m="*"]::before { content: "★"; color: var(--yellow); }
+.note-editor li[data-m="!"]::before { content: "!"; color: var(--red); font-weight: 800; }
+.note-editor [data-raw] { overflow: auto; margin: 6px 0; padding: 4px 8px; border-left: 2px solid var(--line-2); background: var(--panel-2); }
+.note-editor [data-raw] pre, .note-editor [data-raw] blockquote { margin: 0; }
+.note-editor [data-raw] table { border-collapse: collapse; }
+.note-editor [data-raw] :is(th, td) { padding: 2px 8px; border: 1px solid var(--line); }
+.note-editor [data-raw] .rb-plain { white-space: pre-wrap; }
 .note-bar .grp { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
 .note-bar .lab { font-size: 11px; color: var(--muted); margin-right: 2px; }
 .note-bar .chip.sw { width: 20px; height: 20px; padding: 0; min-width: 20px; border-radius: 50%; }

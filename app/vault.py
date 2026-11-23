@@ -173,13 +173,13 @@ class Vault:
         page = self._dir(rel)
         meta = self._read_meta(page)
         content_file = page / _content_file(meta.get("type", "note"))
-        content = content_file.read_text(encoding="utf-8") if content_file.is_file() else ""
+        content = content_file.read_bytes().decode("utf-8") if content_file.is_file() else ""
         return {"path": self._rel(page), "meta": meta, "content": content}
 
     def write(self, rel: str, content: str) -> dict[str, Any]:
         page = self._dir(rel)
         meta = self._read_meta(page)
-        (page / _content_file(meta.get("type", "note"))).write_text(content, encoding="utf-8")
+        (page / _content_file(meta.get("type", "note"))).write_bytes(content.encode("utf-8"))
         self._write_meta(page, meta)
         return self.read(rel)
 

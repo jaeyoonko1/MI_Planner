@@ -3,33 +3,155 @@
 <!-- Open http://127.0.0.1:8765/test/mdconv.html — every line should start with PASS. -->
 <pre id="out">running…</pre>
 <script type="module">
-import { mdToHtml, htmlToMd } from "/js/mdconv.js";
-const rt = (md) => { const d = document.createElement("div"); d.innerHTML = mdToHtml(md); return htmlToMd(d); };
-const cases = {
+import { mdToHtml, htmlToMd, loadInto } from "/js/mdconv.js";
+import { runNoteLineAction } from "/js/note-lines.js";
+const load = (md) => { const d = document.createElement("div"); loadInto(d, md); return d; };
+// untouched: the file is opened and saved without edits
+const rt = (md) => htmlToMd(load(md));
+// Recompute editable block content while retaining the source positions and read-only originals.
+const rw = (md) => {
+  const d = load(md);
+  for (const n of d.children) if (!n.hasAttribute("data-raw")) n.removeAttribute("data-sig");
+  return htmlToMd(d);
+};
+const res = [];
+const ok = (cond, name, info = "") => res.push(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : "\n  " + info}`);
+const show = (v) => JSON.stringify(v);
+
+// ---- canonical files: original == 1st save == 2nd save, both untouched and fully rewritten
+const canon = {
   "heading+para": "# 제목\n\n본문 한 줄\n",
   "inline": "**굵게** *기울임* ~~취소~~ `code`\n",
-  "allowed html": '<u>밑줄</u> <mark style="background:#fff176">형광</mark> <span style="color:#d93025;font-size:22px">색크기</span>\n',
+  "allowed html": '<u>밑줄</u> <mark style="background:#a5d8ff">파랑</mark> <span style="color:#d93025;font-size:22px">색크기</span>\n',
   "lists": "- a\n- b\n\n1. x\n2. y\n\n- [ ] 할일\n- [x] 완료\n",
   "image": "![](files/img-20261124-101010.png)\n",
   "image widths": "![](files/a.png){size=small}\n\n![](files/b.png){width=480}\n\n![](files/c.png){size=orig}\n\n![](files/d.png)\n",
   "escapes": "별표 \\*가 \\* 그대로 \\<script> 와 EQ_A01\n",
-  "line start": "\\# 해시로 시작\n\n\\- 대시로 시작\n\n1\\. 숫자로 시작\n",
+  "line start": "\\# 해시로 시작\n\n\\- 대시로 시작\n\n1\\. 숫자로 시작\n\n\\> 꺾쇠로 시작\n\n\\| 파이프로 시작\n\n\\---\n\n\\#### 넷\n",
   "multi-line para": "첫줄\n둘째줄\n",
   "bold italic": "***둘다***\n",
+  // P3-02R: journal line model
+  "nested list": "- 상위\n  - 하위\n    - 더 하위\n  - 하위2\n- 상위2\n",
+  "all marks": "- [ ] 할일\n- [x] 완료\n- [*] 별표\n- [!] 긴급\n  - [ ] 하위 할일\n  - [*] 하위 별표\n",
+  "marks without bullets text": "- 그냥\n  - [!] 긴급\n- 다시 그냥\n",
+  "journal highlight": "- <mark>형광</mark> 줄\n  - [*] 앞 <mark>하위 형광</mark> 뒤\n\n문단 <mark>형광</mark>\n",
+  "styled yellow keeps its spelling": '- <mark style="background:#fff176">노랑</mark>\n',
+  "nested ordered": "1. 하나\n  - 하위\n2. 둘\n",
+  "mark-looking text is escaped": "- \\[x] 글자일 뿐\n",
+  "empty items": "- \n- [ ]\n  - [x]\n".replace(/ \n/g, "\n"),
+  "korean marks": "- [*] 한글 별표 항목\n  - [!] 한글 긴급 <mark>형광</mark>\n",
 };
-const res = [];
-for (const [name, md] of Object.entries(cases)) {
-  const once = rt(md), twice = rt(once);
-  res.push(`${once === md && twice === md ? "PASS" : "FAIL"} ${name}` + (once === md ? "" : `\n  in : ${JSON.stringify(md)}\n  out: ${JSON.stringify(once)}`));
+for (const [name, md] of Object.entries(canon)) {
+  for (const [how, f] of [["untouched", rt], ["rewritten", rw]]) {
+    const once = f(md), twice = f(once);
+    ok(once === md && twice === md, `${how}: ${name}`, `in : ${show(md)}\n  1st: ${show(once)}\n  2nd: ${show(twice)}`);
+  }
 }
+
+// ---- files the app did not write: untouched stays byte-identical (and rewriting settles after one save)
+const foreign = {
+  "code fence": "문장\n\n```python\n# not a heading\n\n- not a list\n**x**\n```\n\n끝\n",
+  "tilde fence": "~~~\nraw <b>\n~~~\n",
+  "unclosed fence": "```\nraw 1\n\nraw 2\n",
+  "table": "| A | B |\n| --- | --- |\n| 1 | 2 |\n\n끝\n",
+  "table without outer pipes": "A | B\n--- | ---\n1 | 2\n",
+  "table without outer pipes row": "|a|b|\n|:-|-:|\n|1|2|\n",
+  "quote": "> 인용 1\n> 인용 2\n\n본문\n",
+  "html comment": "<!-- column -->\n\n<!--\n여러 줄\n-->\n\n본문\n",
+  "deep heading and rule": "#### 넷째\n\n---\n\n본문\n",
+  "star/plus bullets": "* a\n+ b\n  * c\n",
+  "uppercase X mark": "- [X] 완료\n",
+  "four-space nesting": "- a\n    - b\n        - c\n",
+  "tab nesting": "- a\n\t- b\n",
+  "extra blank lines": "# A\n\n\n\n본문\n\n\n",
+  "no blank between blocks": "# A\n본문\n- a\n- b\n다음\n",
+  "no trailing newline": "# 제목\n\n본문",
+  "leading blank lines": "\n\n# 제목\n\n본문\n",
+  "crlf": "# 제목\r\n\r\n- a\r\n  - b\r\n\r\n```\r\nraw\r\n```\r\n",
+  "mixed line endings": "# 제목\r\n\r\n```\n- A\r```\n\n본문\r\n",
+  "trailing spaces": "문장  \n둘째 줄  \n\n- a  \n",
+  "mixed everything": "# 보고\n\n> 요약\n\n- [x] 완료\n  - [*] 하위\n\n```sh\necho hi\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n[[링크]] → 할일 #12\n",
+};
+for (const [name, md] of Object.entries(foreign)) {
+  const once = rt(md), twice = rt(once);
+  ok(once === md && twice === md, `untouched: ${name}`, `in : ${show(md)}\n  out: ${show(once)}`);
+  const w1 = rw(md), w2 = rw(w1);
+  ok(w1 === w2, `rewritten settles: ${name}`, `1st: ${show(w1)}\n  2nd: ${show(w2)}`);
+}
+// rewriting must never lose a code fence / table / quote / comment line (these only ever pass through)
+for (const name of ["code fence", "table", "quote", "html comment"]) {
+  const md = foreign[name];
+  const d = load(md);
+  d.querySelector("p, div:not(.raw)")?.append?.("");
+  ok(htmlToMd(d) === md, `raw blocks survive an unrelated edit: ${name}`, show(htmlToMd(d)));
+}
+
+// ---- editing one thing changes only that thing
+{
+  const md = "# 제목\n\n```\n# 코드\n\n- 목록 아님\n```\n\n- 상위\n  - 하위\n- [*] 별표\n\n> 인용\n\n\n마지막\n";
+  const d = load(md);
+  d.querySelector("h1").append(" 단어");
+  const want = md.replace("# 제목", "# 제목 단어");
+  ok(htmlToMd(d) === want, "one word in a heading rewrites nothing else", show(htmlToMd(d)));
+  const d2 = load(md);
+  d2.querySelector("li[data-m='*']").setAttribute("data-m", "!");
+  ok(htmlToMd(d2) === md.replace("- [*] 별표", "- [!] 별표"), "changing one mark rewrites only that line", show(htmlToMd(d2)));
+  const d3 = load(md);
+  d3.querySelector(".raw[data-k='quote']").remove();
+  ok(htmlToMd(d3) === md.replace("> 인용\n\n\n", ""), "deleting a raw block removes just it", show(htmlToMd(d3)));
+  const d4 = load(md);
+  const last = d4.lastElementChild;
+  last.after(Object.assign(document.createElement("div"), { textContent: "새 문단" }));
+  ok(htmlToMd(d4) === md + "\n새 문단\n", "appended paragraph follows with one blank line", show(htmlToMd(d4)));
+  const d5 = load(md);
+  d5.querySelector("ul li").append(document.createTextNode(" 추가"));
+  ok(htmlToMd(d5) === md.replace("- 상위\n  - 하위", "- 상위 추가\n  - 하위"), "editing a list item keeps nesting", show(htmlToMd(d5)));
+  const d6 = load("a\n\nb\n");
+  d6.firstElementChild.textContent = "";
+  ok(htmlToMd(d6) === "b\n", "emptied paragraph disappears", show(htmlToMd(d6)));
+}
+
+// ---- reader: structure
+{
+  const d = load("- 상위\n  - [x] 하위\n    - [*] 별\n- 둘째\n");
+  const ul = d.querySelector("ul");
+  ok(ul.children.length === 2 && ul.querySelector("ul ul li[data-m='*']") && ul.querySelector("ul > li[data-m='x']"), "reader nests lists and keeps marks", d.innerHTML);
+  const r = load("```js\nlet a = 1 < 2;\n```\n");
+  ok(r.querySelector(".raw pre code")?.textContent === "let a = 1 < 2;" && r.querySelector(".raw").contentEditable === "false", "code fence is read-only text", r.innerHTML);
+  const tb = load("| A | B |\n| - | - |\n| 1 | 2 |\n");
+  ok(tb.querySelectorAll(".raw table th").length === 2 && tb.querySelectorAll(".raw table td").length === 2, "table is shown as a table", tb.innerHTML);
+}
+
+// ---- security and cleanup (unchanged behaviour)
 const d = document.createElement("div");
 d.innerHTML = '<div><span style="color:#123456;font-size:20px">x</span><font face="a">y</font><a href="http://e.com">z</a></div>';
 const dropped = htmlToMd(d);
-res.push(`${dropped === "xyz\n" ? "PASS" : "FAIL"} disallowed style/tags dropped -> ${JSON.stringify(dropped)}`);
+ok(dropped === "xyz\n", "disallowed style/tags dropped", show(dropped));
 const h = mdToHtml('<scr' + 'ipt>alert(1)</scr' + 'ipt> <img src=x onerror=1> <span style="color:red;x:y">q</span>');
 const probe = document.createElement("div");
 probe.innerHTML = h;
 const bad = probe.querySelector("script,img") || [...probe.querySelectorAll("*")].find((e) => [...e.attributes].some((a) => /^on/i.test(a.name)));
-res.push(`${bad ? "FAIL" : "PASS"} reader neutralises raw html`);
-document.getElementById("out").textContent = res.join("\n");
+ok(!bad, "reader neutralises raw html");
+const hostile = load('```\n<script>alert(1)<\/script><img src=x onerror=1>\n```\n\n| <img src=x onerror=1> |\n|---|\n\n> <b onclick=1>q</b>\n');
+ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")].some((e) => [...e.attributes].some((a) => /^on/i.test(a.name))), "raw blocks cannot inject html", hostile.innerHTML);
+
+{
+  const editor = load("상위\n하위\n마지막\n");
+  editor.contentEditable = "true";
+  document.body.append(editor);
+  editor.focus();
+  getSelection().collapse(editor.children[1].firstChild, 0);
+  runNoteLineAction(editor, "indent");
+  ok(htmlToMd(editor) === "상위\n  하위\n마지막\n", "Tab indents the selected plain line", show(htmlToMd(editor)));
+  runNoteLineAction(editor, "outdent");
+  ok(htmlToMd(editor) === "상위\n하위\n마지막\n", "Shift+Tab restores plain line depth");
+  runNoteLineAction(editor, "indent");
+  getSelection().collapse(editor.children[0].firstChild, 0);
+  runNoteLineAction(editor, "down");
+  ok([...editor.children].map(n => n.textContent + (n.dataset.indent || "")).join(",") === "마지막,상위,하위1",
+     "Alt+Down moves a plain parent with its child");
+  editor.remove();
+}
+const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
+document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");
 </script>

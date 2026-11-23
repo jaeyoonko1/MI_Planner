@@ -31,11 +31,13 @@ def merge_texts(body: str, note: str) -> tuple[str, bool]:
     """Combine a page body and an old memo. Returns (text, merged) - merged is True only when both had
     different content, in which case the memo is appended under a heading so nothing is dropped."""
     b, n = (body or "").strip(), (note or "").strip()
-    if not n or n == b:
+    body_key = b.replace("\r\n", "\n").replace("\r", "\n")
+    note_key = n.replace("\r\n", "\n").replace("\r", "\n")
+    if not n or note_key == body_key:
         return body or "", False
     if not b:
         return note, False
-    if n in b:  # the memo text is already part of the body
+    if note_key in body_key:  # the memo text is already part of the body
         return body, False
     return f"{body.rstrip()}\n\n{MERGE_HEADING}\n\n{n}\n", True
 

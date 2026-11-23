@@ -2,6 +2,15 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · P3-02R
+- 한 일: 앞선 미커밋 변환기 작업을 이어서 공용 노트·이슈 메모에 연결했다. 중첩 목록, 네 가지 표시 및 원문 블록을 왕복 보존한다. 파일 API도 혼합 줄바꿈을 유지하고, 줄바꿈만 다른 기존 이슈 메모는 중복 병합하지 않는다.
+- 한 일: Tab/Shift+Tab(줄과 목록), Ctrl+. 불렛, Ctrl+1/Alt+1 표시 순환, Ctrl+Enter 완료, Alt+↑/↓ 하위 포함 이동을 연결했다. Ctrl+Alt+1은 제목 1로 유지한다.
+- 바뀐 파일: app/(vault, memo).py, web/js/(mdblocks, mdconv, note-lines, note).js, web/css/note.css, web/test/(mdconv.html, run_mdblocks.mjs), tests/(test_pages, test_memo_unify).py, SPEC, DECISIONS, FLOW, WORKLOG.
+- 테스트: pytest 136 passed. Node 블록 분할 28/28. Edge 변환기 99/99 및 실제 페이지 라우트에서 한글 제목 편집 → API 저장, 혼합 줄바꿈·원문 펜스 보존, 목록 표시·다중 선택·마우스·Enter, 이동·접기 회귀 확인.
+- 다음에 할 것 / 막힌 것:
+  - P3-03 단 배치부터. D-20의 `<!-- column -->` 경계와 `_page.json` 너비를 사용해 저장/로딩부터 분리해 진행한다. 이후 P3-06/P3-08, 독립 작업 P4-02.
+  - 일반 줄/목록의 자식 접기와 실제 회사 키보드의 한글 IME·브라우저 키 우선순위는 후속 검증 항목이다. 서로 다른 종류의 중첩 목록을 내어쓸 때는 표시와 종류 보존을 위해 원위치 유지. P1-05 vendor는 P3-06 결정, P2-07/P3-09는 회사 PC에서 진행.
+
 ## 2026-11-24 · Codex · P3-02R (진행 중)
 - 한 일: 공용 노트/메모 편집기의 keydown에 IME `keyCode === 229` 가드를 추가했다. 기존 변환기 변경 네 개는 작업 사본에 보존했다. FLOW 상태는 미완료.
 - 바뀐 파일: web/js/note.js, docs/WORKLOG.md.

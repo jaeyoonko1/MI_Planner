@@ -137,6 +137,16 @@ def test_merge_not_needed_when_one_side_empty_or_contained(env) -> None:
     assert merged and text.startswith("A") and "B" in text and memo.MERGE_HEADING in text
 
 
+def test_legacy_mirror_line_endings_do_not_duplicate_memo(env) -> None:
+    c, tmp = env
+    body = "# 제목\r\n\r\n본문\r\n"
+    tid, rel = legacy(c, tmp, "# 제목\n\n본문\n", "")
+    (tmp / "vault" / rel / "index.md").write_bytes(body.encode("utf-8"))
+    result = c.get(f"/api/todos/{tid}")
+    assert result.json()["note"] == body
+    assert not result.json()["memo_merged"]
+
+
 def test_open_page_of_legacy_pair_unifies_before_editing(env) -> None:
     c, tmp = env
     tid, rel = legacy(c, tmp, "남겨야 할 메모", "본문")
