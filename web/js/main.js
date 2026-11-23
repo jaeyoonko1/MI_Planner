@@ -7,6 +7,7 @@ import { flushNote, renderNote } from "./note.js";
 import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
 import { renderWeek } from "./week.js";
+import { renderStructure } from "./structure.js";
 import { hub } from "./hub.js";
 import { closeInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
@@ -116,12 +117,16 @@ async function route() {
     return openMonth(todayISO().slice(0, 7));
   }
   const isMonth = path && MONTH_PAGE.test(path);
-  const name = screen === "todos" || screen === "today" ? screen : week ? "week" : isMonth ? "month" : "";
+  const struct = screen.match(/^structure(?:\/(classes))?$/);
+  const name = screen === "todos" || screen === "today" ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
   showScreen(name);
-  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : struct ? ["구조", ...(struct[1] ? ["분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
   const fail = (e) => viewEl.replaceChildren(errorState(e.message, route));
   if (screen === "today") {
     return renderToday(viewEl).catch(fail);
+  }
+  if (struct) {
+    return renderStructure(viewEl, struct[1] ? "classes" : "tree").catch(fail);
   }
   if (week) {
     return renderWeek(viewEl, week[1], (d) => { location.hash = `#/week/${d}`; }).catch(fail);
@@ -221,6 +226,7 @@ function showAddForm(parent) {
 document.addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() !== "n" || e.ctrlKey || e.metaKey || e.altKey) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+  if (document.querySelector("dialog[open]")) return;
   e.preventDefault();
   if (location.hash === "#/todos" && quickInput) quickInput.focus();
   else {

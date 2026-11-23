@@ -2,6 +2,16 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P2B-07
+- 한 일: **구조 화면 `#/structure`**(사이드바 '구조') — 계층 바(모양+이름 칩, 에픽 › 유형 › 이슈), 분류별 묶음 읽기 보기(접기·완료율), 규칙이 깨지면 자유 배치 + 사유 안내. **계층 편집 창**(네이티브 dialog): 분류 기준/자유 배치 칩, 끌기·↑↓·Alt+↑↓ 순서 변경, 기존 분류 추가, 새 분류 만들기, 모양 6종×색 6종 선택(모양·이름 병기), '보기에서 제외', 적용(원자적 PUT)/취소(서버 호출 없음). **분류 관리 `#/structure/classes`**: 영향 이슈 수·선택지별 건수·위치 규칙 참조, 이름 바꾸기, 선택지 추가/삭제(비우기·옮기기), 구조 보기에서만 제외, 보관·복원, 값까지 완전 삭제(확인 창, 규칙 참조·기본 항목은 차단). 서버: 마이그레이션 004(epic·type 시드), `app/repositories/structure.py`·`routers/structure.py`, 설정은 `settings.structure_view`(재시작 후 복원). D-26.
+- 바뀐 파일: migrations/004, app/(repositories/structure.py, routers/structure.py, main.py), web/(index.html, css/structure.css·theme.css, js/structure·leveldialog·classes·sheet·levels·api·main·shell.js), tests/(test_structure.py 신규, test_db·test_task_fields 기대값), docs/(SPEC, DECISIONS D-26), project_flow.html.
+- 테스트: pytest 79 passed(신규 6: 초기 보기, 적용·복원·새 분류, 잘못된 적용 무변경, 제외 vs 보관→자유 모드, 영향·규칙 참조, 자유 모드 저장). 브라우저(격리 DB, 다크·라이트, 콘솔 오류 없음)에서 추가·순서(버튼·Alt 키·드래그 이벤트)·새 분류·모양/색·취소(서버 불변)·적용, 선택지 옮기며 삭제, 보관 확인 → 자유 배치 전환 확인.
+- 다음에 할 것 / 막힌 것:
+  - 미리보기 브라우저가 모달 dialog를 스크린샷에서 확대·잘라 보여, 스크린샷은 showModal을 비모달로 대체해 찍음. 실제 모달 동작(Esc·배경 클릭·포커스 복귀)과 실제 마우스 드래그는 Edge에서 사람이 확인 필요. 1280px 확인 안 함(1024px만).
+  - 구조 화면은 읽기 보기만(그룹 이동·재정렬·복사·자유 배치 편집·전체 접기 버튼은 P2B-08). 자유 배치의 부모·순서 저장은 아직 없음(모드와 사유만 저장).
+  - 새 분류는 선택지 없이 생성되므로 이슈에 값을 주려면 분류 관리에서 선택지를 먼저 추가해야 함(빠른 추가·상세 패널은 선택지가 있어야 칩이 뜸). 계층에 `person` 분류(요청자 등)를 쓰는 경우 그룹명은 입력된 이름 그대로.
+  - 분류 순서 변경(`PUT /fields/order`)·필터/행 노출 토글·위치 규칙 편집 화면은 범위 밖.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P2B-05
 - 한 일: **간헐 500 수정** — 원인은 SQLite 잠김이 아니라 FastAPI가 `yield` 의존성의 연결을 생성/종료 스레드가 다르게 처리해 `sqlite3.ProgrammingError`(스레드 검사)가 나던 것. `db.connect`에 `check_same_thread=False` + `busy_timeout` 추가, 재현 테스트 2개. **서버**: 마이그레이션 003(`tasks.mark`), 일지 줄↔할일 양방향 동기화(`app/journal_links.py`: 제목·완료·★!·계획일 이동·하위 줄 동반 이동·복제 줄 연결 해제·승격 중복 방지·같은 제목 재사용), 할일 목록 필터(`ids`·`planned_from/to`·`due_from/to`·`unplanned`·`marked`·`open_only`), 오늘 API 확장. **화면**: 오늘(납기 임박/★!/오늘 일지 탭), 주간 신규(`#/week[/날짜]`, 이전·이번·다음 주, 주말 토글, 계획/납기/날짜 없음 탭, 확대), 월간(트레이·드롭·주 헤더·주말/납기/단축키 칩), 할일(빠른 추가 상세 칩 + 마지막 선택 기본값·끄기·비우기, `@사람 ~날짜 ! 필드:값` 입력, 칩 필터, 행 한 번 클릭 이름 변경·더블클릭 상세), 우측 상세 패널(상태·우선순위·표시·계획일·납기·요청자·사용자 정의 칩, 메모 자동 저장, 삭제 확인), 토스트(되돌리기·다시 시도), 오류·빈·로딩 상태. 줄 편집기에 이슈 칩(#id·납기·요청자)·이동 손잡이·더블클릭=상세 추가. 공통 `hub.js`가 한 화면의 편집기·목록을 같은 응답으로 갱신.
 - 바뀐 파일: app/(db.py, journal.py, journal_links.py, repositories/tasks.py, routers/tasks·journal·dashboard.py), migrations/003_task_mark.sql, web/(index.html, css/screens.css·style.css, js/hub·ui·toast·dayeditor·taskrow·inspector·quickadd·week·today·todos·journal·lineeditor·main·api.js), tests/(test_journal_links.py, test_db.py 외 기대값 갱신), docs/(SPEC, DECISIONS D-25), project_flow.html.

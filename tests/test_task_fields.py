@@ -42,7 +42,7 @@ def test_migration_moves_existing_data_to_props(tmp_path: Path) -> None:
     )
     conn.execute("INSERT INTO tasks (title, created_at, updated_at) VALUES ('b', 'x', 'x')")
     conn.commit()
-    assert db.migrate(conn) == ["002_task_fields.sql", "003_task_mark.sql"]
+    assert db.migrate(conn) == ["002_task_fields.sql", "003_task_mark.sql", "004_structure_defaults.sql"]
     a, b = (dict(r) for r in conn.execute("SELECT * FROM tasks ORDER BY id"))
     assert json.loads(a["props"]) == {
         "priority": 1, "requester": "EQ-A01 담당", "due_date": "2026-12-01", "planned_date": "2026-11-30",
@@ -50,15 +50,16 @@ def test_migration_moves_existing_data_to_props(tmp_path: Path) -> None:
     assert json.loads(b["props"]) == {"priority": 2}
     assert (a["priority"], a["due_date"], a["title"]) == (1, "2026-12-01", "a")  # columns untouched
     keys = [r["key"] for r in conn.execute("SELECT key FROM task_fields ORDER BY sort_order")]
-    assert keys == ["priority", "requester", "due_date", "planned_date"]
+    assert keys == ["priority", "requester", "due_date", "planned_date", "epic", "type"]
     conn.close()
 
 
 def test_builtin_fields_listed(client) -> None:
     items = client.get("/api/todos/fields").json()["items"]
-    assert [f["key"] for f in items] == ["priority", "requester", "due_date", "planned_date"]
+    assert [f["key"] for f in items][:4] == ["priority", "requester", "due_date", "planned_date"]
     assert items[0]["options"][0] == {"value": 1, "label": "높음", "color": "red"}
-    assert all(f["builtin"] for f in items)
+    assert all(f["builtin"] for f in items[:4])
+    assert [f["key"] for f in items if not f["builtin"]] == ["epic", "type"]
 
 
 def test_legacy_fields_and_props_stay_in_sync(client) -> None:

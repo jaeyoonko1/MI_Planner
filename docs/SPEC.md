@@ -383,6 +383,13 @@ vault/
 - 필터: 기존 필터는 그대로, 추가로 `?field_<key>=a,b`(한 항목 안에서는 OR, 항목끼리 AND; multi는 하나라도 포함). 없는 항목은 404.
 - 위치 규칙: `GET/PUT /api/todos/page-rules` `{rules:[{conditions:[{field,op,value?}],path}]}` → `settings.page_rules`(JSON). op는 `is`·`not`·`set`·`empty`. 저장 시 항목·선택지·템플릿 변수(`{연}` `{월}` `{에픽위치}` 또는 항목 key·이름)가 실제로 있는지 검증한다.
 
+**구조 보기·분류 관리 (P2B-07, 마이그레이션 `004_structure_defaults.sql`)**
+- 004: 기본 분류 `epic`(에픽)·`type`(유형)을 일반 `choice` 항목(builtin=0)으로 시드 — 이름 변경·보관·삭제 가능. 초기 보기는 에픽 → 유형 → 이슈.
+- 보기 설정은 `settings.structure_view`(JSON `{mode:"fields"|"free", levels:[key…], styles:{key:{icon,color}}}`)에 저장되고 재시작 후 복원된다. 이슈의 분류 값(`tasks.props`)과 완전히 별개다. 계층 후보는 단일값 항목(`choice`·`person`, 보관 안 됨)뿐.
+- `GET /api/structure/view` → `{mode, levels:[{key,label,icon,color}], available:[…], free_reason, saved, icons, colors}`. 저장된 계층에 삭제·보관된 분류가 있으면 **규칙이 깨진 것**으로 보고 `mode:"free"` + `free_reason`을 돌려준다(저장 값은 보존).
+- `PUT /api/structure/view` `{mode, levels:[key | "new:<tmp>"], new_fields:[{tmp,label}], styles}` — 전부 검증한 뒤 새 분류(`c1`, `c2`… choice 항목)를 만들고 설정을 한 번에 저장(적용 = 원자적, 취소 = 서버 호출 없음). 오류: 중복·예약 이름 409/400, 계층 8단계 초과, 알 수 없는 아이콘·색(`layers grid box person flag ring` × `violet mint blue peach pink yellow`).
+- `GET /api/structure/classes` → 분류별 `{used_by, rules[], in_view, archived, builtin, groupable}`; `GET /api/structure/classes/{key}/impact` → `{used_by, total_tasks, options:[{value,label,count,rules[]}], rules[], in_view}`. 삭제·보관·선택지 이동은 기존 `/api/todos/fields` API(`DELETE`, `?purge=true`, `PATCH option_moves`)를 그대로 쓴다.
+
 ### tasks
 | 컬럼 | 타입 | 설명 |
 |---|---|---|

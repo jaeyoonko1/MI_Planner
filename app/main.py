@@ -16,6 +16,7 @@ from app.routers import html_pages
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
 from app.routers import pages
+from app.routers import structure as structure_router
 from app.routers import task_fields as task_fields_router
 from app.routers import tasks as tasks_router
 from app.vault import DEFAULT_VAULT_PATH, Vault, VaultError
@@ -40,6 +41,7 @@ def create_app(
     app.include_router(journal_router.router)
     app.include_router(task_fields_router.router)  # before tasks (/fields vs /{task_id})
     app.include_router(tasks_router.router)
+    app.include_router(structure_router.router)
     app.include_router(settings_router.router)
     app.include_router(dashboard_router.router)
 

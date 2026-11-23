@@ -79,6 +79,7 @@ export async function initShell() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "[" || e.ctrlKey || e.metaKey || e.altKey) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+    if (document.querySelector("dialog[open]")) return;
     e.preventDefault();
     toggleRail();
   });

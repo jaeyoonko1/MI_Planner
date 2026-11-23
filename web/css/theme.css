@@ -16,6 +16,8 @@
   --knob-off: #3a4962; --check-bd: #5d6f8d; --scrim: rgba(0, 4, 12, .55);
   --shadow-pop: 0 18px 50px rgba(0, 0, 0, .5);
   --scroll-thumb: #2c3b57; --scroll-track: transparent;
+  /* structure level colors (P2B-07): always paired with a shape and a name */
+  --lv-violet: #b8a2ff; --lv-mint: #5de1dc; --lv-blue: #8cb5ff; --lv-peach: #ffbf84; --lv-pink: #f5a9ce; --lv-yellow: #e5d580;
   /* line editor tokens (lineeditor.css) */
   --le-star: #f5b73d; --le-urgent: #ef5a78; --le-done: #34c98a;
   --le-hl: rgba(255, 210, 123, .3); --le-hl-text: inherit;
@@ -49,6 +51,7 @@
   --knob-off: #c5ccd6; --check-bd: #9aa7bd; --scrim: rgba(15, 23, 42, .3);
   --shadow-pop: 0 18px 50px rgba(16, 24, 40, .16);
   --scroll-thumb: #c3cbd9;
+  --lv-violet: #6a46d8; --lv-mint: #0b8a86; --lv-blue: #2f6be0; --lv-peach: #b8620a; --lv-pink: #c2397a; --lv-yellow: #8a6d00;
   --le-star: #d27a00; --le-urgent: #d92d20; --le-done: #1a9d5b;
   --le-hl: #ffe9a8; --le-hover: rgba(47, 107, 224, .06); --le-ring: rgba(47, 107, 224, .24);
 }

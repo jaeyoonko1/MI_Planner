@@ -1,0 +1,30 @@
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Depends
+
+from app.repositories import structure as repo
+from app.routers.tasks import get_conn
+
+router = APIRouter(prefix="/api/structure")
+
+
+@router.get("/view")
+def get_view(conn=Depends(get_conn)) -> dict:
+    return repo.get_view(conn)
+
+
+@router.put("/view")
+def put_view(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    return repo.save_view(conn, body)
+
+
+@router.get("/classes")
+def classes(conn=Depends(get_conn)) -> dict:
+    return {"items": repo.overview(conn)}
+
+
+@router.get("/classes/{key}/impact")
+def class_impact(key: str, conn=Depends(get_conn)) -> dict:
+    return repo.impact(conn, key)

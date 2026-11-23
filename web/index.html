@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/lineeditor.css">
   <link rel="stylesheet" href="/css/screens.css">
+  <link rel="stylesheet" href="/css/structure.css">
 </head>
 <body>
   <svg class="sprite" aria-hidden="true" focusable="false">
@@ -42,6 +43,18 @@
     <symbol id="user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4"/></symbol>
     <symbol id="tag" viewBox="0 0 24 24"><path d="M3.5 12.2V5.5a2 2 0 0 1 2-2h6.7l8.3 8.3a2 2 0 0 1 0 2.8l-6.4 6.4a2 2 0 0 1-2.8 0z"/><circle cx="8" cy="8" r="1.2"/></symbol>
     <symbol id="alert" viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 17.4h.01"/></symbol>
+    <symbol id="hier" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="5" rx="1.4"/><rect x="3.5" y="15.5" width="6" height="5" rx="1.4"/><rect x="14.5" y="15.5" width="6" height="5" rx="1.4"/><path d="M12 8.5v3.5M6.5 15.5V12h11v3.5"/></symbol>
+    <symbol id="lv-layers" viewBox="0 0 24 24"><path d="m3 8 9-5 9 5-9 5zM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+    <symbol id="lv-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="lv-box" viewBox="0 0 24 24"><path d="m3 7 9-4 9 4v10l-9 4-9-4zm0 0 9 5 9-5m-9 5v9"/></symbol>
+    <symbol id="lv-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="lv-flag" viewBox="0 0 24 24"><path d="M5 21V3.5l14 3-4 5 4 4-14-2"/></symbol>
+    <symbol id="lv-ring" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
+    <symbol id="lv-issue" viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9z"/></symbol>
+    <symbol id="arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+    <symbol id="grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="2.6"/></symbol>
+    <symbol id="eye-off" viewBox="0 0 24 24"><path d="M3.5 12s3.2-6 8.5-6c1.5 0 2.8.4 4 1M20.5 12s-3.2 6-8.5 6c-1.5 0-2.8-.4-4-1M4 4l16 16"/><path d="M10 10a3 3 0 0 0 4 4"/></symbol>
     <symbol id="d-compact" viewBox="0 0 24 24"><path d="M5 5.5h14M5 9.2h14M5 12.9h14M5 16.6h14M5 20.3h14"/></symbol>
     <symbol id="d-normal" viewBox="0 0 24 24"><path d="M5 6h14M5 10.7h14M5 15.3h14M5 20h14"/></symbol>
     <symbol id="d-cozy" viewBox="0 0 24 24"><path d="M5 6.5h14M5 12h14M5 17.5h14"/></symbol>
@@ -57,6 +70,7 @@
           <a href="#/today" data-screen="today"><svg class="i"><use href="#home"/></svg><span class="lbl">오늘</span></a>
           <a href="#/todos" data-screen="todos"><svg class="i"><use href="#todo"/></svg><span class="lbl">할일</span></a>
           <a href="#/week" data-screen="week"><svg class="i"><use href="#week"/></svg><span class="lbl">주간 일지</span></a>
+          <a href="#/structure" data-screen="structure"><svg class="i"><use href="#hier"/></svg><span class="lbl">구조</span></a>
           <a href="#/month" data-screen="month"><svg class="i"><use href="#cal"/></svg><span class="lbl">월간 일지</span></a>
         </nav>
         <div class="rail-label">페이지<button id="btn-new-root" class="ib" title="최상위 페이지 추가" aria-label="최상위 페이지 추가"><svg class="i s"><use href="#plus"/></svg></button></div>
