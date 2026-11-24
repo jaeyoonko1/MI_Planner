@@ -29,10 +29,10 @@ def _clone_task(conn: sqlite3.Connection, src: dict[str, Any], title: str, overr
     now = _now()
     cur = conn.execute(
         "INSERT INTO tasks (title, status, priority, requester, due_date, planned_date, parent_task_id, "
-        "eval_id, page_path, note, mark, props, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?)",
+        "eval_id, page_path, note, mark, props, level_id, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?, ?, ?, ?, ?)",
         (title, src["status"], src["priority"], src["requester"], src["due_date"], parent_map.get(parent, parent),
-         src["note"], src["mark"], json.dumps(props, ensure_ascii=False), now, now))
+         src["note"], src["mark"], json.dumps(props, ensure_ascii=False), src.get("level_id"), now, now))
     return int(cur.lastrowid)
 
 

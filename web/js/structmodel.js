@@ -1,6 +1,6 @@
 // Structure worksheet model (P2B-08): turns tasks + view (+ free layout) into one row tree for both modes.
 // Group node: { kind: "group", id, label, none, level, key, value, nodeId, assign, children, items, done, parent }
-// Issue node: { kind: "issue", id, task, assign, parent }
+// Issue node: { kind: "issue", id, task, assign, parent } (+ issue hierarchy: level, children, items, done)
 // `assign` = the field values an issue gets by sitting under that node (null removes the value).
 
 export const FOLDER = { key: null, icon: "folder", color: "blue", label: "그룹" };
@@ -84,10 +84,38 @@ export function buildFreeTree(free, tasks, levelByKey) {
   return walk(null, null);
 }
 
+// Issue hierarchy (V-011, Jira style): every row is an issue; children come from parent_task_id. Upper levels
+// (rank > 0) sort before plain issues, then by id (creation order). `items` = all descendants (for done counts).
+export const LEAF = { id: null, label: "이슈", rank: 0, icon: "issue", color: "blue" };
+export const rankOf = (task, levels) => (task?.level_id == null ? 0 : levels.find((l) => l.id === task.level_id)?.rank ?? 0);
+
+export function buildIssueTree(tasks, levels) {
+  const byLevel = new Map((levels ?? []).map((l) => [l.id, l]));
+  const ids = new Set(tasks.map((t) => t.id));
+  const kids = new Map();
+  for (const t of tasks) {
+    const p = t.parent_task_id != null && ids.has(t.parent_task_id) ? t.parent_task_id : null;
+    if (!kids.has(p)) kids.set(p, []);
+    kids.get(p).push(t);
+  }
+  const rank = (t) => byLevel.get(t.level_id)?.rank ?? 0;
+  const walk = (pid, parent, seen) => (kids.get(pid) ?? []).slice().sort((a, b) => rank(b) - rank(a) || a.id - b.id).map((t) => {
+    const n = { kind: "issue", id: `i${t.id}`, task: t, level: byLevel.get(t.level_id) ?? null, assign: {}, parent, children: [] };
+    n.children = seen.has(t.id) ? [] : walk(t.id, n, new Set([...seen, t.id]));
+    n.items = n.children.flatMap((c) => [c.task, ...c.items]);
+    n.done = n.items.filter((x) => x.status === "done").length;
+    return n;
+  });
+  return walk(null, null, new Set());
+}
+
+// A row that opens and closes: a group, or an issue with sub-issues.
+export const hasKids = (n) => Boolean(n && (n.kind === "group" || n.children?.length));
+
 export function flatten(nodes, out = []) {
   for (const n of nodes) {
     out.push(n);
-    if (n.kind === "group") flatten(n.children, out);
+    if (n.children?.length) flatten(n.children, out);
   }
   return out;
 }
@@ -96,7 +124,7 @@ export function flatten(nodes, out = []) {
 export function visibleRows(nodes, folded, depth = 0, out = []) {
   for (const n of nodes) {
     out.push({ node: n, depth });
-    if (n.kind === "group" && !folded.has(n.id)) visibleRows(n.children, folded, depth + 1, out);
+    if (n.children?.length && !folded.has(n.id)) visibleRows(n.children, folded, depth + 1, out);
   }
   return out;
 }

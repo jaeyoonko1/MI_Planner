@@ -64,16 +64,21 @@ export function neighbourAfterRemoval(vis, removed) {
   return [...vis.slice(0, first)].reverse().find((x) => !removed.has(x)) ?? "";
 }
 
-// What to send to the delete API. In the classification view groups are field values, not deletable things.
+// What to send to the delete API. In the classification view a group is a classification value (V-011): deleting it
+// removes that value (the same value under other branches too); "미분류" is not a value and is skipped.
 export function deleteItems(ids, index, { free }) {
   const items = [];
+  const seen = new Set();
   let blockedGroups = 0;
   for (const id of ids) {
     const n = index.get(id);
     if (!n) continue;
     if (n.kind === "issue") items.push({ kind: "issue", id: n.task.id });
     else if (free && n.nodeId != null) items.push({ kind: "group", id: n.nodeId });
-    else blockedGroups++;
+    else if (!free && n.key && !n.none && n.value != null) {
+      const k = `${n.key}=${JSON.stringify(n.value)}`;
+      if (!seen.has(k)) { seen.add(k); items.push({ kind: "value", key: n.key, value: n.value }); }
+    } else blockedGroups++;
   }
   return { items, blockedGroups };
 }

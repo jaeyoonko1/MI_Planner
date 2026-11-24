@@ -24,6 +24,7 @@ class TodoIn(BaseModel):
     note: str | None = None
     props: dict | None = None
     mark: str | None = None
+    level_id: int | None = None
 
 
 class TodoPatch(BaseModel):
@@ -39,6 +40,7 @@ class TodoPatch(BaseModel):
     note: str | None = None
     props: dict | None = None
     mark: str | None = None
+    level_id: int | None = None
 
 
 def get_conn(request: Request) -> Iterator:

@@ -17,9 +17,11 @@ def keys(view, name="levels"):
     return [lv["key"] for lv in view[name]]
 
 
-def test_initial_view_is_epic_type(client) -> None:
+def test_initial_view_is_issue_hierarchy_with_epic_type_ready(client) -> None:
+    # V-011: an unsaved view opens as the issue hierarchy; the classification levels stay ready for 분류 기준
     v = client.get("/api/structure/view").json()
-    assert v["mode"] == "fields" and keys(v) == ["epic", "type"] and not v["saved"]
+    assert v["mode"] == "issues" and keys(v) == ["epic", "type"] and not v["saved"]
+    assert [lv["label"] for lv in v["issue_levels"]] == ["에픽"]
     assert (v["levels"][0]["icon"], v["levels"][0]["color"]) == ("layers", "violet")
     assert "priority" in keys(v, "available") and "due_date" not in keys(v, "available")
 
@@ -91,6 +93,7 @@ def test_impact_reports_rules_and_classes_overview(client) -> None:
     imp = client.get("/api/structure/classes/epic/impact").json()
     assert imp["rules"] == [1] and imp["options"][0]["rules"] == [1]
     assert client.delete("/api/todos/fields/epic?purge=true").status_code == 409
+    client.put("/api/structure/view", json={"mode": "fields", "levels": ["epic", "type"]})  # default is now "issues"
     rows = {c["key"]: c for c in client.get("/api/structure/classes").json()["items"]}
     assert rows["epic"]["rules"] == [1] and rows["epic"]["in_view"] and rows["due_date"]["groupable"] is False
     assert client.get("/api/structure/classes/zzz/impact").status_code == 404

@@ -321,3 +321,22 @@
 .dmode { margin-top: 2px; }
 .stools .tbtn.danger:not(:disabled) { color: var(--red); }
 .srow[aria-selected="true"] + .srow[aria-selected="true"] { box-shadow: inset 2px 0 0 var(--blue), inset 0 1px 0 color-mix(in srgb, var(--blue) 14%, transparent); }
+
+/* V-011 issue hierarchy: upper-level issues read as headers, every level is added/edited in place */
+.srow.issue.head { background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
+.srow.issue.head[aria-selected="true"] { background: var(--sel-bg); }
+.srow.issue.head .stitle { font-weight: 680; letter-spacing: -.02em; }
+.srow.issue .lvname { flex: none; }
+.c-st { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.c-st .cnt.sub { min-width: 0; font-size: 10.5px; color: var(--dim); }
+.hero .btn.pri.hero-add { display: inline-flex; align-items: center; gap: 7px; background: var(--blue-s); border-color: var(--blue); color: var(--on-blue); box-shadow: 0 6px 18px -10px var(--blue); }
+.hero .btn.pri.hero-add:hover { background: var(--blue-s); filter: brightness(1.08); }
+.stools .tbtn svg { width: 14px; height: 14px; }
+.lvname-in { width: 100%; max-width: 260px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font-size: 13px; font-weight: 600; }
+.lvname-in:hover { border-color: var(--line-2); }
+.lvname-in:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; background: var(--panel-2); }
+.lvrow .cnt { min-width: 64px; text-align: right; }
+.lvrow .btn.sm.quiet.danger { color: var(--red) !important; }
+.sheet .pg-row .k:empty { min-height: 0; }
+.sheet .dest { max-height: 46vh; overflow: auto; margin-top: 8px; }
+.insp button.chip-link { border: 0; background: none; cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

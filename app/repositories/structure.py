@@ -8,6 +8,7 @@ import re
 import sqlite3
 from typing import Any
 
+from app.repositories import issue_levels
 from app.repositories import task_fields as tf
 from app.repositories.tasks import TaskError
 
@@ -19,6 +20,7 @@ DEFAULT_LEVELS = ("epic", "type")
 DEFAULT_STYLES = {"epic": ("layers", "violet"), "type": ("grid", "mint")}
 RESERVED_LABELS = {"이슈"}
 MAX_LEVELS = 8
+MODES = ("issues", "fields", "free")  # V-011: "issues" = Jira-style issue hierarchy (parent links), the default
 _NEW = re.compile(r"^new:([A-Za-z0-9_-]{1,24})$")
 
 
@@ -48,7 +50,7 @@ def get_view(conn: sqlite3.Connection) -> dict[str, Any]:
     """Effective view. A broken rule (a saved level was deleted/archived) falls back to free mode."""
     fields = {f["key"]: f for f in tf.list_fields(conn)}
     stored = _stored(conn)
-    mode = "fields"
+    mode = "issues"
     reason = None
     if stored is None:
         keys = [k for k in DEFAULT_LEVELS if k in fields]
@@ -56,7 +58,7 @@ def get_view(conn: sqlite3.Connection) -> dict[str, Any]:
     else:
         keys = [k for k in stored.get("levels", []) if isinstance(k, str)]
         styles = stored.get("styles") if isinstance(stored.get("styles"), dict) else {}
-        mode = "free" if stored.get("mode") == "free" else "fields"
+        mode = stored.get("mode") if stored.get("mode") in MODES else "fields"
     missing = [k for k in keys if k not in fields or not _usable(fields[k])]
     if mode == "fields" and missing:
         names = ", ".join(f"'{fields[k]['label']}'" if k in fields else f"'{k}'" for k in missing)
@@ -68,6 +70,7 @@ def get_view(conn: sqlite3.Connection) -> dict[str, Any]:
     return {
         "mode": mode, "levels": levels, "available": pool, "free_reason": reason,
         "saved": stored is not None, "icons": list(ICONS), "colors": list(COLORS),
+        "issue_levels": issue_levels.list_levels(conn),
     }
 
 
@@ -101,8 +104,8 @@ def save_view(conn: sqlite3.Connection, data: Any) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise TaskError("요청 형식이 올바르지 않습니다.")
     mode = data.get("mode", "fields")
-    if mode not in ("fields", "free"):
-        raise TaskError("mode는 fields 또는 free여야 합니다.")
+    if mode not in MODES:
+        raise TaskError("mode는 issues, fields, free 중 하나여야 합니다.")
     levels = data.get("levels", [])
     if not isinstance(levels, list) or len(levels) > MAX_LEVELS:
         raise TaskError(f"계층은 {MAX_LEVELS}단계까지 둘 수 있습니다.")
@@ -169,8 +172,8 @@ def _value_counts(conn: sqlite3.Connection, field: dict[str, Any]) -> dict[Any, 
 def _in_view(conn: sqlite3.Connection, key: str) -> bool:
     saved = _stored(conn)
     if saved is None:
-        return key in DEFAULT_LEVELS
-    return saved.get("mode") != "free" and key in saved.get("levels", [])
+        return False  # the default view is the issue hierarchy, which groups by no classification
+    return saved.get("mode") == "fields" and key in saved.get("levels", [])
 
 
 def impact(conn: sqlite3.Connection, key: str) -> dict[str, Any]:

@@ -11,7 +11,7 @@ from app import db
 STATUSES = ("todo", "doing", "done", "hold")
 FIELDS = (
     "title", "status", "priority", "requester", "due_date", "planned_date",
-    "parent_task_id", "eval_id", "page_path", "note", "mark",
+    "parent_task_id", "eval_id", "page_path", "note", "mark", "level_id",
 )
 MARKS = (None, "star", "urgent")
 _DATE_FIELDS = ("due_date", "planned_date")
@@ -135,8 +135,11 @@ def _check_parent(conn: sqlite3.Connection, task_id: int | None, parent_id: int 
 
 
 def create(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
+    from app.repositories import issue_levels  # lazy: avoids an import cycle
+
     clean = _prepare(conn, data, None)
     _check_parent(conn, None, clean.get("parent_task_id"))
+    issue_levels.check_placement(conn, None, clean.get("level_id"), clean.get("parent_task_id"))
     now = _now()
     cols = [*clean, "created_at", "updated_at"]
     vals = [*clean.values(), now, now]
@@ -152,6 +155,11 @@ def update(conn: sqlite3.Connection, task_id: int, data: dict[str, Any]) -> dict
     clean = _prepare(conn, data, current)
     if "parent_task_id" in clean:
         _check_parent(conn, task_id, clean["parent_task_id"])
+    if "parent_task_id" in clean or "level_id" in clean:  # V-011: a child never sits above its parent
+        from app.repositories import issue_levels
+
+        issue_levels.check_placement(conn, task_id, clean.get("level_id", current.get("level_id")),
+                                     clean.get("parent_task_id", current.get("parent_task_id")))
     if clean:  # always non-empty: props is rewritten
         sets = ", ".join(f"{k} = ?" for k in clean)
         conn.execute(

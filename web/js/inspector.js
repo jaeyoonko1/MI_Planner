@@ -6,6 +6,7 @@ import { mountEditor } from "./note.js";
 import { mountNoteColumns } from "./note-columns.js";
 import { classRows, toggleMulti } from "./inspector-fields.js";
 import { openPageSheet } from "./pagedialog.js";
+import { openParentSheet } from "./structissue.js";
 import { toast } from "./toast.js";
 import { editableOf, registerContext } from "./contextmenu.js";
 import { deleteTaskUndoable, taskGroups } from "./taskactions.js";
@@ -19,6 +20,7 @@ let panel = null;
 let openId = null;
 let unsub = null;
 let fields = null;
+let levels = []; // V-011 issue levels (에픽 …), top first
 let returnFocus = null;
 
 function ensurePanel() {
@@ -109,6 +111,7 @@ async function write(data) {
 // Always read from the server: classifications are edited in 분류 관리 / 계층 편집 while an issue can stay open.
 // A failed read keeps the last good list instead of caching an empty one.
 async function loadFields() {
+  try { levels = await api.structureLevels(); } catch { /* keep the last list */ }
   try { return await api.todoFields(); } catch (e) {
     if (!fields) toast(`분류를 불러오지 못했어요 · ${e.message}`, { error: true });
     return fields || [];
@@ -142,6 +145,42 @@ function classRow(r) {
     for (const c of r.chips) wrap.append(chip(c.label, r.current.includes(c.value), () => write1(toggleMulti(r.current, c.value).filter((v) => v !== undefined)), c));
   }
   return row(r.label, "tag", wrap);
+}
+
+// V-011: the issue's kind (수준) and its parent - the structure tree reads exactly these two values.
+function levelRow(t) {
+  const items = [...levels.map((l) => [l.id, l.label]), [null, "이슈"]];
+  return row("수준", "hier", chipRow(items, t.level_id ?? null, (v) => write({ level_id: v })));
+}
+
+function parentRow(t) {
+  const parts = [];
+  if (t.parent_task_id != null) {
+    const link = el("button", "chip-link");
+    link.type = "button";
+    const known = hub.task(t.parent_task_id);
+    link.textContent = `#${t.parent_task_id}${known ? ` ${known.title}` : ""}`;
+    if (!known) api.getTodo(t.parent_task_id).then((p) => { hub.putTask(p); link.textContent = `#${p.id} ${p.title}`; }).catch(() => {});
+    link.title = "상위 이슈 열기";
+    link.addEventListener("click", () => openInspector(t.parent_task_id));
+    parts.push(link);
+  } else parts.push(el("span", "chip-note", "최상위"));
+  const change = el("button", "btn quiet sm", "바꾸기…");
+  change.type = "button";
+  change.addEventListener("click", async () => {
+    try {
+      const all = (await api.todos({})).items;
+      openParentSheet({ task: t, tasks: all, levels, onPick: (pid) => write({ parent_task_id: pid }) });
+    } catch (e) { toast(`이슈 목록을 불러오지 못했어요 · ${e.message}`, { error: true }); }
+  });
+  parts.push(change);
+  if (t.parent_task_id != null) {
+    const clear = el("button", "btn quiet sm", "최상위로");
+    clear.type = "button";
+    clear.addEventListener("click", () => write({ parent_task_id: null }));
+    parts.push(clear);
+  }
+  return row("상위", "hier", ...parts);
 }
 
 function row(label, iconId, ...content) {
@@ -230,6 +269,8 @@ function paint(focusTitle) {
   reqInput.addEventListener("change", () => write({ requester: reqInput.value.trim() || null }));
   const props = el("div", "props");
   props.append(
+    levelRow(t),
+    parentRow(t),
     row("상태", "flag", chipRow(STATUS, t.status, (v) => write({ status: v }))),
     row("우선순위", "flag", chipRow(PRIO, t.priority, (v) => write({ priority: v }))),
     row("표시", "star", chipRow(MARKS, t.mark ?? null, (v) => write({ mark: v }))),

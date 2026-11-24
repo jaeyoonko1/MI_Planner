@@ -72,6 +72,12 @@ const index = new Map([
 ]);
 assert.deepEqual(deleteItems(["g1", "i1"], index, { free: true }), { items: [{ kind: "group", id: 7 }, { kind: "issue", id: 11 }], blockedGroups: 0 });
 assert.deepEqual(deleteItems(["g1", "i1", "f"], index, { free: false }), { items: [{ kind: "issue", id: 11 }], blockedGroups: 2 });
+// V-011: classification-view groups are values; the same value under two branches is sent once, 미분류 is skipped
+const vIndex = new Map([
+  ["a", { kind: "group", key: "type", value: "셋업" }], ["b", { kind: "group", key: "type", value: "셋업" }],
+  ["n", { kind: "group", key: "type", value: null, none: true }],
+]);
+assert.deepEqual(deleteItems(["a", "b", "n"], vIndex, { free: false }), { items: [{ kind: "value", key: "type", value: "셋업" }], blockedGroups: 1 });
 
 // ---- typing targets ----
 const fake = (tag, extra = {}) => ({ nodeType: 1, tagName: tag, isContentEditable: false, closest: () => null, ...extra });

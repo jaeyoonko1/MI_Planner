@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Opus) · V-011
+- 한 일: Jira식 이슈 계층(D-48). 상위 수준(에픽 등)도 이슈: 마이그레이션 013(`issue_levels` + `tasks.level_id`, 추가만), `app/repositories/issue_levels.py`(수준 CRUD·순서·삭제(이슈는 한 수준 아래로, 휴지통 복원)·rank 규칙·분류 값→상위 이슈 가져오기), `/api/structure/levels*`. 구조 기본 보기 `issues`(이슈 계층): 히어로 '이슈 추가'(수준·상위 칩, 계속 추가), 헤더 행 = 이슈 제목 + 수준 배지 + 하위 완료 수, 끌어 놓기·Alt+→/←·상위 바꾸기 창, 하위가 있는 이슈 삭제는 하위 올리기/함께 삭제 + Ctrl+Z. 이슈 상세에 수준·상위 행(구조 즉시 반영). 분류 기준 보기의 그룹(분류 값)도 F2 이름 변경·Delete(값만/이슈까지, 되돌리기). 이슈 상세·목록에서 상위/하위가 있는 이슈 삭제도 구조 휴지통 경로(같은 ID·연결 복원). 분류 삭제 불가 원인: API는 정상, 구조가 분류 그룹 삭제를 막고 분류 관리는 사용 중이면 보관만 함.
+- 바뀐 파일: migrations/013_issue_levels.sql, app/repositories/(issue_levels.py 신규, structure.py, structure_trash.py, structure_copy.py, tasks.py), app/routers/(structure.py, tasks.py), web/js/(structissue.js 신규, structure.js, structmodel.js, structselect.js, structdelete.js, inspector.js, taskactions.js, api.js), web/css/structure.css, web/test/(run_issue_tree.mjs 신규, run_structure_undo.mjs), tests/(test_issue_hierarchy.py 신규, test_structure.py), docs/(VOC, DECISIONS, SPEC, DESIGN, WORKLOG), project_flow.html
+- 테스트: pytest 464 passed(test_flow_site 제외 — tzdata), 신규 tests/test_issue_hierarchy.py 10건(수용 흐름+재시작, 수준 CRUD·복원, 분류 값 삭제·복원, 가져오기, 마이그레이션 보존, node 모델). 앱 내 브라우저(임시 DB·가짜 데이터): 에픽 4개 연속 추가 → 하위 이슈 → 상세에서 상위 변경 즉시 반영 → 삭제(하위 올리기/함께) + Ctrl+Z → 수준 추가·삭제·가져오기 → 분류 기준에서 값 이름 변경·삭제·되돌리기.
+- 다음에 할 것 / 막힌 것: 헤더 수준 이름(에픽→유형) 사용자 확인. 형제 수동 순서는 저장하지 않음(수준→번호 순). 자유 배치에서 상세의 분류 값을 바꿔도 묶인 그룹 위치는 그대로(기존 동작, 별도 VOC 후보). 검증 중 다른 세션이 같은 포트(8791)로 요청을 보내 임시 DB가 섞인 일이 있어 포트를 바꿔 재검증함. VERIFY V-011 참고.
+
 ## 2026-11-24 · Codex · V-011 요구 등록
 - 한 일: 사용자의 Jira식 애자일 업무 구조 요구를 단일 VOC V-011(개선, 우선순위 1 추정, L, 대기)로 등록. 모든 계층의 구조 내 이슈 생성·수정·삭제, 상위 소속/헤더 동기화, 분류 삭제 불가 조사, 임시 헤더 명칭 및 수용 기준을 기록. 구현 완료 처리는 하지 않음.
 - 바뀐 파일: docs/VOC.md, project_flow.html, docs/WORKLOG.md

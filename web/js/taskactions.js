@@ -1,4 +1,5 @@
 // Task writes shared by the task row, the inspector and their context menus (V-010): one implementation each.
+import { api } from "./api.js";
 import { hub } from "./hub.js";
 import { toast } from "./toast.js";
 import { addDays, dateChoices, fmtMD, todayISO } from "./ui.js";
@@ -18,6 +19,21 @@ export async function writeTask(id, data) {
 export async function deleteTaskUndoable(id, after) {
   const snapshot = { ...hub.task(id) };
   try {
+    // V-011: an upper-level issue or one with sub-issues goes through the structure trash, so undo brings back the
+    // same id with its children's links (children move up to its parent meanwhile, nothing is lost)
+    const items = [{ kind: "issue", id: Number(id) }];
+    const impact = snapshot.level_id != null ? { subtasks: 1 } : await api.structureDeletePreview({ items, children: "move_up" });
+    if (impact.subtasks) {
+      const res = await api.structureDelete({ items, children: "move_up" });
+      hub.applyDays(res.journal_days);
+      hub.emit({ kind: "task", id });
+      after?.();
+      toast(`#${snapshot.id} 삭제했어요 · 하위 이슈는 한 단계 위로 올라갔어요`, {
+        ms: 8000,
+        action: { label: "되돌리기", run: async () => { const r = await api.structureRestore(res.trash_id); hub.applyDays(r.journal_days); hub.emit({ kind: "task", id }); } },
+      });
+      return;
+    }
     await hub.deleteTask(id);
     after?.();
     toast(`#${snapshot.id} 삭제했어요`, {

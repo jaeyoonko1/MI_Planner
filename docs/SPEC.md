@@ -581,6 +581,10 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 - `POST /api/structure/delete-preview` · `POST /api/structure/delete` `{items:[{kind:"issue"|"group", id}], children:"move_up"|"delete"}` — 소프트 삭제(V-004, D-40, 마이그레이션 `012_structure_trash`). 미리보기는 `{issues, groups, children, moved_up, moved_groups, pages, journal_lines, subtasks, group_labels, issue_titles, needs_confirm}`; 삭제는 `{trash_id, summary, issues, groups, impact, journal_days, free}`. 한 요청 = 한 트랜잭션(실패하면 DB·휴지통으로 옮긴 페이지 모두 원복), 최대 500개. 그룹은 `children:"move_up"`이면 하위를 그 자리로 올리고 `"delete"`이면 하위 전체를 삭제. 이슈 페이지·이미지 폴더는 `vault/.trash`로.
 - `POST /api/structure/trash/{id}/restore` → `{trash_id, summary, issues, groups, journal_days, journal_skipped, free}` — 같은 ID·값·순서·그룹 소속·페이지 연결로 복원. 이미 복원했으면 409, 같은 번호 이슈·그룹이 이미 있으면 409(변경 없음). `GET /api/structure/trash` → `{items:[{id, summary, created_at, restored_at}]}`.
 
+### issue_levels (V-011, 마이그레이션 `013_issue_levels.sql`, D-48)
+- `id, label, rank(높을수록 상위), icon, color, created_at, updated_at`. 시드: `에픽`(rank 1). 가장 아래 '이슈'는 행 없음(`tasks.level_id` NULL).
+- `tasks.level_id`(→ issue_levels, ON DELETE SET NULL) 추가, 인덱스 `idx_tasks_parent`, `idx_tasks_level`. 규칙: rank(자식) ≤ rank(부모).
+
 ### tasks
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
@@ -713,6 +717,15 @@ GET    /api/search?q=
 # 일지
 GET    /api/journal/{yyyy-mm}    PUT /api/journal/{yyyy-mm}/{dd}
 GET    /api/journal/{yyyy-mm}/auto   # 자동 표시 데이터
+# 이슈 계층 (V-011, D-48) — 오류는 {"error"}
+GET  /api/structure/levels → {items:[{id,label,rank,icon,color,used_by}]} (상위부터)
+POST /api/structure/levels {label, icon?, color?, index?(0=맨 위, 기본=이슈 바로 위)} → 201 · 이름 중복/'이슈' 409
+PATCH /api/structure/levels/{id} {label?, icon?, color?} · PUT /api/structure/levels/order {ids(위→아래)} (기존 연결이 깨지면 409)
+DELETE /api/structure/levels/{id} → {trash_id, moved, to} (이슈는 한 수준 아래로; POST /api/structure/trash/{id}/restore로 복원)
+POST /api/structure/levels/convert {field_key, level_id} → {created, reused, linked} (선택형 분류 값마다 상위 이슈, 상위 없는 이슈만 연결, 값 보존)
+POST/PATCH /api/todos 에 level_id (수준 규칙 위반 400, 없는 수준 404)
+PUT /api/structure/view mode: issues | fields | free (저장 안 됐으면 issues), 응답에 issue_levels
+POST /api/structure/delete(-preview) items에 {kind:"value", key, value} 추가 (분류 값: move_up=값만 비움 / delete=값의 이슈까지), 하위 이슈: move_up=가장 가까운 상위로 / delete=하위 트리. 미리보기에 values·value_labels·cleared
 # 할일
 GET/POST /api/tasks              PATCH/DELETE /api/tasks/{id}
 POST   /api/tasks/from-line      # 일지 줄 승격
