@@ -5,6 +5,7 @@ import {
   MAX_COLUMNS, MAX_ROWS, addRowBelow, deleteColumn, insertColumn, joinColumns, layoutFor, layoutMeta, mergeTarget,
   resizePair, rowIndexOf, rowsOf, splitColumns, widthsAfterDelete, widthsAfterInsert,
 } from "./note-column-layout.js";
+import { TABLE_KEY_HELP } from "./note-table.js";
 import { toast } from "./toast.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -321,7 +322,7 @@ export function mountNoteColumns(mountEditor, cfg) {
 
   const add = chip("단 추가", () => addColumn(columns[currentColumn], "right"));
   const addBelow = chip("행 추가", () => addRow(columns[currentColumn]));
-  const helpButton = chip("단 단축키", () => {
+  const helpButton = chip("단·표 단축키", () => {
     const open = help.hidden;
     help.hidden = !open;
     helpButton.setAttribute("aria-expanded", String(open));
@@ -331,7 +332,8 @@ export function mountNoteColumns(mountEditor, cfg) {
   const help = element("dl", "note-layout-help");
   help.id = "note-layout-help";
   help.hidden = true;
-  for (const [keys, text] of KEY_HELP) {
+  const helpRows = [...KEY_HELP, ["표", "표 안의 칸에서는 아래 키가 표를 편집해요 (단·행 키보다 우선)"], ...TABLE_KEY_HELP];
+  for (const [keys, text] of helpRows) {
     const dt = element("dt", "");
     const kbd = element("kbd", "", keys);
     dt.append(kbd);

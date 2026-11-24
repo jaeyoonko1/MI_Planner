@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-009
+- 한 일: 노트 표를 한 번 만들면 지울 수 없던 버그(원인: 행 추가뿐이고 선택·삭제 수단이 전혀 없었음, D-43). `note-table-model.js`에 행·열 삽입/삭제, 머리글 켬/끔, 채운 칸 수(순수 함수), `note-table.js`에 아이콘 도구줄(aria-label·title+단축키, 탭으로 이동), 표 선택(칸에서 Esc, 표 블록 포커스) 후 Delete·Backspace로 표 삭제, 표 안 단축키 Alt+Shift+↑↓←→·Delete(행)·Backspace(열)·H(머리글), 범위 선택 시 여러 행·열 한 번에 처리, 채운 칸 3개 초과·마지막 행/열일 때만 인라인 확인 줄, 토스트 "되돌리기" + Ctrl+Z(V-008과 같은 stale 규칙, 편집기 캡처 단계에서 처리해 단 되돌리기와 충돌 없음). 단축키 안내는 표 도구줄의 키보드 버튼과 "단·표 단축키" 목록 양쪽에 둠.
+- 바뀐 파일: web/js/(note-table-model, note-table, note-columns).js, web/css/note.css, web/test/run_note_tables.mjs, docs/(DECISIONS D-43, VOC, WORKLOG), project_flow.html
+- 테스트: Node 표 모델 테스트(삽입·삭제·머리글 왕복·바이트 동일·마지막 행/열·채운 칸 수) + pytest test_note_table_cases/test_note_column_layout_cases 통과. 격리 vault·가짜 표로 앱 내 브라우저 확인: 행 삭제→Ctrl+Z, 표 선택→Delete→확인 줄→삭제→Ctrl+Z가 제자리 복원, 열·행 삽입·머리글 끄기 3단계 Ctrl+Z 후 파일이 원본과 바이트 동일, 다크 800/1280px·라이트 1024px, 콘솔 오류 없음.
+- 다음에 할 것 / 막힌 것: 실제 Edge·IME 미확인(VERIFY). 열 정렬(:--- ---:) 변경 UI는 없음. V-001(엑셀 붙여넣기·셀 편집)은 같은 모델 위에서 진행. 전체 pytest의 test_lineeditor_core_cases는 V-003 보류 변경 때문일 수 있음.
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-002
 - 한 일: 노트·이슈 페이지에 PowerPoint 첨부(D-42). `app/ppt_attach.py` + `app/routers/ppt.py`(`/api/ppt`): 올리기(files/ 복사, 300MB·sha256) / 링크만(절대·UNC 검증, 복사 안 함) 사이드카 JSON, `missing`·`changed` 상태, 새로고침(해시 재읽기), 삭제는 .trash(링크 원본 불변), 슬라이드 개요·삽입 그림은 `pptx_read` 재사용(`data/ppt_cache`), 링크 덱 옆 PNG 폴더가 있으면 실제 슬라이드 그림으로 사용, `os.startfile` 열기는 루프백·Host·Origin·confirm·확장자 화이트리스트 가드. 화면: `ppt.js`(페이지 위 띠, 추가 창의 토글 칩 `파일 올리기|링크만` + 실시간 경로 검증, 풀윈도 뷰어: 썸네일 레일·←→·Home/End·F 전체 화면(막히면 창 안 집중 보기)·N 노트·E 편집·aria-live), `ppt-model.js`(순수 로직), `ppt.css`. 노트 쪽은 `note.js`에 두 줄(`host.before(mountPptPanel)`)만.
 - 바뀐 파일: app/ppt_attach.py, app/routers/ppt.py, app/main.py, web/js/(ppt, ppt-model, note).js, web/css/ppt.css, web/index.html, web/test/run_ppt.mjs, tests/test_ppt_attach.py, docs/(SPEC, DECISIONS, VOC, WORKLOG), project_flow.html

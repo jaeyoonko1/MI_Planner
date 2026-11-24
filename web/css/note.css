@@ -149,19 +149,38 @@
 .note-layout-help dt, .note-layout-help dd { margin: 0; }
 .note-layout-help kbd { padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--panel); font: 11.5px var(--mono); color: var(--text); }
 @keyframes note-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
-@media (prefers-reduced-motion: reduce) { .note-col-tools, .note-col-btn, .note-col-confirm { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .note-col-tools, .note-col-btn, .note-col-confirm, .note-table-confirm, .note-table { transition: none; animation: none; } }
 @media (hover: none) { .note-col-tools { opacity: 1; transform: none; pointer-events: auto; } }
 .note-layout.compact .note-col-tools { display: none; }
 
 /* P3-06: editable tables are isolated from the surrounding rich text. */
 .note-editor .note-table { padding: 0; border: 1px solid var(--line); border-radius: 8px; }
-.note-table-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; }
+.note-editor .note-table { position: relative; transition: border-color .15s, box-shadow .15s; }
+.note-editor .note-table:focus { outline: none; }
+.note-editor .note-table:focus-visible { border-color: var(--sel-bd); box-shadow: 0 0 0 3px var(--le-ring); }
+.note-table-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: 5px 6px; }
+.note-table-group { display: inline-flex; gap: 1px; padding-right: 5px; margin-right: 1px; border-right: 1px solid var(--line); }
+.note-table-group:last-child { border-right: 0; padding-right: 0; margin-right: 0; }
+.note-table-tools .note-col-btn { opacity: .62; }
+.note-table:hover .note-table-tools .note-col-btn, .note-table:focus-within .note-table-tools .note-col-btn, .note-table:focus .note-table-tools .note-col-btn { opacity: 1; }
+.note-table-tools .note-col-btn[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); }
 .note-table-tools .chip { min-height: 26px; font-size: 11.5px; }
+.note-table-spacer { flex: 1; }
 .note-table-status { color: var(--muted); font-size: 11px; }
+.note-table-status:empty { display: none; }
+.note-table-help { margin: 0 6px 6px; border: 1px solid var(--line); border-radius: 10px; }
+.note-table-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 6px 6px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--red) 40%, var(--line-2)); border-radius: 10px; background: color-mix(in srgb, var(--red) 7%, var(--panel-2)); animation: note-pop .16s var(--ease); }
+.note-table-confirm-t { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.note-table-confirm-d { flex: 1; min-width: 160px; font-size: 11.5px; color: var(--muted); }
+.note-table-confirm .chip { min-height: 28px; font-size: 12px; }
+.note-table-confirm .chip.danger { border-color: color-mix(in srgb, var(--red) 55%, transparent); color: var(--red); }
+.note-table-confirm .chip.danger:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
 .note-editor .note-table-grid { width: 100%; border-collapse: collapse; }
 .note-editor .note-table-grid :is(th, td) { min-width: 96px; padding: 0; border: 1px solid var(--line); }
 .note-editor .note-table-grid th { background: var(--panel); color: var(--text); }
 .note-editor .note-table-grid [data-selected] { background: var(--sel-bg); }
+.note-editor .note-table-grid tr[data-blank] th { background: transparent; }
+.note-editor .note-table-grid tr[data-blank] .note-table-cell { min-height: 14px; padding-block: 0; }
 .note-table-header { display: flex; align-items: center; }
 .note-table-header button { margin-right: 3px; min-width: 26px; padding-inline: 5px; color: var(--accent); }
 .note-table-cell { display: block; width: 100%; min-width: 0; min-height: 29px; padding: 3px 6px; border: 0; resize: none; field-sizing: content; background: transparent; color: inherit; font: inherit; }

@@ -106,6 +106,95 @@ export function pasteTableCells(table, rowIndex, column, values) {
   return changed;
 }
 
+// ---- structure edits (V-009). Pure functions on the parsed table; rows that change lose their `raw`
+// text (they are re-serialized), untouched rows keep it so unedited tables stay byte-identical.
+const blankRow = width => ({ raw: null, cells: Array(width).fill("") });
+const padCells = (cells, width) => Array.from({ length: width }, (_, index) => cells[index] ?? "");
+const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+
+// A table with at most this many filled cells is deleted without a confirmation question.
+export const TABLE_CONFIRM_CELLS = 3;
+const PLACEHOLDER_HEADER = /^열 \d+$/;
+
+export function tableFilledCells(table) {
+  let count = 0;
+  table.rows.forEach((row, index) => {
+    for (const cell of row.cells) {
+      const text = cellText(cell).trim();
+      if (text && !(index === 0 && PLACEHOLDER_HEADER.test(text))) count++;
+    }
+  });
+  return count;
+}
+
+// Insert `count` empty body rows at `index` (1 = right under the header). Returns the first new row index.
+export function insertTableRows(table, index, count = 1) {
+  const at = clamp(index, 1, table.rows.length);
+  table.rows.splice(at, 0, ...Array.from({ length: count }, () => blankRow(table.width)));
+  return at;
+}
+
+// Delete rows from..to (inclusive). Returns { empty: true } without changing anything when no row would be
+// left. Deleting the header row promotes the next row to the header.
+export function deleteTableRows(table, from, to = from) {
+  const first = clamp(Math.min(from, to), 0, table.rows.length - 1);
+  const last = clamp(Math.max(from, to), 0, table.rows.length - 1);
+  const keep = table.rows.filter((_, index) => index < first || index > last);
+  if (!keep.length) return { empty: true };
+  if (first === 0) keep[0] = { raw: null, cells: padCells(keep[0].cells, table.width) };
+  table.rows = keep;
+  return { empty: false, removed: last - first + 1 };
+}
+
+// Insert `count` empty columns so the first new one gets index `index` (0..width).
+export function insertTableColumns(table, index, count = 1) {
+  const at = clamp(index, 0, table.width);
+  for (const [rowIndex, row] of table.rows.entries()) {
+    const cells = padCells(row.cells, table.width);
+    cells.splice(at, 0, ...Array.from({ length: count }, (_, k) => rowIndex ? "" : "열 " + (table.width + k + 1)));
+    row.cells = cells;
+    row.raw = null;
+  }
+  table.alignments.splice(at, 0, ...Array(count).fill("---"));
+  table.width += count;
+  table.delimiter = null;
+  return at;
+}
+
+// Delete columns from..to (inclusive). { empty: true } (nothing changed) when no column would be left.
+export function deleteTableColumns(table, from, to = from) {
+  const first = clamp(Math.min(from, to), 0, table.width - 1);
+  const last = clamp(Math.max(from, to), 0, table.width - 1);
+  const count = last - first + 1;
+  if (count >= table.width) return { empty: true };
+  for (const row of table.rows) {
+    const cells = padCells(row.cells, table.width);
+    cells.splice(first, count);
+    row.cells = cells;
+    row.raw = null;
+  }
+  table.alignments.splice(first, count);
+  table.width -= count;
+  table.delimiter = null;
+  return { empty: false, removed: count };
+}
+
+export const tableHeaderBlank = table => table.rows[0].cells.every(cell => !cell.trim());
+
+// Markdown always has a header row: "off" pushes the header text down into the first body row and leaves a
+// blank header, "on" turns the first body row into the header again. Returns "off" | "on" | null (nothing to do).
+export function toggleTableHeader(table) {
+  if (!tableHeaderBlank(table)) {
+    const old = table.rows[0];
+    table.rows.splice(0, 1, blankRow(table.width), { raw: null, cells: padCells(old.cells, table.width) });
+    return "off";
+  }
+  if (table.rows.length < 2) return null;
+  const next = table.rows[1];
+  table.rows.splice(0, 2, { raw: null, cells: padCells(next.cells, table.width) });
+  return "on";
+}
+
 const collator = new Intl.Collator("ko", { numeric: true, sensitivity: "base" });
 const NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
