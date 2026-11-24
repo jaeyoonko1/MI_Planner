@@ -73,3 +73,13 @@ def test_eval_select_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_eval_wait_model():
+    """P4-06: wait hours, warning levels and formatting (web/test/run_eval_wait.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_eval_wait.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

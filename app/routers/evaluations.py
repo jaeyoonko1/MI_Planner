@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StrictFloat, StrictInt, StringConstraints, model_validator
 
 from app.repositories import evaluations as repo
 from app.routers.tasks import get_conn
@@ -66,6 +66,15 @@ def list_evaluations(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
 @router.get("/{evaluation_id}/board")
 def get_board(evaluation_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return repo.get_board(conn, evaluation_id)
+
+
+class WarnHoursBody(BaseModel):
+    warn_hours: dict[str, StrictInt | StrictFloat | None]
+
+
+@router.put("/{evaluation_id}/warn-hours")
+def put_warn_hours(evaluation_id: int, body: WarnHoursBody, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.set_warn_hours(conn, evaluation_id, body.warn_hours)
 
 
 @router.get("/{evaluation_id}")

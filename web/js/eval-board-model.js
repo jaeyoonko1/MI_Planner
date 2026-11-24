@@ -27,6 +27,7 @@ export function buildBoard(data) {
   return {
     ...data, fields: data.evaluation.fields || [], stages, lastKey, stageIndex, rows, grid, byId,
     rowByWafer: wafers, columnById: equipmentIndex, columns: data.equipment.length,
+    clockOffset: data.now && !Number.isNaN(Date.parse(data.now)) ? Date.parse(data.now) - Date.now() : 0,
   };
 }
 

@@ -9,6 +9,7 @@ from datetime import datetime
 from itertools import product
 from typing import Any
 
+from app import eval_wait
 from app.repositories.eval_templates import get_template
 from app.vault import Vault, VaultError
 
@@ -132,11 +133,15 @@ def create_evaluation(conn: sqlite3.Connection, vault: Vault, data: dict[str, An
         raise
 
 
-def get_board(conn: sqlite3.Connection, evaluation_id: int) -> dict[str, Any]:
+def get_board(
+    conn: sqlite3.Connection, evaluation_id: int, now: datetime | None = None,
+) -> dict[str, Any]:
     """Return one evaluation with compact ID-keyed rows for the board screen (P4-04).
 
     `at` is the latest stage entry time read from eval_stage_log (D-09); it is never stored on the cell.
+    `wait_h` / `warn` (P4-06) are computed here from `at` and `now`, also never stored.
     """
+    now = now or eval_wait.now_seoul()
     evaluation = get_evaluation(conn, evaluation_id)
     equipment = [dict(row) for row in conn.execute(
         "SELECT id, name, vendor FROM eval_equipment WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))]
@@ -150,17 +155,41 @@ def get_board(conn: sqlite3.Connection, evaluation_id: int) -> dict[str, Any]:
         for row in conn.execute(
             "SELECT id, lot_no FROM eval_lots WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))
     ]
+    rows = conn.execute(
+        """SELECT c.id, c.equipment_id, c.wafer_id, c.stage_key, c.excluded, c.field_values, c.note,
+                  (SELECT l.at FROM eval_stage_log l WHERE l.cell_id = c.id
+                   ORDER BY l.at DESC, l.id DESC LIMIT 1) AS at,
+                  (SELECT l.to_stage FROM eval_stage_log l WHERE l.cell_id = c.id
+                   ORDER BY l.at DESC, l.id DESC LIMIT 1) AS at_stage
+           FROM eval_cells c WHERE c.evaluation_id = ? ORDER BY c.id""", (evaluation_id,)).fetchall()
     cells = [
         {"id": row["id"], "equipment_id": row["equipment_id"], "wafer_id": row["wafer_id"],
          "stage_key": row["stage_key"], "excluded": bool(row["excluded"]), "values": json.loads(row["field_values"]),
          "note": row["note"], "at": row["at"]}
-        for row in conn.execute(
-            """SELECT c.id, c.equipment_id, c.wafer_id, c.stage_key, c.excluded, c.field_values, c.note,
-                      (SELECT l.at FROM eval_stage_log l WHERE l.cell_id = c.id
-                       ORDER BY l.at DESC, l.id DESC LIMIT 1) AS at
-               FROM eval_cells c WHERE c.evaluation_id = ? ORDER BY c.id""", (evaluation_id,))
+        for row in rows
     ]
-    return {"evaluation": evaluation, "equipment": equipment, "lots": lots, "cells": cells}
+    for cell, row in zip(cells, rows):
+        cell["wait_h"], cell["warn"] = eval_wait.cell_wait(cell, evaluation["stages"], row["at"], row["at_stage"], now)
+    return {"evaluation": evaluation, "equipment": equipment, "lots": lots, "cells": cells,
+            "now": now.isoformat(timespec="seconds")}
+
+
+def set_warn_hours(conn: sqlite3.Connection, evaluation_id: int, warn: dict[str, float | None]) -> dict[str, Any]:
+    """Set per-stage warning thresholds of ONE evaluation (stored with its stage copy, not per cell)."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        evaluation = get_evaluation(conn, evaluation_id)
+        keys = {stage["key"] for stage in evaluation["stages"]}
+        if not warn or any(key not in keys for key in warn):
+            raise EvaluationError("이 평가에 없는 단계예요.", 422)
+        for value in warn.values():
+            if value is not None and not (isinstance(value, (int, float)) and not isinstance(value, bool)
+                                          and 0 < value <= eval_wait.MAX_WARN_HOURS):
+                raise EvaluationError("경고 시간은 0보다 크고 8,760시간 이하여야 해요.", 422)
+        stages = [{**stage, "warn_hours": warn[stage["key"]]} if stage["key"] in warn else stage
+                  for stage in evaluation["stages"]]
+        conn.execute("UPDATE evaluations SET stages = ? WHERE id = ?", (json.dumps(stages, ensure_ascii=False), evaluation_id))
+    return {"stages": stages}
 
 
 # ---- cell edits (P4-05) ----------------------------------------------------------------------

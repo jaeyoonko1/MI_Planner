@@ -8,6 +8,7 @@ import { createPanel } from "./eval-panel.js";
 import {
   allIds, applyChanged, columnIds, locate, lotIds, mergeSelection, pruneSelection, rectIds, rowIds,
 } from "./eval-select-model.js";
+import { boardNow, cellWait, formatThreshold, formatWait, waitSentence, waitSummary } from "./eval-wait-model.js";
 import { toast } from "./toast.js";
 import { chipRow, el, emptyState, errorState, skeleton, store, svg } from "./ui.js";
 
@@ -36,7 +37,45 @@ function segments(board, counts) {
     `<i class="${part.cls}" style="flex-grow:${part.n}" title="${esc(part.label)} ${num(part.n)}칸"></i>`).join("");
 }
 
-function summary(board, onRefresh) {
+// Longest wait + per-stage warnings. The counts only appear while the warning chip is on.
+function waitBlock(board, warnOn) {
+  const waits = waitSummary(board, board.cells, boardNow(board));
+  if (!waits.longest) return null;
+  const box = el("div", "eb-waitsum");
+  box.setAttribute("aria-label", "대기 시간 요약");
+  const { longest } = waits;
+  const row = board.rowByWafer.get(longest.cell.wafer_id);
+  const where = `${board.equipment[board.columnById.get(longest.cell.equipment_id)].name} · ${row.lot.lot_no} ${row.wafer.wafer_no}`;
+  const head = el("p", "eb-wline");
+  head.append(svg("clock"), el("span", "", "가장 오래 기다리는 칸"), el("b", "", formatWait(longest.hours)),
+    el("small", "", `${longest.stage.label} · ${where}`));
+  box.append(head);
+  const rows = waits.stages.filter((item) => warnOn && (item.warn || item.alert));
+  if (warnOn) {
+    const total = el("p", "eb-wline");
+    total.append(svg(waits.alert ? "alert" : "clock"),
+      el("span", "", waits.warn || waits.alert ? "대기 경고" : "대기 경고 없음"));
+    if (waits.warn || waits.alert) {
+      const warn = el("b", "wn1", `경고 ${num(waits.warn)}칸`);
+      const alert = el("b", "wn2", `심각 ${num(waits.alert)}칸`);
+      total.append(warn, alert);
+    }
+    box.append(total);
+  }
+  if (rows.length) {
+    const list = el("ul", "eb-wstages");
+    for (const item of rows) {
+      const li = el("li");
+      li.append(el("span", "", item.stage.label), el("small", "",
+        `${item.alert ? `심각 ${num(item.alert)} · ` : ""}${item.warn ? `경고 ${num(item.warn)} · ` : ""}최장 ${formatWait(item.max)} · 기준 ${formatThreshold(item.stage.warn_hours)}`));
+      list.append(li);
+    }
+    box.append(list);
+  }
+  return box;
+}
+
+function summary(board, onRefresh, warnOn = true) {
   const { evaluation } = board;
   const total = stageCounts(board);
   const box = el("section", "eb-summary");
@@ -67,10 +106,12 @@ function summary(board, onRefresh) {
     `<li class="st-${i}"><i></i>${esc(stage.label)}<b>${num(total.counts.get(stage.key))}</b></li>`).join("") +
     `<li class="st-n"><i></i>미배정<b>${num(total.counts.get(UNASSIGNED))}</b></li>`;
   box.append(head, bar, legend);
+  const waits = waitBlock(board, warnOn);
+  if (waits) box.append(waits);
   return box;
 }
 
-function toolbar(board, prefs, onChange) {
+function toolbar(board, prefs, onChange, limits) {
   const bar = el("div", "eb-tools");
   const group = (label, node) => {
     const wrap = el("div", "fgroup");
@@ -94,20 +135,39 @@ function toolbar(board, prefs, onChange) {
   const wrap = el("div", "fgroup");
   wrap.append(remain);
   bar.append(wrap);
+  const warn = el("button", "chip", "대기 경고");
+  warn.type = "button";
+  warn.prepend(svg("clock"));
+  warn.setAttribute("aria-pressed", String(prefs.warn));
+  warn.title = "단계에 오래 머문 칸을 아이콘·시간·색으로 표시해요";
+  warn.addEventListener("click", () => onChange({ warn: !prefs.warn }));
+  const limitsBtn = el("button", "chip", "경고 기준");
+  limitsBtn.type = "button";
+  limitsBtn.setAttribute("aria-expanded", String(limits.open()));
+  limitsBtn.setAttribute("aria-controls", "eb-limits");
+  limitsBtn.title = "단계마다 몇 시간이 지나면 경고할지 정해요";
+  limitsBtn.addEventListener("click", () => limits.toggle());
+  const w2 = el("div", "fgroup");
+  w2.append(warn, limitsBtn);
+  bar.append(w2);
   return bar;
 }
 
-function cellLabel(board, row, column, cell, field, value) {
+const WAIT_ICON = ["", "clock", "alert"];
+const iconHtml = (id) => `<svg class="i" aria-hidden="true"><use href="#${id}"></use></svg>`;
+
+function cellLabel(board, row, column, cell, field, value, waitText = "") {
   const head = `${row.lot.lot_no} 웨이퍼 ${row.wafer.wafer_no} · ${board.equipment[column].name}`;
   if (cell.excluded) return head + " · 제외";
   const stage = board.stageIndex.has(cell.stage_key) ? board.stages[board.stageIndex.get(cell.stage_key)].label : "미배정";
-  return head + " · " + stage + (field ? ` · ${field.label} ${value || "없음"}` : "");
+  return head + " · " + stage + (field ? ` · ${field.label} ${value || "없음"}` : "") + (waitText ? " · " + waitText : "");
 }
 
 function matrixView(board, prefs) {
   const rows = visibleRows(board, prefs.remaining);
   const field = prefs.show === "stage" ? null : board.fields.find((f) => f.key === prefs.show) || null;
   const progress = equipmentProgress(board);
+  const nowMs = boardNow(board);
   const head = board.equipment.map((item, c) => {
     const p = progress[c];
     return `<th scope="col" class="eb-col"><button type="button" class="eb-hbtn" tabindex="-1" data-sel="col" data-c="${c}"` +
@@ -141,10 +201,13 @@ function matrixView(board, prefs) {
       const stageLabel = stageI === undefined ? "미배정" : board.stages[stageI].label;
       const value = field && !cell.excluded ? formatValue(field, cell.values[field.key]) : "";
       const text = cell.excluded ? "제외" : field ? value || "—" : stageLabel;
-      const label = cellLabel(board, row, c, cell, field && !cell.excluded ? field : null, value);
-      html += `<td role="gridcell" tabindex="-1" aria-selected="false" class="eb-cell ${cls}${field && !value && !cell.excluded ? " blank" : ""}"` +
+      const info = prefs.warn ? cellWait(board, cell, nowMs) : null;
+      const level = info ? info.level : 0;
+      const label = cellLabel(board, row, c, cell, field && !cell.excluded ? field : null, value, level ? waitSentence(info, true) : "");
+      html += `<td role="gridcell" tabindex="-1" aria-selected="false" class="eb-cell ${cls}${field && !value && !cell.excluded ? " blank" : ""}${level ? " w" + level : ""}"` +
         ` data-r="${r}" data-c="${c}" data-id="${cell.id}" aria-label="${esc(label)}" title="${esc(label)}">` +
-        `<span class="eb-t">${esc(text)}</span></td>`;
+        `<span class="eb-t">${esc(text)}</span>` +
+        (level ? `<span class="eb-w" aria-hidden="true">${iconHtml(WAIT_ICON[level])}${esc(info.text)}</span>` : "") + `</td>`;
     }
     html += "</tr>";
   });
@@ -152,7 +215,20 @@ function matrixView(board, prefs) {
   return { html, rows };
 }
 
+function lotWarnings(board, lot, equipmentId, nowMs) {
+  const ids = new Set(lot.wafers.map((wafer) => wafer.id));
+  const out = { warn: 0, alert: 0 };
+  for (const cell of board.cells) {
+    if (cell.equipment_id !== equipmentId || !ids.has(cell.wafer_id)) continue;
+    const info = cellWait(board, cell, nowMs);
+    if (info?.level === 1) out.warn++;
+    else if (info?.level === 2) out.alert++;
+  }
+  return out;
+}
+
 function lotView(board, prefs) {
+  const nowMs = boardNow(board);
   const head = board.equipment.map((item) => `<th scope="col" class="eb-col"><span class="eb-eq">${esc(item.name)}</span>` +
     (item.vendor ? `<small>${esc(item.vendor)}</small>` : "") + "</th>").join("");
   let html = `<table class="eb-table eb-lots" aria-label="평가 현황판 (Lot별)"><thead><tr>` +
@@ -168,10 +244,15 @@ function lotView(board, prefs) {
     for (const item of board.equipment) {
       const p = lotProgress(board, lot, item.id);
       if (!p.active) { html += `<td class="eb-cell ex"><span class="eb-t">제외</span></td>`; continue; }
-      const label = `${lot.lot_no} · ${item.name}: ${p.done}/${p.active}칸 완료`;
-      html += `<td class="eb-cell lotcell" title="${esc(label)}">` +
+      const warned = prefs.warn ? lotWarnings(board, lot, item.id, nowMs) : { warn: 0, alert: 0 };
+      const wText = warned.alert || warned.warn
+        ? `대기 ${warned.alert ? `심각 ${warned.alert}칸` : ""}${warned.alert && warned.warn ? ", " : ""}${warned.warn ? `경고 ${warned.warn}칸` : ""}` : "";
+      const label = `${lot.lot_no} · ${item.name}: ${p.done}/${p.active}칸 완료` + (wText ? " · " + wText : "");
+      const worst = warned.alert ? 2 : warned.warn ? 1 : 0;
+      html += `<td class="eb-cell lotcell${worst ? " w" + worst : ""}" title="${esc(label)}">` +
         `<span class="eb-seg" aria-hidden="true">${segments(board, p.counts)}</span>` +
-        `<span class="eb-t"><span class="sr-only">${esc(label)}</span><span aria-hidden="true">${num(p.done)}/${num(p.active)}</span></span></td>`;
+        `<span class="eb-t"><span class="sr-only">${esc(label)}</span><span aria-hidden="true">${num(p.done)}/${num(p.active)}</span></span>` +
+        (worst ? `<span class="eb-w" aria-hidden="true">${iconHtml(WAIT_ICON[worst])}${num(warned.alert + warned.warn)}</span>` : "") + `</td>`;
     }
     html += "</tr>";
   }
@@ -179,17 +260,25 @@ function lotView(board, prefs) {
 }
 
 function stageView(board, prefs, state) {
+  const nowMs = boardNow(board);
   const groups = cellsByStage(board, prefs.remaining);
   const keys = [...board.stages.map((s, i) => [s.key, s.label, "st-" + i]), [UNASSIGNED, "미배정", "st-n"]]
     .filter(([key]) => key !== UNASSIGNED || groups.get(key).length);
   const host = el("div", "eb-stages");
   for (const [key, label, cls] of keys) {
-    const items = groups.get(key);
+    const items = [...groups.get(key)].sort((a, b) =>
+      (cellWait(board, b.cell, nowMs)?.hours ?? -1) - (cellWait(board, a.cell, nowMs)?.hours ?? -1)); // longest wait first
     const shown = state.open.has(key) ? items : items.slice(0, STAGE_CAP);
     const column = el("section", "eb-stage " + cls);
     column.setAttribute("aria-label", `${label} ${items.length}칸`);
-    const list = shown.map(({ cell, row, column: c }, i) =>
-      `<li role="option" aria-selected="false" tabindex="${i ? -1 : 0}" data-id="${cell.id}"><b>${esc(board.equipment[c].name)}</b><span>${esc(row.lot.lot_no)} · ${esc(row.wafer.wafer_no)}</span></li>`).join("");
+    const list = shown.map(({ cell, row, column: c }, i) => {
+      const info = cellWait(board, cell, nowMs);
+      const level = prefs.warn && info ? info.level : 0;
+      return `<li role="option" aria-selected="false" tabindex="${i ? -1 : 0}" data-id="${cell.id}"${level ? ` class="w${level}"` : ""}` +
+        (info ? ` aria-label="${esc(`${board.equipment[c].name} ${row.lot.lot_no} ${row.wafer.wafer_no} · ${waitSentence(info, prefs.warn)}`)}"` : "") +
+        `><b>${esc(board.equipment[c].name)}</b><span>${esc(row.lot.lot_no)} · ${esc(row.wafer.wafer_no)}</span>` +
+        (info ? `<em class="eb-w${level ? "" : " plain"}" aria-hidden="true">${level ? iconHtml(WAIT_ICON[level]) : ""}${esc(info.text)}</em>` : "") + `</li>`;
+    }).join("");
     column.innerHTML = `<header><i></i><h3>${esc(label)}</h3><b>${num(items.length)}</b></header>` +
       `<ul role="listbox" aria-multiselectable="true" aria-label="${esc(label)} 칸 목록">${list || '<li class="none" role="presentation">해당하는 칸이 없어요</li>'}</ul>`;
     if (items.length > shown.length) {
@@ -342,7 +431,7 @@ function loadPrefs(board) {
   const saved = store.get(PREFS_KEY, {}) || {};
   const view = VIEWS.some(([key]) => key === saved.view) ? saved.view : "equipment";
   const show = saved.show === "stage" || board.fields.some((f) => f.key === saved.show) ? saved.show : "stage";
-  return { view, show, remaining: saved.remaining === true };
+  return { view, show, remaining: saved.remaining === true, warn: saved.warn !== false };
 }
 
 export async function renderBoard(host, page, onError) {
@@ -362,7 +451,7 @@ export async function renderBoard(host, page, onError) {
   const stageState = { open: new Set(), repaint: () => paint() };
   const sel = { ids: [], anchor: null, lastId: null, focusId: null, token: 0 };
   let busy = false;
-  let summaryEl = summary(board, () => reload());
+  let summaryEl = summary(board, () => reload(), prefs.warn);
   const body = el("div", "eb-body");
   const rowsNow = () => visibleRows(board, prefs.remaining);
   const announce = (text) => { status.textContent = text; };
@@ -371,6 +460,7 @@ export async function renderBoard(host, page, onError) {
 
   const panel = createPanel({
     board: () => board,
+    warnOn: () => prefs.warn,
     moveCells: (moves, opts) => moveCells(moves, opts),
     saveCell: async (id, patch) => {
       const res = await api.patchEvalCell(id, patch);
@@ -541,10 +631,96 @@ export async function renderBoard(host, page, onError) {
     }
   }
 
+  // ---- warning thresholds (stored with this evaluation's stages, never per cell) -----------------------
+
+  const limitsHost = el("div", "eb-limits-host");
+  const limits = {
+    isOpen: false,
+    open: () => limits.isOpen,
+    toggle() {
+      limits.isOpen = !limits.isOpen;
+      limitsHost.replaceChildren(...(limits.isOpen ? [limitsEditor()] : []));
+      root.querySelector(".eb-tools")?.replaceWith(toolbar(board, prefs, change, limits));
+      if (limits.isOpen) limitsHost.querySelector("input")?.focus();
+    },
+  };
+
+  function limitsEditor() {
+    const box = el("section", "eb-limits");
+    box.id = "eb-limits";
+    box.setAttribute("aria-label", "단계별 경고 기준");
+    box.append(el("h3", "", "단계별 경고 기준"),
+      el("p", "eb-hint", "단계에 이 시간보다 오래 머물면 경고, 2배를 넘으면 심각으로 표시해요. 비워 두면 그 단계는 경고하지 않아요. 마지막 단계는 대기하지 않아요."));
+    const list = el("div", "eb-lrows");
+    const inputs = [];
+    board.stages.slice(0, -1).forEach((stage, i) => {
+      const row = el("label", "eb-lrow st-" + i);
+      const input = el("input", "eb-input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.autocomplete = "off";
+      input.placeholder = "끔";
+      input.value = stage.warn_hours ? String(stage.warn_hours) : "";
+      input.dataset.key = stage.key;
+      input.setAttribute("aria-label", `${stage.label} 경고 기준(시간)`);
+      row.append(el("i"), el("span", "", stage.label), input, el("small", "", "시간"));
+      inputs.push(input);
+      list.append(row);
+    });
+    const status = el("p", "eb-lstatus");
+    status.setAttribute("role", "status");
+    const save = el("button", "btn sm pri", "저장");
+    save.type = "button";
+    const close = el("button", "btn sm quiet", "닫기");
+    close.type = "button";
+    close.addEventListener("click", () => { limits.toggle(); root.querySelector(".eb-tools button[aria-controls]")?.focus(); });
+    const submit = async () => {
+      const payload = {};
+      for (const input of inputs) {
+        const text = input.value.trim().replace(/,/g, "");
+        const value = text === "" ? null : Number(text);
+        if (value !== null && !(Number.isFinite(value) && value > 0 && value <= 8760)) {
+          input.setAttribute("aria-invalid", "true");
+          input.focus();
+          status.textContent = "경고 기준은 0보다 크고 8,760시간 이하의 숫자로 적어 주세요.";
+          return;
+        }
+        input.removeAttribute("aria-invalid");
+        payload[input.dataset.key] = value;
+      }
+      save.disabled = true;
+      status.textContent = "저장 중…";
+      try {
+        const res = await api.setEvalWarnHours(evaluationId, payload);
+        board.stages = res.stages;
+        board.evaluation.stages = res.stages;
+        replaceSummary();
+        repaint();
+        status.textContent = "저장했어요.";
+        announce("경고 기준을 저장했어요.");
+        panel.refresh();
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        save.disabled = false;
+      }
+    };
+    save.addEventListener("click", submit);
+    box.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter" && event.target.matches("input")) { event.preventDefault(); submit(); }
+      else if (event.key === "Escape") { event.stopPropagation(); close.click(); }
+    });
+    const actions = el("div", "eb-lactions");
+    actions.append(save, close, status);
+    box.append(list, actions);
+    return box;
+  }
+
   // ---- rendering ---------------------------------------------------------------------------------------
 
   function replaceSummary() {
-    const next = summary(board, () => reload());
+    const next = summary(board, () => reload(), prefs.warn);
     summaryEl.replaceWith(next);
     summaryEl = next;
   }
@@ -594,8 +770,10 @@ export async function renderBoard(host, page, onError) {
     store.set(PREFS_KEY, prefs);
     stageState.open.clear();
     sel.anchor = null;
+    if ("warn" in patch) { replaceSummary(); panel.refresh(); }
     const count = paint();
-    announce(`${VIEWS.find(([key]) => key === prefs.view)[1]} 보기 · ${num(count)}${VIEW_UNIT[prefs.view]}${prefs.remaining ? " · 남은 것만" : ""}`);
+    if ("warn" in patch) announce(prefs.warn ? "대기 경고를 켰어요." : "대기 경고를 껐어요.");
+    else announce(`${VIEWS.find(([key]) => key === prefs.view)[1]} 보기 · ${num(count)}${VIEW_UNIT[prefs.view]}${prefs.remaining ? " · 남은 것만" : ""}`);
     if (focusLabel) {
       [...root.querySelectorAll(".eb-tools button")].find((b) => b.textContent === focusLabel)?.focus({ preventScroll: true });
     }
@@ -639,7 +817,7 @@ export async function renderBoard(host, page, onError) {
       if (!empty) bindList(stages, handlers);
       count = stages.children.length;
     }
-    root.querySelector(".eb-tools")?.replaceWith(toolbar(board, prefs, change));
+    root.querySelector(".eb-tools")?.replaceWith(toolbar(board, prefs, change, limits));
     const old = root.querySelector(".eb-view");
     if (old) old.replaceWith(view); else body.prepend(view);
     syncSelection();
@@ -648,7 +826,7 @@ export async function renderBoard(host, page, onError) {
   }
 
   body.append(panel.el);
-  root.append(stageStyle(board), summaryEl, toolbar(board, prefs, change), status, body);
+  root.append(stageStyle(board), summaryEl, toolbar(board, prefs, change, limits), limitsHost, status, body);
   paint();
   const content = page.content && page.content.trim();
   if (content) {

@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P4-06
+- 한 일: 단계별 대기 시간과 경고. `app/eval_wait.py`(순수 규칙: 대기=지금−최신 진입 이력, 달력 시간, 오프셋 없는 시각은 Asia/Seoul, 임계 초과 1단계·2배 초과 2단계)와 `web/js/eval-wait-model.js`(같은 규칙 + 표기·요약·이력 머문 시간). 보드 API에 `now`·칸별 `wait_h`·`warn`, `PUT /api/evaluations/{id}/warn-hours`(평가가 복사한 단계에 저장, 칸에는 저장 안 함 D-09). 마이그레이션 없음.
+- UI: `대기 경고` 토글 칩 + `경고 기준` 편집 패널, 설비별 칸 배지·Lot별 개수 배지·단계별 정렬, 요약 블록, 칸 패널 대기 배지와 이력별 머문 시간. 경고는 색 외에 아이콘(시계/삼각)·점선/실선·시간 글자·aria 문장으로 구분.
+- 바뀐 파일: app/(eval_wait, repositories/evaluations, routers/evaluations).py, web/js/(eval-wait-model, eval-board, eval-board-model, eval-select-model, eval-panel, api).js, web/css/evaluations.css, web/test/run_eval_wait.mjs, tests/(test_eval_wait, test_lineeditor_js).py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 192 passed(고정 시각으로 임계·재진입·제외·로그 없음·불일치 이력·오프셋·미래 시각·검증, Node 순수 로직). Edge 앱 내 브라우저(가짜 데이터)에서 다크/라이트, 설비별·Lot별·단계별, 토글 끄기, 기준 저장·오류, 칸 패널 확인. 콘솔 오류 0.
+- 다음에 할 것 / 막힌 것: 템플릿(마스터)의 `warn_hours` 편집은 P4-07(지금은 평가별 기준만). 열린 화면 자동 갱신 없음(새로고침 필요). 설비 열 폭이 좁아 긴 단계명이 배지에 가려 말줄임됨(툴팁·aria에는 전체). "오늘" 화면 Top N은 P4-08에서 `wait_h`를 쓴다. 영업일 기준 대기는 하지 않음(SPEC은 달력 시간). 실브라우저 확인 항목은 flow VERIFY 참고.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P4-05
 - 한 일: 현황판 칸 패널과 다중 선택 일괄 단계 전환. 선택이 패널을 결정(0 닫힘/1 상세/N 일괄). 클릭·Ctrl·Shift·드래그·머리글(열/행/Lot/전체)·방향키·Space·Enter·Ctrl+A·Esc 선택, 제외 칸은 선택에서 빼고 개수 안내. 단일 패널(단계 칩, 다음 단계, 값 입력, 메모, 단계 이력, 범위 넓히기 칩)과 일괄 패널(단계 분포, 옮길 단계 칩 + 옮기기, 각 칸 다음 단계로), 토스트 되돌리기, 오류·오래된 보드(404/409)는 새로고침 버튼. 드롭다운 없음(D-12).
 - API: `POST /api/evaluations/{id}/cells/stage`(원자적, cell_ids 또는 moves, 바뀐 칸만 eval_stage_log 기록), `PATCH /api/eval-cells/{id}`(값 검증·병합, 메모), `GET /api/eval-cells/{id}/history`. 마이그레이션 없음.

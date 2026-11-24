@@ -60,6 +60,7 @@ export const api = {
   evaluationBoard: (id) => request("GET", "/api/evaluations/" + id + "/board"),
   moveEvalCells: (evaluationId, body) => request("POST", `/api/evaluations/${evaluationId}/cells/stage`, body),
   patchEvalCell: (cellId, body) => request("PATCH", `/api/eval-cells/${cellId}`, body),
+  setEvalWarnHours: (evaluationId, warnHours) => request("PUT", `/api/evaluations/${evaluationId}/warn-hours`, { warn_hours: warnHours }),
   evalCellHistory: (cellId) => request("GET", `/api/eval-cells/${cellId}/history`).then((data) => data.items),
   createEvaluation: (body) => request("POST", "/api/evaluations", body),
   pagePreview: (body) => request("POST", "/api/todos/page-preview", body),

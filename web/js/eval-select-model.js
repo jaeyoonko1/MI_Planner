@@ -100,6 +100,6 @@ export function locate(board, id) {
 export function applyChanged(board, changed, at) {
   for (const item of changed) {
     const cell = board.byId.get(item.id);
-    if (cell) { cell.stage_key = item.to; cell.at = at; }
+    if (cell) { cell.stage_key = item.to; cell.at = at; cell.wait_h = item.to ? 0 : null; }
   }
 }

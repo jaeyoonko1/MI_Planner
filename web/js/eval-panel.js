@@ -2,6 +2,7 @@
 // Pure view: all data changes go through the callbacks in `ctx`, so the board stays the single owner of state.
 import { UNASSIGNED, formatAt } from "./eval-board-model.js";
 import { describeSelection, locate, nextStageMoves, stageDistribution, targetMoves } from "./eval-select-model.js";
+import { LEVEL_TEXT, boardNow, cellWait, formatThreshold, formatWait, historyDurations, waitSentence, waitSummary } from "./eval-wait-model.js";
 import { el, svg } from "./ui.js";
 
 const NOTE_MAX = 2000;
@@ -28,6 +29,17 @@ export function createPanel(ctx) {
   let statusEl = null;
 
   const board = () => ctx.board();
+
+  // Wait line: icon + words, so the level never relies on color alone.
+  function waitBadge(info) {
+    const level = ctx.warnOn() ? info.level : 0;
+    const badge = el("span", "eb-wait w" + level);
+    badge.append(svg(level === 2 ? "alert" : "clock"), el("b", "", `대기 ${info.text}`));
+    if (level) badge.append(el("span", "", `${LEVEL_TEXT[level]} · 기준 ${formatThreshold(info.warnHours)}${level === 2 ? "의 2배" : ""} 초과`));
+    else if (info.warnHours) badge.append(el("span", "", `기준 ${formatThreshold(info.warnHours)}`));
+    badge.title = waitSentence(info, ctx.warnOn());
+    return badge;
+  }
   const stageLabel = (key) => {
     const b = board();
     return b.stageIndex.has(key) ? b.stages[b.stageIndex.get(key)].label : key ? String(key) : "미배정";
@@ -239,7 +251,8 @@ export function createPanel(ctx) {
   function historyList(items) {
     if (!items.length) return el("p", "eb-empty", "아직 단계 이력이 없어요. 단계를 고르면 여기에 쌓여요.");
     const list = el("ol", "eb-hist");
-    for (const item of items) {
+    const stays = historyDurations(items, boardNow(board()));
+    for (const [i, item] of items.entries()) {
       const when = formatAt(item.at);
       const li = el("li");
       const move = el("span", "eb-hmove");
@@ -247,7 +260,10 @@ export function createPanel(ctx) {
       const time = el("time", "", when.text);
       time.dateTime = item.at;
       time.title = when.ago;
-      li.append(move, time);
+      const stay = el("span", "eb-stay", stays[i] === null || (i === 0 && item.to_stage === board().lastKey) ? "" : (i === 0 ? "지금까지 " : "머문 시간 ") + formatWait(stays[i]));
+      const when2 = el("span", "eb-hwhen");
+      when2.append(time, stay);
+      li.append(move, when2);
       list.append(li);
     }
     return list;
@@ -281,7 +297,8 @@ export function createPanel(ctx) {
       });
       next.disabled = !nextMoves.length;
       const since = el("p", "eb-since", cell.at ? `${at.text}부터 · ${at.ago}` : "아직 단계가 정해지지 않았어요");
-      stageBox.replaceChildren(el("h4", "", "단계"), group, since, next);
+      const waiting = cellWait(b, cell, boardNow(b));
+      stageBox.replaceChildren(el("h4", "", "단계"), group, ...(waiting ? [waitBadge(waiting)] : []), since, next);
     };
     refreshStage();
     body.append(stageBox);
@@ -331,6 +348,15 @@ export function createPanel(ctx) {
     };
     render();
     body.append(section("지금 단계", dist));
+    const waits = waitSummary(b, ids.map((id) => b.byId.get(id)), boardNow(b));
+    if (waits.longest) {
+      const box = el("div", "eb-waits");
+      box.append(waitBadge(waits.longest));
+      const which = locate(b, waits.longest.cell.id);
+      box.append(el("p", "eb-since", `가장 오래 기다린 칸: ${b.equipment[which.column].name} · ${which.row.lot.lot_no} ${which.row.wafer.wafer_no} · ${waits.longest.stage.label}`));
+      if (ctx.warnOn() && (waits.warn || waits.alert)) box.append(el("p", "eb-since", `경고 ${num(waits.warn)}칸 · 심각 ${num(waits.alert)}칸`));
+      body.append(section("대기 시간", box));
+    }
     if (info.skipped) {
       const note = el("p", "eb-note-skip", `제외한 칸 ${num(info.skipped)}개는 선택에서 뺐어요.`);
       body.append(note);
