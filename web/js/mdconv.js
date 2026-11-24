@@ -30,7 +30,7 @@ const WIKI_TOKEN = /\[\[[^\x00\[\]\\\r\n]+\]\]/g;
 const escAttr = (s) => esc(s).replace(/"/g, "&quot;").replace(/\r/g, "&#13;");
 
 // ---------------------------------------------------------------- reader --
-function inlineToHtml(text, fileUrl) {
+export function inlineToHtml(text, fileUrl) {
   const hold = [];
   const put = (html) => {
     hold.push(html);

@@ -7,6 +7,7 @@ import { api } from "./api.js";
 import { getFolds, setFolds } from "./foldstore.js";
 import { keyAction } from "./lineeditor-core.js";
 import { bindNoteTables } from "./note-table.js";
+import { clipboardToTable } from "./paste-html.js";
 import { editorKeys } from "./lineeditor.js";
 import { runNoteLineAction } from "./note-lines.js";
 import { mountNoteColumns } from "./note-columns.js";
@@ -266,12 +267,19 @@ export function mountEditor(cfg) {
 
   ed.addEventListener("paste", async (e) => {
     e.preventDefault();
-    const imgs = imagesOf(e.clipboardData);
+    const text = e.clipboardData.getData("text/plain"); // plain text only keeps the file clean
+    // V-001: a table (Excel / Sheets / web) or tab separated text becomes a note table. Excel also puts a picture of the
+    // range on the clipboard; text always wins over that picture, which is only the fallback when nothing else is there.
+    const hit = clipboardToTable({ html: e.clipboardData.getData("text/html"), text });
+    if (hit) {
+      noteTables.pasteBlock(hit.block, hit.via);
+      return;
+    }
+    const imgs = text.trim() ? [] : imagesOf(e.clipboardData);
     if (imgs.length) {
       for (const f of imgs) await insertImage(f);
       return;
     }
-    const text = e.clipboardData.getData("text/plain"); // plain text only keeps the file clean
     if (text) {
       run("insertText", text);
       schedule();

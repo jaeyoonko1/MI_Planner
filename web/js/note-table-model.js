@@ -62,8 +62,11 @@ export const cellText = value => (value || "")
     return { "&#9;": "\t", "&#32;": " ", "&amp;": "&", "&lt;": "<" }[token.toLowerCase()];
   });
 
-function cellSource(text) {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+// The only inline markup a cell may carry (same tags as mdconv.js): <u>, <mark>, <span style="color">. Any other "<" is text.
+const KEEP_TAG = /<(?!(?:\/(?:u|mark|span)|u|mark(?: style="background:#[0-9a-fA-F]{6}")?|span style="color:#[0-9a-fA-F]{6}")>)/g;
+
+export function cellSource(text) {
+  return text.replace(/&/g, "&amp;").replace(KEEP_TAG, "&lt;")
     .replace(/(\\*)\|/g, (_, slashes) => "\\".repeat(slashes.length * 2 + 1) + "|")
     .replace(/\r\n|\r|\n/g, "<br>").replace(/\t/g, "&#9;")
     .replace(/^ +| +$/g, spaces => "&#32;".repeat(spaces.length));
@@ -76,6 +79,37 @@ export function setTableCell(table, rowIndex, column, text) {
   row.cells[column] = cellSource(text);
   row.raw = null;
   return true;
+}
+
+// Store a cell from ready-made cell source (as it appears between the pipes). Returns true when it changed.
+export function setTableCellSource(table, rowIndex, column, source) {
+  const row = table.rows[rowIndex];
+  if ((row.cells[column] ?? "") === source) return false;
+  while (row.cells.length < table.width) row.cells.push("");
+  row.cells[column] = source;
+  row.raw = null;
+  return true;
+}
+
+// Grow the table so that `rows` x `cols` cells starting at (rowIndex, column) exist. New header cells get "열 N".
+export function growTable(table, rowIndex, column, rows, cols) {
+  let changed = false;
+  const needed = column + cols;
+  if (needed > table.width) {
+    changed = true;
+    table.width = needed;
+    table.delimiter = null;
+    while (table.alignments.length < needed) table.alignments.push("---");
+    for (const [index, row] of table.rows.entries()) {
+      while (row.cells.length < needed) row.cells.push(index ? "" : "열 " + (row.cells.length + 1));
+      row.raw = null;
+    }
+  }
+  while (table.rows.length < rowIndex + rows) {
+    table.rows.push({ raw: null, cells: Array(table.width).fill("") });
+    changed = true;
+  }
+  return changed;
 }
 
 export function pasteTableCells(table, rowIndex, column, values) {
@@ -198,11 +232,11 @@ export function toggleTableHeader(table) {
 const collator = new Intl.Collator("ko", { numeric: true, sensitivity: "base" });
 const NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
-export function sortTableRows(table, column, direction) {
+export function sortTableRows(table, column, direction, read = cellText) {
   const previous = table.rows.slice(1);
   const ordered = [...previous].sort((a, b) => {
-    const first = cellText(a.cells[column]);
-    const second = cellText(b.cells[column]);
+    const first = read(a.cells[column]);
+    const second = read(b.cells[column]);
     if (!first || !second) return Number(!first) - Number(!second);
     const firstNumber = NUMBER.test(first) && Number.isFinite(Number(first));
     const secondNumber = NUMBER.test(second) && Number.isFinite(Number(second));

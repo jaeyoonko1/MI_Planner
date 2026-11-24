@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-001
+- 한 일: 엑셀 복붙이 그림으로 붙던 문제와 표 칸 편집을 엑셀 수준으로 개선(D-44). 붙여넣기 우선순위를 표 > 텍스트 > 이미지로 바꾸고(엑셀은 범위 그림도 함께 넣음) 표 HTML·탭 텍스트를 노트 마크다운 표로 변환하는 공용 모듈 `paste-html.js`(자체 토크나이저·엑셀 클래스 스타일·프리셋 최근접 색·정렬·병합 풀기·0 앞자리·`<br>`·파이프 이스케이프·10,000칸 한도 안내)를 만들고 V-007이 확장할 지점을 열어 뒀다. 붙인 직후 "원본 서식 유지 / 텍스트만" 칩 + 되돌리기(`paste-chip.js`). 표 칸은 선택/편집 모드(범위 선택·드래그·Shift+방향키, F2·입력·Enter·Tab·Esc, Delete, Ctrl+A/C/X/V(TSV+HTML+내부 페이로드)·Ctrl+D/R), 서식 칸은 렌더링 보기, 정렬 3단계(끔 복원), 열 너비 끌기(세션 한정 — 마크다운에 담을 곳 없음), 표별 Ctrl+Z/Y 기록(V-009 구조 편집 포함).
+- 바뀐 파일: web/js/(paste-html, paste-chip, note-table-range 신규; note-table, note-table-model, note, mdconv).js, web/css/note.css, web/test/run_paste_table.mjs + fixtures/(엑셀·구글시트 가짜 클립보드 HTML), tests/test_lineeditor_js.py, docs/(DECISIONS D-44, VOC), project_flow.html
+- 테스트: Node run_paste_table.mjs(엑셀·시트 HTML·TSV 변환, 서식·병합·한도, 범위 복사·채우기·지우기·붙여넣기·정렬 끔·이동) + 기존 표·단·서식 Node 테스트 통과, pytest 4건(표·붙여넣기·단·서식) 통과. 격리 vault에서 앱 내 브라우저로 합성 paste(엑셀 HTML+이미지 파일 동시 → 표만 붙음), 키 입력(범위·Ctrl+D·Ctrl+Z/Y·한글 입력·Enter), 정렬 3단계, 2000×50 붙여넣기(≈0.5초, 200×50으로 제한 안내), 칩 토글·되돌리기, 다크·라이트, 1024·1280px, 콘솔 오류 없음.
+- 다음에 할 것 / 막힌 것: 실제 Excel 클립보드·Edge IME·단축키 충돌은 미확인(VERIFY). 글자 크기·테두리는 가져오지 않음. 열 너비는 새로고침하면 초기화. V-007은 `registerBlockParser`로 문단·불릿 파서를 추가하면 됨. 전체 pytest의 test_lineeditor_core_cases 등 V-003 관련 실패는 이번 변경과 무관.
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-009
 - 한 일: 노트 표를 한 번 만들면 지울 수 없던 버그(원인: 행 추가뿐이고 선택·삭제 수단이 전혀 없었음, D-43). `note-table-model.js`에 행·열 삽입/삭제, 머리글 켬/끔, 채운 칸 수(순수 함수), `note-table.js`에 아이콘 도구줄(aria-label·title+단축키, 탭으로 이동), 표 선택(칸에서 Esc, 표 블록 포커스) 후 Delete·Backspace로 표 삭제, 표 안 단축키 Alt+Shift+↑↓←→·Delete(행)·Backspace(열)·H(머리글), 범위 선택 시 여러 행·열 한 번에 처리, 채운 칸 3개 초과·마지막 행/열일 때만 인라인 확인 줄, 토스트 "되돌리기" + Ctrl+Z(V-008과 같은 stale 규칙, 편집기 캡처 단계에서 처리해 단 되돌리기와 충돌 없음). 단축키 안내는 표 도구줄의 키보드 버튼과 "단·표 단축키" 목록 양쪽에 둠.
 - 바뀐 파일: web/js/(note-table-model, note-table, note-columns).js, web/css/note.css, web/test/run_note_tables.mjs, docs/(DECISIONS D-43, VOC, WORKLOG), project_flow.html

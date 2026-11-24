@@ -187,3 +187,33 @@
 .note-table-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .note-table-grid [data-align="right"] .note-table-cell { text-align: right; }
 .note-table-grid [data-align="center"] .note-table-cell { text-align: center; }
+
+/* V-001: spreadsheet-style cells (select / edit modes), rich cell view, range edge, column resize, paste options bar. */
+.note-table-scroll { overflow-x: auto; border-radius: 0 0 8px 8px; }
+.note-table-cellbox { position: relative; flex: 1; min-width: 0; }
+.note-table-view { display: none; position: absolute; inset: 0; padding: 3px 6px; overflow: hidden; pointer-events: none; white-space: pre-wrap; overflow-wrap: anywhere; line-height: inherit; }
+.note-table-cellbox[data-rich]:not([data-editing]) .note-table-view { display: block; }
+.note-table-cellbox[data-rich]:not([data-editing]) .note-table-cell { color: transparent; caret-color: transparent; }
+.note-table-cellbox:not([data-editing]) .note-table-cell { cursor: cell; caret-color: transparent; }
+.note-table-cellbox:not([data-editing]) .note-table-cell::selection { background: transparent; color: inherit; }
+.note-table-cellbox[data-editing] .note-table-cell { background: var(--panel-2); box-shadow: inset 0 0 0 2px var(--accent); }
+.note-table-cellbox[data-editing] .note-table-cell:focus-visible { outline: none; }
+.note-table-view mark { color: #1f2430; border-radius: 3px; padding: 0 1px; }
+.note-editor .note-table-grid :is(th, td) { position: relative; }
+.note-editor .note-table-grid [data-selected] { --et: 0px; --eb: 0px; --el: 0px; --er: 0px; box-shadow: inset 0 var(--et) 0 0 var(--accent), inset 0 calc(var(--eb) * -1) 0 0 var(--accent), inset var(--el) 0 0 0 var(--accent), inset calc(var(--er) * -1) 0 0 0 var(--accent); }
+.note-table-grid [data-edge*="t"] { --et: 1.5px; }
+.note-table-grid [data-edge*="b"] { --eb: 1.5px; }
+.note-table-grid [data-edge*="l"] { --el: 1.5px; }
+.note-table-grid [data-edge*="r"] { --er: 1.5px; }
+.note-table-resize { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 2; width: 7px; cursor: col-resize; touch-action: none; }
+.note-table-resize::after { content: ""; position: absolute; inset: 3px 3px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity .12s; }
+.note-table-resize:hover::after, .note-table-resize[data-active]::after { opacity: .8; }
+.paste-chip { position: fixed; left: 50%; bottom: 26px; z-index: 89; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px 12px; max-width: min(640px, 94vw); padding: 10px 12px 10px 16px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--pop-bg); box-shadow: var(--shadow-pop); font-size: 13px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .32s var(--ease); }
+.paste-chip.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.paste-chip-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
+.paste-chip-msg { font-weight: 600; }
+.paste-chip-note { color: var(--muted); font-size: 11.5px; }
+.paste-chip-group { display: inline-flex; gap: 4px; }
+.paste-chip .chip { min-height: 28px; font-size: 12px; }
+.paste-chip .chip[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bd); }
+@media (prefers-reduced-motion: reduce) { .paste-chip, .note-table-resize::after { transition: none; } }
