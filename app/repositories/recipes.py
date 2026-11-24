@@ -86,7 +86,7 @@ def _source(row: sqlite3.Row) -> dict[str, Any]:
     return d
 
 
-def create_source(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
+def _normalize_source(data: dict[str, Any]) -> dict[str, Any]:
     name = str(data.get("name") or "").strip()
     if not name or len(name) > 100:
         raise RecipeError("소스 이름은 1~100자여야 해요.", 422)
@@ -99,23 +99,54 @@ def create_source(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, A
     layout = data.get("layout", "folder")
     if layout not in ("folder", "file"):
         raise RecipeError("레이아웃은 folder 또는 file이에요.", 422)
-    rules = validate_filter(data.get("name_filter", []))
-    globs = _validate_globs(data.get("file_globs", []))
+    return {
+        "name": name, "vendor": str(data.get("vendor") or "")[:100], "model": str(data.get("model") or "")[:100],
+        "equipment": str(data.get("equipment") or "")[:100], "line": str(data.get("line") or "")[:100],
+        "ftp_profile": profile, "remote_dir": str(data.get("remote_dir") or "")[:500], "layout": layout,
+        "name_filter": json.dumps(validate_filter(data.get("name_filter", [])), ensure_ascii=False),
+        "file_globs": json.dumps(_validate_globs(data.get("file_globs", [])), ensure_ascii=False),
+        "mapping": mapping, "enabled": 1 if data.get("enabled", True) else 0,
+        "note": str(data.get("note") or "")[:2000],
+    }
+
+
+def create_source(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
+    v = _normalize_source(data)
     now = _now()
     try:
         cur = conn.execute(
             "INSERT INTO recipe_sources (name, vendor, model, equipment, line, ftp_profile, remote_dir, layout,"
             " name_filter, file_globs, mapping, enabled, note, created_at, updated_at)"
             " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (name, str(data.get("vendor") or "")[:100], str(data.get("model") or "")[:100],
-             str(data.get("equipment") or "")[:100], str(data.get("line") or "")[:100], profile,
-             str(data.get("remote_dir") or "")[:500], layout, json.dumps(rules, ensure_ascii=False),
-             json.dumps(globs, ensure_ascii=False), mapping, 1 if data.get("enabled", True) else 0,
-             str(data.get("note") or "")[:2000], now, now))
+            (v["name"], v["vendor"], v["model"], v["equipment"], v["line"], v["ftp_profile"], v["remote_dir"],
+             v["layout"], v["name_filter"], v["file_globs"], v["mapping"], v["enabled"], v["note"], now, now))
     except sqlite3.IntegrityError as exc:
         raise RecipeError("같은 이름의 소스가 이미 있어요.", 409) from exc
     conn.commit()
     return get_source(conn, cur.lastrowid)
+
+
+def update_source(conn: sqlite3.Connection, source_id: int, data: dict[str, Any]) -> dict[str, Any]:
+    """Partial update: fields missing from `data` keep their stored value."""
+    merged = {**get_source(conn, source_id), **data}
+    v = _normalize_source(merged)
+    try:
+        conn.execute(
+            "UPDATE recipe_sources SET name=?, vendor=?, model=?, equipment=?, line=?, ftp_profile=?, remote_dir=?,"
+            " layout=?, name_filter=?, file_globs=?, mapping=?, enabled=?, note=?, updated_at=? WHERE id=?",
+            (v["name"], v["vendor"], v["model"], v["equipment"], v["line"], v["ftp_profile"], v["remote_dir"],
+             v["layout"], v["name_filter"], v["file_globs"], v["mapping"], v["enabled"], v["note"], _now(), source_id))
+    except sqlite3.IntegrityError as exc:
+        raise RecipeError("같은 이름의 소스가 이미 있어요.", 409) from exc
+    conn.commit()
+    return get_source(conn, source_id)
+
+
+def delete_source(conn: sqlite3.Connection, source_id: int) -> None:
+    """Local DB only: recipes/snapshots of the source go with it; cached blobs stay on disk (content addressed)."""
+    get_source(conn, source_id)
+    conn.execute("DELETE FROM recipe_sources WHERE id = ?", (source_id,))
+    conn.commit()
 
 
 def list_sources(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -177,6 +208,13 @@ def get_recipe(conn: sqlite3.Connection, recipe_id: int) -> dict[str, Any]:
     current = get_snapshot(conn, row["current_snapshot_id"]) if row["current_snapshot_id"] else None
     return {"recipe": {**dict(row), "missing": bool(row["missing"])},
             "source": get_source(conn, row["source_id"]), "snapshots": snaps, "current": current}
+
+
+def get_run(conn: sqlite3.Connection, run_id: int) -> dict[str, Any]:
+    row = conn.execute("SELECT * FROM recipe_runs WHERE id = ?", (run_id,)).fetchone()
+    if row is None:
+        raise RecipeError("수집 기록을 찾을 수 없어요.", 404)
+    return {**dict(row), "errors": json.loads(row["errors"] or "[]")}
 
 
 def list_runs(conn: sqlite3.Connection, source_id: int | None = None, limit: int = 50) -> list[dict[str, Any]]:

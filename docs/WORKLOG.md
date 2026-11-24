@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P6-02
+- 한 일: RCP 수집(D-37, 새 패키지·마이그레이션 없음). `app/config.py`(config/local.json 프로필·한도), `app/rcp_ftp.py`(쓰기 메서드 없는 `ReadOnlyFtp`: MLSD → LIST 대체, 고정 한국어 오류 문구), `app/rcp_collect.py`(목록 → 이름 필터 → 임시 `.part` → sha256 blob `os.replace` → `add_snapshot`, 한도·취소·시간 제한, 완전 성공에서만 missing, 시작 시 `running` 정리), API(소스 POST/PATCH/DELETE, 필터·목록 미리보기, 수집 202 + 폴링, 취소, 프로필 이름 목록). 화면 `#/rcp`: `수집 켜짐/꺼짐` 토글, 소스 목록·상세·상태 카드·오류·이전 실행·레시피 표, 소스 편집 창(프로필·단위 칩, 규칙 행, 즉시 필터 미리보기).
+- 바뀐 파일: app/(config, rcp_ftp, rcp_collect, main, repositories/recipes, routers/recipes).py, web/js/(rcp, rcp-model, api, main).js, web/css/rcp.css, web/index.html, web/test/run_rcp.mjs, tests/(test_rcp_collect, test_lineeditor_js).py, docs/(SPEC 4.6.2, DECISIONS D-37, WORKLOG), project_flow.html
+- 테스트: pytest 307 passed(신규 22+1: 가짜 FTP로 성공·캐시 blob·재실행 unchanged·변경 시 새 버전·missing(부분 실패·빈 목록 제외)·일부 실패·다운로드/접속 타임아웃·거부·로그인 실패 문구에 호스트/계정/비밀번호 없음·파일 수/크기/합계 한도·LIST 대체·파일 단위·안전하지 않은 이름·꺼짐 403(연결 0회)·가드·취소·미리보기(다운로드 0)·프로필 비노출·소스 CRUD·시작 시 정리·LIST 파서 + Node 모델). Edge 앱 내 브라우저(가짜 FTP 서버 모델을 꽂은 임시 앱)에서 1280 라이트/다크·1024 라이트/다크 목록·편집 창·수집·로그인 실패 표시 확인, 콘솔 오류 0.
+- 다음에 할 것 / 막힌 것: 파서 없음 → 파라미터 0개(P6-03). 같은 크기·수정 시각이면 다운로드 생략하는 최적화 없음(항상 전부 받음 — 레시피 수백 개면 느릴 수 있음). 수집은 수동만(예약 없음). 소스 복제·가져오기·정렬 없음. 캐시 `.tmp` 정리는 실행 끝에만(크래시 시 남음), blob 정리 없음. 연결 시험 전용 버튼 없음(`목록 불러오기`가 대신함). 실제 회사 FTP 동작은 flow VERIFY P6-02. 설정 화면이 따로 없어 RCP 토글은 RCP 화면 머리글에 둠.
+
 ## 2026-11-24 · Claude Code(Opus) · P6-01
 - 한 일: RCP 관리 설계(SPEC 4.6.1, D-36) — FTP 프로필(config/local.json만), 수집 흐름·한도, 이름 필터(정규식 없음), `data/recipes/` 내용 주소 캐시, 파서 플러그인 인터페이스, 버전 있는 설비사 매핑 JSON, 스냅샷·diff 의미, P6-05 쓰기 안전장치(두 열쇠·dry run·기준 해시·백업·diff·이름 확인·업로드 후 검증·감사 로그)와 위협 목록 T1~T16. migration 010(`recipe_sources/runs/recipes/snapshots/files/params`), `app/repositories/recipes.py`, 읽기 전용 API(`/api/recipe-sources`, `/api/recipes`, `/api/recipe-snapshots`, `/api/recipe-runs`), `parsers/`(base 레지스트리·`fake` 테스트 파서·`mapping.py` 검증·`mappings/example_vendor.json` 가짜 예시), 설정 `rcp_enabled`·`rcp_write_enabled`(기본 off, 쓰기는 RCP 켠 뒤에만, RCP 끄면 같이 꺼짐). FTP·쓰기 코드 없음, UI 없음.
 - 바뀐 파일: migrations/010_recipes.sql, app/(main, repositories/recipes, routers/recipes, routers/settings).py, parsers/(__init__, base, fake, mapping).py, parsers/mappings/example_vendor.json, tests/(test_recipes, test_db, test_task_fields).py, .gitignore(data/recipes/, config/recipe_mappings/), docs/(SPEC, DECISIONS, WORKLOG), project_flow.html

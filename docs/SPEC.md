@@ -467,6 +467,15 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
   | T15 | 필터 정규식 폭주 | 정규식 미지원(contains/prefix/suffix/glob) |
   | T16 | 대량 변경 | 파일 1개 단위, 일괄 없음 |
 
+### 4.6.2 수집 구현 (P6-02, D-37)
+- **설정 파일**: `app/config.py`가 `config/local.json`을 읽는다(없으면 빈 설정). 프로필은 `host·port·user·password(_env)·encoding·passive·timeout`, 선택 `recipe_ftp.limits`(`max_files`·`max_file_bytes`·`max_total_bytes`·`max_seconds`·`max_depth`). 화면·API에는 프로필 **이름·encoding·passive**만 나간다(`GET /api/recipe-ftp/profiles`).
+- **읽기 전용 래퍼** `app/rcp_ftp.py` `ReadOnlyFtp`: `list_dir`(MLSD → 서버가 모르면 `LIST` 파싱, Unix·DOS 형식)·`retrieve`(`RETR`만)·`reconnect`·`close`. 쓰기 명령 메서드 없음, 원시 `ftplib.FTP`는 비공개(테스트로 확인). 파일 한도 초과로 전송을 끊으면 연결을 다시 연다. 오류는 `describe()`가 고정 한국어 문구로 바꾼다(호스트·계정·비밀번호·서버 응답 원문은 어디에도 남기지 않음).
+- **수집 `app/rcp_collect.py`**: `recipe_runs` 행 생성 → 접속(수동 모드 기본) → 목록(`layout=folder` 하위 폴더 / `file` 파일) → 이름 필터 → 레시피마다 폴더를 최대 깊이 4까지 훑어 `file_globs`(`/` 없는 패턴은 파일 이름에만, 대소문자 무시)에 맞는 파일을 `.tmp/<run_id>/*.part`로 받으며 sha256 계산 → `blobs/<sha[:2]>/<sha>`로 `os.replace`(이미 있으면 버림) → `add_snapshot`(해시 같으면 `unchanged`). 레시피의 파일이 하나라도 실패하면 그 레시피는 이전 버전을 그대로 두고 오류만 기록(반쪽 스냅샷 없음). 레시피마다 실행 행의 개수를 갱신해 화면이 진행을 폴링한다.
+- **missing 표시**: 오류 0건·취소 아님·한도 미도달·목록이 비어 있지 않은 **완전 성공** 실행에서만, 이번에 안 보인 레시피를 `missing=1`로 표시(삭제 안 함). 다시 보이면 해제.
+- **상태**: `ok`(오류 0) / `partial`(일부 레시피 성공 + 오류 또는 한도·시간 초과) / `error`(접속·목록 실패 또는 성공 0) / `cancelled`. 앱 시작 시 `running`으로 남은 실행은 `error`("앱이 종료되어…")로 닫는다.
+- **API**: `POST/PATCH/DELETE /api/recipe-sources[/{id}]`(DELETE는 DB 행만, 캐시 blob 유지) · `POST /api/recipe-preview/filter`(이름 목록에 필터 적용, 네트워크 없음) · `POST /api/recipe-preview/list`(`rcp_enabled` 필요, 이름만 읽고 받지 않음, 설비에 연결) · `POST /api/recipe-sources/{id}/run`(202, 작업 스레드, `rcp_enabled` 꺼짐 403·꺼진 소스/실행 중 409·프로필 없음 422) · `GET /api/recipe-runs/{id}` · `POST /api/recipe-runs/{id}/cancel`. 한 번에 한 실행(연결 1개)이며 미리보기도 같은 잠금을 쓴다.
+- **화면 `#/rcp`**(사이드바 `RCP 관리`): 헤더에 `수집 켜짐/꺼짐` 토글 칩(= `rcp_enabled`, 꺼짐이면 안내 띠와 비활성 버튼), 소스 목록 + 상세(필터 요약, 수집 버튼·취소·편집·지우기, 상태 카드 5칸·오류 목록·이전 실행, 수집한 레시피 표·`누락 N개 보기` 칩·이름 찾기). 편집 창: 프로필·레시피 단위 칩(D-12), 경로·파일 패턴, 규칙 행(종류 칩 4개 + 값 + `제외` 칩), 미리보기 이름 칸(`목록 불러오기`로 채우거나 직접 입력) + 즉시 일치 표시(색 + 아이콘 + 글자).
+
 ### 4.7 LLM 연동 (P7, D-10)
 **1단계 — 파일 + 스킬 + CLI** (사내 OpenCode / Claude Code / Codex 공통)
 - 노트·일지가 일반 파일이라 에이전트가 바로 읽고 쓴다.

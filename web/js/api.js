@@ -134,4 +134,17 @@ export const api = {
   rulesOverview: (rules, fallback) => request("POST", "/api/todos/page-rules/overview", rules ? { rules, fallback } : {}),
   movePage: (path, data) => request("PATCH", `/api/pages${q(path)}`, data),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
+  // RCP management (P6-02)
+  recipeSources: () => request("GET", "/api/recipe-sources").then((d) => d.items),
+  recipeProfiles: () => request("GET", "/api/recipe-ftp/profiles").then((d) => d.items),
+  recipes: (params = {}) => request("GET", "/api/recipes?" + new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "" && v != null && v !== false))).then((d) => d.items),
+  recipeRuns: (sourceId) => request("GET", `/api/recipe-runs?source_id=${sourceId}&limit=6`).then((d) => d.items),
+  recipeRun: (id) => request("GET", `/api/recipe-runs/${id}`).then((d) => d.run),
+  runRecipeSource: (id) => request("POST", `/api/recipe-sources/${id}/run`).then((d) => d.run),
+  cancelRecipeRun: (id) => request("POST", `/api/recipe-runs/${id}/cancel`),
+  createRecipeSource: (data) => request("POST", "/api/recipe-sources", data).then((d) => d.source),
+  patchRecipeSource: (id, data) => request("PATCH", `/api/recipe-sources/${id}`, data).then((d) => d.source),
+  deleteRecipeSource: (id) => request("DELETE", `/api/recipe-sources/${id}`),
+  previewRecipeList: (data) => request("POST", "/api/recipe-preview/list", data),
+  previewRecipeFilter: (rules, names) => request("POST", "/api/recipe-preview/filter", { rules, names }),
 };

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import db, memo
+from app import db, memo, rcp_collect
 from fastapi.exceptions import RequestValidationError
 
 from app.repositories.eval_templates import TemplateError
@@ -47,6 +47,7 @@ def create_app(
         conn = db.connect(db_path)
         try:
             memo.sweep(conn, app.state.vault)  # unify issue memos with their page bodies (P2B-10)
+            rcp_collect.reap_stale(conn)  # a run left running by a restart can never finish (P6-02)
         finally:
             conn.close()
         yield

@@ -123,3 +123,13 @@ def test_doi_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_rcp_model():
+    """P6-02: RCP screen helpers - filter cleanup, labels, recipe search (web/test/run_rcp.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_rcp.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
