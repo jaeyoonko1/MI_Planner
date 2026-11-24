@@ -12,6 +12,7 @@ import { runNoteLineAction } from "./note-lines.js";
 import { mountNoteColumns } from "./note-columns.js";
 import { bindWikiEditor } from "./wikilinks.js";
 import { hub } from "./hub.js";
+import { mountPptPanel } from "./ppt.js";
 import { htmlToMd, loadInto } from "./mdconv.js";
 import { mountFormatBar } from "./note-format.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
@@ -540,6 +541,7 @@ export function renderNote(host, page) {
   });
   current = { flush: ctl.flush, destroy: ctl.destroy };
   host.replaceChildren(ctl.el);
+  host.before(mountPptPanel(path)); // V-002: PowerPoint attachments sit above the note
   if (taskId != null) { // the issue's detail panel may edit the same text
     hub.on(async (i) => {
       if (i.kind !== "task" || Number(i.id) !== Number(taskId) || i.from === "page" || ctl.isBusy()) return;

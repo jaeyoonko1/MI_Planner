@@ -692,6 +692,17 @@ GET    /api/pages?path=          PUT /api/pages?path=      # 내용 읽기/저�
 POST   /api/pages                # {parent, title, type}
 PATCH  /api/pages?path=          # 이름 변경, 이동, 순서
 DELETE /api/pages?path=          # vault/.trash/ 로 이동
+# PowerPoint 첨부 (V-002, D-42) — 페이지 폴더 기준, 오류는 {"error"}
+GET    /api/ppt?path=                      # 첨부 목록 {id, mode upload|link, name, size, missing, changed, rendered, ...}
+POST   /api/ppt/upload?path=&name=         # 원본 바이트 본문 → files/ 복사 (300MB, .ppt/.pptx/.pptm)
+POST   /api/ppt/link?path=                 # {link} 절대·UNC 경로만 기억 (복사 안 함, 존재 검증)
+POST   /api/ppt/check-link                 # {link} 저장 없이 검증
+GET    /api/ppt/{id}/outline?path=         # 슬라이드 개요(제목·본문·노트·삽입 그림) + 사전 렌더 여부
+GET    /api/ppt/{id}/slide/{n}?path=       # 사전 렌더 PNG/JPG (링크한 덱 옆 폴더, 있을 때만)
+GET    /api/ppt/{id}/media/{key}.{ext}     # 덱 안 삽입 그림(캐시)    GET /{id}/cover  # 표지(없으면 204)
+POST   /api/ppt/{id}/refresh?path=         # 해시 다시 읽기 {refreshed}
+POST   /api/ppt/{id}/open?path=            # {confirm:true}, 루프백 전용 → os.startfile
+DELETE /api/ppt/{id}?path=                 # 사이드카·사본은 .trash로, 링크 원본은 그대로
 GET    /api/search?q=
 # 일지
 GET    /api/journal/{yyyy-mm}    PUT /api/journal/{yyyy-mm}/{dd}

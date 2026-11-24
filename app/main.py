@@ -28,6 +28,7 @@ from app.routers import search as search_router
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
 from app.routers import pages
+from app.routers import ppt as ppt_router
 from app.routers import structure as structure_router
 from app.routers import task_pages
 from app.routers import task_fields as task_fields_router
@@ -55,6 +56,7 @@ def create_app(
     app = FastAPI(title="MI_Planner", version=APP_VERSION, lifespan=lifespan)
     app.state.db_path = db_path
     app.state.vault = Vault(vault_path)
+    app.include_router(ppt_router.router)
     app.include_router(html_pages.router)  # before pages.router (/state vs "")
     app.include_router(pages.router)
     app.include_router(journal_router.router)

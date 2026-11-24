@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-002
+- 한 일: 노트·이슈 페이지에 PowerPoint 첨부(D-42). `app/ppt_attach.py` + `app/routers/ppt.py`(`/api/ppt`): 올리기(files/ 복사, 300MB·sha256) / 링크만(절대·UNC 검증, 복사 안 함) 사이드카 JSON, `missing`·`changed` 상태, 새로고침(해시 재읽기), 삭제는 .trash(링크 원본 불변), 슬라이드 개요·삽입 그림은 `pptx_read` 재사용(`data/ppt_cache`), 링크 덱 옆 PNG 폴더가 있으면 실제 슬라이드 그림으로 사용, `os.startfile` 열기는 루프백·Host·Origin·confirm·확장자 화이트리스트 가드. 화면: `ppt.js`(페이지 위 띠, 추가 창의 토글 칩 `파일 올리기|링크만` + 실시간 경로 검증, 풀윈도 뷰어: 썸네일 레일·←→·Home/End·F 전체 화면(막히면 창 안 집중 보기)·N 노트·E 편집·aria-live), `ppt-model.js`(순수 로직), `ppt.css`. 노트 쪽은 `note.js`에 두 줄(`host.before(mountPptPanel)`)만.
+- 바뀐 파일: app/ppt_attach.py, app/routers/ppt.py, app/main.py, web/js/(ppt, ppt-model, note).js, web/css/ppt.css, web/index.html, web/test/run_ppt.mjs, tests/test_ppt_attach.py, docs/(SPEC, DECISIONS, VOC, WORKLOG), project_flow.html
+- 테스트: pytest tests/test_ppt_attach.py 12 passed(업로드·링크 검증·변경/없음·개요·캐시·표지·.ppt·사전 렌더·열기 가드(원격·Host·Origin·확인·사이드카 변조)·삭제) + Node run_ppt.mjs. 격리 vault·가짜 덱으로 앱 내 브라우저 확인: 카드·추가 창(링크 검증 메시지)·뷰어(←→·E 확인 창·열기 호출)·집중 보기, 다크/라이트, 1024·1280px.
+- 다음에 할 것 / 막힌 것: 실제 PowerPoint·UNC·대용량·실제 Edge 전체 화면은 미확인(VERIFY). 대체 보기는 도형·차트를 그리지 못함(PowerPoint PNG 내보내기 폴더로 보완). 업로드는 본문을 메모리에 올리므로 300MB 상한. 이슈 메모(페이지 없는 이슈)에는 띠가 없음 — 이슈 페이지를 만들면 보임. DOI 화면 연결은 후속. data/ppt_cache 정리 기능 없음.
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-008
 - 한 일: 노트 단 삭제 불가·아래 행 추가 불가 수정(D-41). 원인: 단 추가만 있고 삭제·행 개념이 없었다. 본문 표식 `<!-- row -->`로 행을 추가(`note-column-layout.js`: insertColumn·addRowBelow·deleteColumn·mergeTarget, 표식 종류에서 행 구조 계산), 레이아웃은 2행 이상일 때만 `note_layout.rows`. `note-columns.js`: 단별 hover/Tab 도구줄(아이콘 버튼 + aria-label), 삭제 확인 패널(토글 칩 앞 단에 합치기/내용까지 삭제, 빈 단은 즉시), 단·행 변경은 스냅샷 되돌리기(토스트 + Ctrl+Z, 그 뒤 입력하면 편집기 자체 실행 취소), 단축키 Alt+Shift+←·→·↓·Delete + "단 단축키" 목록. 다른 단 편집기는 유지(포커스·undo 이력 보존).
 - 바뀐 파일: web/js/(note-column-layout, note-columns).js, web/css/note.css, app/routers/pages.py(`rows` 검증), web/test/run_note_columns.mjs, tests/test_pages.py, docs/(SPEC, DECISIONS, VOC, WORKLOG), project_flow.html
