@@ -168,6 +168,15 @@ XML/INI/TXT 범용 파서를 내장하고, 설비사별 차이는 `parsers/<vend
 | Q-11 | ~~Plan/Step 출처~~ | | process plan 엑셀 표 → 엑셀 가져오기 |
 | Q-12 | ~~PPT 템플릿~~ | | 반출 불가 → pptx 스킬은 회사에서 제작 (D-17) |
 
+### D-36 RCP 관리 설계: 프로필 이름만 DB에, 내용 해시 스냅샷, 정규식 없는 필터, 두 열쇠 쓰기 (P6-01, 2026-11-24)
+새 패키지 없음(`ftplib`·`hashlib`·`fnmatch`·`json`). 상세는 SPEC 4.6.1.
+- **접속 정보**: FTP 주소·계정은 `config/local.json`의 `recipe_ftp.profiles`(git 제외)에만, DB 소스는 프로필 이름만. 비밀번호는 환경 변수 우선.
+- **캐시**: `data/recipes/blobs/<sha[:2]>/<sha>` 내용 주소·불변(vault 아님 — 사람이 쓰는 문서가 아니라 원본 보관용). 루트의 옛 `recipe_cache/` 무시 규칙은 그대로 둔다.
+- **스냅샷**: 레시피 버전 = 파일들의 (경로, sha256) 해시. 현재와 같으면 새로 만들지 않고, 되돌림도 새 버전. 파서·매핑 버전이 바뀌면 blob에서 다시 파싱(새 스냅샷 아님).
+- **이름 필터**: contains/prefix/suffix/glob + 제외, 대소문자 무시. 정규식은 ReDoS·실수 위험으로 받지 않는다.
+- **파서·매핑**: `parsers/base.py` 레지스트리 + 순수 파서. 매핑은 버전 있는 JSON(`format_version`, `mapping_version`). 실제 회사 매핑은 `config/recipe_mappings/`(git 제외, D-17), 커밋되는 `parsers/mappings/`에는 가짜 예시만.
+- **쓰기(P6-05)**: 설정 `rcp_write_enabled` + 프로필 `allow_write` 두 열쇠, 기본 dry run, 기준 해시 재확인, 백업 검증, diff 미리보기, 이름 입력 확인, 업로드 후 해시 검증·자동 복구, 추가만 되는 감사 로그(DB + jsonl). 파일 1개 단위, CLI·스킬에는 쓰기 없음.
+
 ### D-35 DOI 공유 패키지는 zip 한 개(manifest.json + images/)로 주고받는다 (P5-04, 2026-11-24)
 새 패키지 없음(`zipfile`·`json`·`hashlib`만). SPEC의 "폴더(이미지 + doi.json)"는 사내 드라이브로 옮기기 쉽도록 zip 한 개로 바꿨다(안 풀어도 되고 한 파일이라 빠뜨릴 일이 없다).
 - **형식 v1**: `manifest.json`(`format="mi-planner-doi-package"`, `format_version`, `package_id`, 보낸 곳·메모, DOI 레코드 + 이미지별 `uid`·`path`·`sha256`·`size`·캡션·순서, 선택적 미리보기 `thumb_path`·`thumb_sha256`) + `README.txt` + `images/<DOI uid>/<이미지 uid>.<ext>`(+`.thumb.jpg`). 사람·LLM이 메모장으로 읽을 수 있게 들여쓴 JSON. 더 높은 `format_version`은 "앱을 업데이트하라"는 안내와 함께 거부한다.

@@ -14,6 +14,7 @@ from app.repositories.eval_templates import TemplateError
 from app.repositories.evaluations import EvaluationError
 from app.repositories.doi import DoiError
 from app.repositories.plans import PlanError
+from app.repositories.recipes import RecipeError
 from app.repositories.tasks import TaskError
 from app.routers import dashboard as dashboard_router
 from app.routers import eval_templates, evaluations
@@ -22,6 +23,7 @@ from app.routers import doi_import as doi_import_router
 from app.routers import doi_package as doi_package_router
 from app.routers import html_pages
 from app.routers import plans as plans_router
+from app.routers import recipes as recipes_router
 from app.routers import search as search_router
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
@@ -66,6 +68,7 @@ def create_app(
     app.include_router(evaluations.router)
     app.include_router(evaluations.cell_router)
     app.include_router(plans_router.router)
+    app.include_router(recipes_router.router)
     app.include_router(doi_import_router.router)
     app.include_router(doi_package_router.router)
     app.include_router(doi_router.router)
@@ -97,6 +100,10 @@ def create_app(
 
     @app.exception_handler(PlanError)
     async def on_plan_error(_, exc: PlanError) -> JSONResponse:
+        return JSONResponse({"error": str(exc)}, status_code=exc.status)
+
+    @app.exception_handler(RecipeError)
+    async def on_recipe_error(_, exc: RecipeError) -> JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=exc.status)
 
     @app.exception_handler(DoiError)

@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Opus) · P6-01
+- 한 일: RCP 관리 설계(SPEC 4.6.1, D-36) — FTP 프로필(config/local.json만), 수집 흐름·한도, 이름 필터(정규식 없음), `data/recipes/` 내용 주소 캐시, 파서 플러그인 인터페이스, 버전 있는 설비사 매핑 JSON, 스냅샷·diff 의미, P6-05 쓰기 안전장치(두 열쇠·dry run·기준 해시·백업·diff·이름 확인·업로드 후 검증·감사 로그)와 위협 목록 T1~T16. migration 010(`recipe_sources/runs/recipes/snapshots/files/params`), `app/repositories/recipes.py`, 읽기 전용 API(`/api/recipe-sources`, `/api/recipes`, `/api/recipe-snapshots`, `/api/recipe-runs`), `parsers/`(base 레지스트리·`fake` 테스트 파서·`mapping.py` 검증·`mappings/example_vendor.json` 가짜 예시), 설정 `rcp_enabled`·`rcp_write_enabled`(기본 off, 쓰기는 RCP 켠 뒤에만, RCP 끄면 같이 꺼짐). FTP·쓰기 코드 없음, UI 없음.
+- 바뀐 파일: migrations/010_recipes.sql, app/(main, repositories/recipes, routers/recipes, routers/settings).py, parsers/(__init__, base, fake, mapping).py, parsers/mappings/example_vendor.json, tests/(test_recipes, test_db, test_task_fields).py, .gitignore(data/recipes/, config/recipe_mappings/), docs/(SPEC, DECISIONS, WORKLOG), project_flow.html
+- 테스트: pytest 284 passed(신규 10: 필터 규칙·검증, 소스 검증(계정 형태 거부·중복), 스냅샷 생성/무변경/되돌림, 해시 순서 무관, 중복 경로·parse_status, missing 해제, 읽기 전용 API·LIKE 이스케이프·405, RCP 플래그, 파서 레지스트리·fake 파서(cp949), 매핑 예시·검증·로컬 우선)
+- 다음에 할 것 / 막힌 것: P6-02 = 읽기 전용 FTP 래퍼(쓰기 메서드 없음 테스트) + 소스 등록 API/화면 + 수집 실행(`upsert_recipe`/`add_snapshot` 사용) + missing 표시. P6-03 = xml/ini/txt 파서(경로 표기 확정) + 매핑 적용. 설정 화면에 RCP 토글 UI 없음(API만) — RCP 화면(P6-02/04)과 함께 DESIGN.md 따라 추가. 캐시 blob 정리(.trash) 기능 없음. 회사 FTP 특성은 flow VERIFY P6-01.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P5-04
 - 한 일: DOI 공유 패키지 내보내기·가져오기(D-35, 새 패키지 없음). 내보내기: DOI 화면 헤더 `패키지 내보내기`(범위 칩 보이는/전체, 상세 패널 `패키지로 내보내기`)로 `manifest.json`(형식 버전·package_id·보낸 곳·DOI·이미지 sha256) + `README.txt` + `images/<DOI uid>/<이미지 uid>.<ext>`(+미리보기) zip 한 개 생성, 초안·휴지통 제외. 가져오기: `패키지 가져오기` 창 — 검증(경로 이탈·심볼릭 링크·암호·중복 이름·용량 한도·sha256·크기·이미지 형식·형식 버전, 하나라도 틀리면 전체 거부) → 미리보기(새 항목/이미 있음/충돌, 저장 없음) → 항목별 선택 칩(가져오기·건너뛰기·둘 다 두기·내 것 덮어쓰기) → 원자적 적용(`.part` 복사 → DB 트랜잭션 → 파일 교체, 실패 시 전부 되돌림). 가져온 DOI는 `imported`·읽기 전용·`가져온 곳` 표시. 덮어쓰기는 내가 만든 DOI만(이전 내용은 `.trash/overwritten_*.json` + 이미지 `.trash`로).
 - 바뀐 파일: app/(doi_package, main, routers/doi_package).py, web/js/(doi-package, doi-package-model, doi, api).js, web/css/doi-package.css, web/index.html, web/test/run_doi_package.mjs, tests/test_doi_package.py, docs/(SPEC, DECISIONS, WORKLOG), project_flow.html

@@ -12,11 +12,16 @@ router = APIRouter(prefix="/api/settings")
 
 # Whitelisted keys with defaults (SPEC section 5 settings table).
 DEFAULTS: dict[str, str] = {"journal_auto_show": "on", "theme": "system", "density": "normal",
-            "memo_folds": "{}", "mos_mapping": "", "plan_mapping": ""}
+            "memo_folds": "{}", "mos_mapping": "", "plan_mapping": "",
+            "rcp_enabled": "off", "rcp_write_enabled": "off"}
 # Keys with a closed set of values (D-23 theme, density). Other keys accept any string.
 CHOICES: dict[str, set[str]] = {
     "theme": {"system", "light", "dark"},
     "density": {"compact", "normal", "cozy"},
+    # RCP feature flags (D-11, D-36). Write stays off by default and needs rcp_enabled; it is only one of two keys
+    # (the other is allow_write on the FTP profile in config/local.json) and has no effect until P6-05.
+    "rcp_enabled": {"off", "on"},
+    "rcp_write_enabled": {"off", "on"},
 }
 
 
@@ -44,6 +49,8 @@ def put_setting(request: Request, key: str, body: SettingIn) -> dict:
         raise TaskError("알 수 없는 설정입니다.", 404)
     if key in CHOICES and body.value not in CHOICES[key]:
         raise TaskError("허용되지 않는 설정 값입니다.", 400)
+    if key == "rcp_write_enabled" and body.value == "on" and read_all(request.app.state.db_path)["rcp_enabled"] != "on":
+        raise TaskError("RCP 관리를 먼저 켜야 레시피 쓰기를 허용할 수 있어요.", 400)
     if key == "mos_mapping":
         try:
             data = json.loads(body.value) if body.value else {}
@@ -75,6 +82,9 @@ def put_setting(request: Request, key: str, body: SettingIn) -> dict:
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, body.value),
         )
+        if key == "rcp_enabled" and body.value == "off":  # turning RCP off always revokes write permission
+            conn.execute("INSERT INTO settings (key, value) VALUES ('rcp_write_enabled', 'off') "
+                         "ON CONFLICT(key) DO UPDATE SET value = 'off'")
         conn.commit()
     finally:
         conn.close()

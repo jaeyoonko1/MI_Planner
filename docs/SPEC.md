@@ -382,6 +382,91 @@ vault/
 - **이력**: 수집할 때마다 스냅샷 → 바뀐 파라미터 감지·diff.
 - **수정·업로드 (마지막 단계)**: 자동 백업 → diff 미리보기 → 명시적 확인 → 업로드 → 로그. 기본은 꺼둠(설정에서 켬).
 
+### 4.6.1 RCP 설계 상세 (P6-01, D-36)
+**원칙**: 설비 쪽으로는 읽기만(D-11). 앱이 쓰는 곳은 `data/` 아래 로컬 캐시와 DB뿐. 주소·계정은 DB·로그·화면에 남기지 않는다.
+
+**1) FTP 접속 정보 — `config/local.json`(git 제외)에만**
+```json
+"recipe_ftp": { "profiles": { "line1": {
+  "host": "…", "port": 21, "user": "…", "password_env": "MI_RCP_FTP_PW",
+  "encoding": "cp949", "passive": true, "timeout": 20, "allow_write": false } } }
+```
+- 소스(`recipe_sources.ftp_profile`)는 프로필 **이름**만 가진다. 비밀번호는 `password_env`(환경 변수) 우선, 없으면 `password`. 오류 메시지·수집 로그에 호스트·계정을 넣지 않는다.
+- `rcp_enabled`가 꺼져 있으면 수집하지 않는다(외부 연결 0건 유지, 9장 예외는 켰을 때만).
+
+**2) 수집 흐름 (P6-02, `ftplib`)**
+1. 실행 기록 `recipe_runs`(status `running`) 생성 → 프로필로 접속. 읽기 전용 래퍼는 `cwd/pwd/nlst/mlsd/dir/retrbinary`만 노출하고 `stor*/delete/rename/mkd/rmd`는 없다(테스트로 확인).
+2. `remote_dir` 목록 → **이름 필터**를 통과한 레시피만(`layout=folder`: 하위 폴더 = 레시피, `file`: 파일 = 레시피).
+3. 레시피마다 `file_globs`에 맞는 파일만 `data/recipes/.tmp/<run_id>/`에 `.part`로 받기 → 크기·sha256 → `blobs/<sha[:2]>/<sha>`로 이동(이미 있으면 버림).
+4. 내용 해시 = 정렬된 `rel_path NUL sha256` 줄들의 sha256. 현재 스냅샷과 같으면 `last_seen_at`만 갱신(`unchanged`), 다르면 새 스냅샷 + 파일 + 파싱한 파라미터(`add_snapshot`).
+5. **성공한 전체 실행**에서 안 보인 레시피는 `missing=1`(삭제하지 않음). 부분 실패 실행은 missing 표시를 하지 않는다.
+6. 한도: 실행당 파일 2,000개·파일 20MB·합계 500MB(설정 가능), 타임아웃, 연결 1개 순차, 취소(`cancelled`). 원격 이름의 `..`·절대 경로·`\`·제어 문자는 거부(로컬 경로는 해시로만 만들므로 경로 이탈 없음).
+7. 결과를 `recipe_runs`에 기록(listed/matched/downloaded/unchanged/new_snapshots/errors[{recipe, file, 메시지}]).
+
+**3) 이름 필터 규칙** — `name_filter` JSON 목록 `[{type, value, exclude}]`
+- `type`: `contains`·`prefix`·`suffix`·`glob`(대소문자 무시). **정규식은 받지 않는다**(ReDoS·실수 방지). 규칙 30개·값 120자 이하.
+- 포함 규칙이 없으면 전부 포함, 있으면 하나라도 맞아야 포함. 제외 규칙이 하나라도 맞으면 제외. 예: plan `aabb_bb100000` 관리 → `[{"type":"contains","value":"aabb"},{"type":"suffix","value":"_old","exclude":true}]`.
+- 구현: `app/repositories/recipes.py` `validate_filter`·`name_matches`.
+
+**4) 로컬 캐시 (`data/recipes/`, git 제외 — vault 아님)**
+```
+data/recipes/blobs/<sha[:2]>/<sha256>          원본 파일, 내용 주소·불변(스냅샷 간 공유)
+data/recipes/.tmp/<run_id>/                    받는 중(.part → 검증 → blobs로 이동, 실행 끝나면 삭제)
+data/recipes/backups/<시각>_<소스>_<레시피>/   P6-05 쓰기 직전 원본 + manifest.json(sha256)
+data/recipes/write_log.jsonl                   P6-05 쓰기 감사 로그 사본(추가만)
+data/recipes/.trash/                           정리된 blob (바로 지우지 않음)
+```
+파일 이름·경로는 DB(`recipe_files.rel_path`)에 있으므로 사람·LLM은 API·CLI(P7)로 원래 이름과 함께 본다.
+
+**5) 파서 플러그인 (`parsers/`, D-19)**
+- `parsers/base.py`: `RecipeParser`(`name`, `version`, `extensions`, `can_write=False`, `sniff(file_name, head)`, `parse(bytes, file_name) → ParseResult{params[Param(path, value, line)], warnings, encoding}`), `register`·`get`·`pick`·`names`, `ParseError`(한국어 메시지), `decode_text`(UTF-8(BOM) → CP949 → Latin-1). 공통 검사: 20MB·파라미터 5만 개·경로 중복 거부.
+- 파서는 순수 함수(네트워크·파일 쓰기 없음). 경로 표기 잠정: XML `A/B/C`(속성 `A/B@attr`, 반복 요소 `A/B[2]`), INI `섹션/키`, TXT `키`. 구체 규칙은 P6-03에서 확정.
+- 내장 파서: P6-03에 `xml`·`ini`·`txt`. XML은 DTD·엔티티 거부(pptx/xlsx 읽기와 같은 방식). `parsers/fake.py`는 테스트 전용(`.fake`, 기본 import 안 됨).
+- `version`이 바뀌면 캐시 blob에서 다시 파싱해 해당 스냅샷의 `recipe_params`만 다시 만든다(새 스냅샷 아님, `parser_info`에 파서·매핑 버전 기록).
+
+**6) 설비사 매핑 파일** — `parsers/mappings/<이름>.json`(가짜 예시만 커밋) + `config/recipe_mappings/<이름>.json`(git 제외, 회사 실제 매핑, 같은 이름이면 우선)
+```json
+{ "format": "mi-planner-recipe-mapping", "format_version": 1,
+  "vendor": "VENDOR-X", "models": ["MODEL-1"], "mapping_version": "2026-11-24.1", "description": "…",
+  "files":  [{"match": "*.xml", "parser": "xml"}, {"match": "params/*.ini", "parser": "ini"}],
+  "params": [{"path": "Inspection/Optics/Focus", "label": "초점", "unit": "um", "group": "광학", "compare": "number", "tolerance": 0.01},
+             {"path_glob": "Inspection/Detect/*/Threshold", "label": "임계값", "group": "검출"}],
+  "ignore": ["Header/*", "*/Timestamp"], "show_unmapped": true }
+```
+- 들여쓴 JSON(사람·LLM이 메모장으로 고침). `files`는 위에서부터 첫 일치, 없으면 `pick`(확장자). `params` 순서 = 표시 순서. `ignore`는 비교·표시 제외. 더 높은 `format_version`은 "앱 업데이트" 안내로 거부. 검증: `parsers/mapping.py` `validate`·`load`.
+- 스킬 `recipe-parser-maker`(P7)는 이 형식의 파일을 만든다.
+
+**7) 스냅샷·diff 의미**
+- 레시피 신원 = (소스, 레시피 이름). 버전 = 내용 해시. 현재 스냅샷과 해시가 같으면 새 스냅샷을 만들지 않고, 다르면(되돌림 A→B→A 포함) 새로 만든다. 스냅샷은 지우지 않는다(작음).
+- 비교 키 = (파일 `rel_path`, 파라미터 `path`). 상태: `same`·`changed`·`added`·`removed`. 값은 앞뒤 공백을 뺀 문자열로 비교, 매핑 `compare: number`면 숫자로(±`tolerance`).
+- 이력 diff = 같은 레시피의 두 스냅샷(기본: 현재 vs 직전). 설비·라인 비교 = 같은 레시피 이름의 여러 소스 현재 스냅샷을 열로 놓고 다른 값 강조(P6-04).
+- 파싱 실패 파일은 파일 해시 수준으로만 비교("파일 바뀜, 파라미터 비교 불가").
+
+**8) 레시피 쓰기 안전장치 설계 (P6-05 — 지금은 쓰기 코드 없음, D-11)**
+- **두 개의 열쇠**: 설정 `rcp_write_enabled=on`(UI, `rcp_enabled=on`일 때만 켤 수 있고 RCP를 끄면 같이 꺼짐) **그리고** 프로필 `allow_write: true`(config/local.json, 화면에서 못 바꿈). 하나라도 없으면 쓰기 API는 403. CLI(P7)·LLM 스킬에는 쓰기 명령을 만들지 않는다.
+- **흐름**: 초안 편집(파라미터 값만, 파일 생성·삭제·이름 변경 없음) → 원본 바이트에서 바뀐 줄만 고친 새 파일 생성(인코딩·줄바꿈·BOM·순서 보존, `can_write` 파서만) → 새 파일을 다시 파싱해 **의도한 파라미터만** 바뀌었는지 검증 → 설비에서 방금 다시 받은 파일 해시가 초안 기준 스냅샷과 같은지 확인(다르면 중단: "설비에서 바뀌었어요") → 원본 백업 저장·해시 검증 → **diff 미리보기**(파라미터 표 + 텍스트 줄) → **명시적 확인**(소스·설비·라인·경로 표시 + 레시피 이름 직접 입력) → 기본은 **dry run**(업로드만 빼고 전부 실행) → 업로드 → 다시 받아 해시 검증, 다르면 백업으로 자동 복구 시도 → **감사 로그** → 새 스냅샷 수집.
+- 한 번에 파일 1개, 일괄 쓰기 없음. 감사 로그는 추가만(새 마이그레이션 테이블 + `write_log.jsonl`), 삭제 API 없음. 로그 항목: 시각, 소스·레시피·파일, 기준 스냅샷, before/after sha256, 백업 경로, 바뀐 파라미터, dry_run 여부, 결과·오류.
+- **위협·실패 목록과 대응**
+
+  | # | 위협·실패 | 대응 |
+  |---|---|---|
+  | T1 | 실수 클릭·잘못 켠 설정 | 두 열쇠 + 이름 직접 입력 확인 + 기본 dry run |
+  | T2 | 수집 후 설비에서 레시피가 바뀜(낡은 기준) | 업로드 직전 다시 받아 해시 비교, 다르면 중단 |
+  | T3 | 업로드 중 끊김·부분 쓰기 | 업로드 후 다시 받아 해시 검증, 실패 시 백업 복구 + 로그 |
+  | T4 | 인코딩·줄바꿈·BOM 깨짐 | 바이트 수준 줄 교체, 바뀐 줄 외 바이트 동일 검사 |
+  | T5 | 파서 오해석(다른 줄을 고침) | 다시 파싱해 의도한 경로 외 값이 모두 같은지 검사 |
+  | T6 | 대상 착오(다른 설비·라인의 같은 이름) | 확인 화면에 소스·설비·라인·전체 경로, 이름 입력 |
+  | T7 | 설비가 파일을 쓰는 중·사용 중 | 앱이 알 수 없음 → 경고 문구, 설비 유휴 시 작업 권고(VERIFY에서 설비별 확인) |
+  | T8 | 계정 정보 유출 | config/local.json·환경 변수만, DB·로그·오류·내보내기에 없음, git 제외 |
+  | T9 | 원격 이름으로 경로 이탈 | 캐시는 해시 이름만, 원격 이름 검사 |
+  | T10 | 거대·악성 파일(XML 폭탄) | 크기 한도, DTD·엔티티 거부, 파라미터 수 한도 |
+  | T11 | 백업 실패·손상 | 백업 쓰기 후 해시 검증, 실패면 업로드 안 함 |
+  | T12 | 로그 유실·변조 | DB + jsonl 이중 기록, 추가만 |
+  | T13 | 회사 데이터 반출(D-17) | 캐시·실제 매핑은 git 제외 경로, 내보내기 기능 없음 |
+  | T14 | 에이전트·LLM이 쓰기 실행 | CLI·스킬에 쓰기 없음, 화면 확인 필수, config 쪽 열쇠 |
+  | T15 | 필터 정규식 폭주 | 정규식 미지원(contains/prefix/suffix/glob) |
+  | T16 | 대량 변경 | 파일 1개 단위, 일괄 없음 |
+
 ### 4.7 LLM 연동 (P7, D-10)
 **1단계 — 파일 + 스킬 + CLI** (사내 OpenCode / Claude Code / Codex 공통)
 - 노트·일지가 일반 파일이라 에이전트가 바로 읽고 쓴다.
@@ -528,10 +613,18 @@ UNIQUE(equipment_id, wafer_id)
 `doi: id, uid(안정 ID, UNIQUE), product, plan, step, defect_type, title, description, tool_condition, source_dept, source_author, origin('mine'|'imported'), package_id, source_ref(예: 원본 PPT 이름#슬라이드), status('ready'|'draft'), tags(JSON 배열), created_at, updated_at, deleted_at(휴지통)`
 `doi_images: id, uid(안정 ID, UNIQUE), doi_id FK(CASCADE), file_path(data/doi 기준 상대 경로 <doi uid>/<image uid>.<ext>), thumb_path, mime, width, height, size, sha256, caption, sort` (migration 009)
 P5-03(PPT 가져오기)은 `repositories/doi.create(..., status='draft', source_ref=…)`와 `add_image`를, P5-04(패키지)는 `uid`·`sha256`·상대 경로와 `origin='imported'`·`package_id`·`create(uid=…)`를 쓴다.
-### recipe_sources / recipes / recipe_params / recipe_snapshots (P6) — P6-01에서 상세화
+### recipe_sources / recipe_runs / recipes / recipe_snapshots / recipe_files / recipe_params (P6-01, migration 010, D-36)
+`recipe_sources: id, name UNIQUE, vendor, model, equipment, line, ftp_profile(config/local.json 프로필 이름 — 주소·계정 없음), remote_dir, layout('folder'|'file'), name_filter(JSON [{type,value,exclude}]), file_globs(JSON), mapping(매핑 파일 이름), enabled, note, created_at, updated_at`
+`recipe_runs: id, source_id FK(SET NULL), started_at, finished_at, status('running'|'ok'|'partial'|'error'|'cancelled'|'dry_run'), listed, matched, downloaded, unchanged, new_snapshots, errors(JSON), message` — 수집 로그
+`recipes: id, source_id FK(CASCADE), name, remote_path, first_seen_at, last_seen_at, missing(0/1), current_snapshot_id, UNIQUE(source_id, name)`
+`recipe_snapshots: id, recipe_id FK(CASCADE), run_id FK(SET NULL), collected_at, content_hash, file_count, param_count, parse_status('ok'|'partial'|'error'|'unparsed'), parser_info(JSON 파서·매핑 버전)`
+`recipe_files: id, snapshot_id FK(CASCADE), rel_path, size, sha256, remote_mtime, cache_path(data/recipes 기준 blobs/<sha[:2]>/<sha>), parser, error, UNIQUE(snapshot_id, rel_path)`
+`recipe_params: id, snapshot_id FK(CASCADE), file_id FK(CASCADE), path, value, label, unit, group_name, sort, UNIQUE(file_id, path)`
+저장소 `app/repositories/recipes.py`: `create_source`(검증)·`list_sources`·`get_source`·`list_recipes`·`get_recipe`·`get_snapshot`·`list_runs`·`upsert_recipe`·`add_snapshot`(해시 같으면 만들지 않음)·`content_hash`·`validate_filter`·`name_matches`. 쓰기 감사 로그 테이블은 P6-05가 새 마이그레이션으로 추가.
 
 ### settings
 `key TEXT PK, value TEXT` — 일지 자동 표시 on/off, 경고 배수, 백업 폴더, 레시피 쓰기 허용 등.
+RCP 플래그(P6-01): `rcp_enabled`(`off`|`on`, 기본 off), `rcp_write_enabled`(`off`|`on`, 기본 off — `rcp_enabled=on`일 때만 켤 수 있고 `rcp_enabled`를 끄면 같이 꺼짐; P6-05 전까지 효과 없음).
 
 ## 6. 화면
 
@@ -586,6 +679,10 @@ POST   /api/lot-status/paste     GET /api/lot-status?lot_no=   # (미구현) P4-
 GET    /api/evaluations/stalled?limit=8   # 오늘 화면 '밀린 단계' (진행 중 평가의 경고 칸, 오래 기다린 순)
 # 오늘
 GET    /api/dashboard/today
+# RCP (P6-01 읽기 전용 골격)
+GET    /api/recipe-sources        GET /api/recipe-sources/{id}
+GET    /api/recipes?source_id=&q=&include_missing=   GET /api/recipes/{id}   # 레시피 + 스냅샷 목록 + 현재 파일·파라미터
+GET    /api/recipe-snapshots/{id}  GET /api/recipe-runs?source_id=&limit=
 ```
 
 ## 8. 단계 계획 (project_flow.html과 동일)

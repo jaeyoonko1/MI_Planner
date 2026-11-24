@@ -1,0 +1,20 @@
+{
+  "format": "mi-planner-recipe-mapping",
+  "format_version": 1,
+  "vendor": "VENDOR-X",
+  "models": ["MODEL-1"],
+  "mapping_version": "2026-11-24.1",
+  "description": "가짜 예시 (D-17). 실제 설비사 매핑은 config/recipe_mappings/에 둔다.",
+  "files": [
+    {"match": "*.xml", "parser": "xml"},
+    {"match": "params/*.ini", "parser": "ini"},
+    {"match": "*.fake", "parser": "fake"}
+  ],
+  "params": [
+    {"path": "Inspection/Optics/Focus", "label": "초점", "unit": "um", "group": "광학", "compare": "number", "tolerance": 0.01},
+    {"path_glob": "Inspection/Detect/*/Threshold", "label": "임계값", "group": "검출", "compare": "number"},
+    {"path": "Stage/Speed", "label": "스테이지 속도", "unit": "mm/s", "group": "스테이지"}
+  ],
+  "ignore": ["Header/*", "*/Timestamp"],
+  "show_unmapped": true
+}
