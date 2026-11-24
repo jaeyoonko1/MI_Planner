@@ -2,9 +2,9 @@
 
 > 🔒 **이 문서는 비공개 GitHub 저장소 안에서만 볼 수 있습니다.** GitHub Pages에 공개하지 않습니다.
 
-**최종 갱신:** 2026. 11. 24. 13:52 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [92ff656](https://github.com/jaeyoonko1/MI_Planner/commit/92ff656f33165c435e7d22f3a31cd766aa52839f)
+**최종 갱신:** 2026. 11. 24. 13:53 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [4851d29](https://github.com/jaeyoonko1/MI_Planner/commit/4851d290ebb9861475a3a1ccbc85a8c65d380f09)
 
-**최신 작업:** [P8-06] Private project flow dashboard automation * [P8-06] Add scripts/build_flow_site.py for automated roadmap publishing * [P8-06] Add tests/test_flow_site.py for automated roadmap publishing * [P8-06] Add docs/GITHUB_PAGES_SETUP.md for automated roadmap publishing * [P8-06] Add .github/workflows/publish-flow.yml for automated roadmap publishing * [P8-06] Add scripts/render_flow_markdown.mjs for private roadmap * [P8-06] Add tests/test_private_flow.mjs for private roadmap * [P8-06] Add docs/GITHUB_PRIVATE_FLOW.md for private roadmap * [P8-06] Add .github/workflows/update-private-flow.yml for private roadmap * [P8-06] Make HTML output private download only * [P8-06] Remove public Pages setup .github/workflows/publish-flow.yml * [P8-06] Remove public Pages setup docs/GITHUB_PAGES_SETUP.md
+**최신 작업:** [P8-06] Polish private dashboard commit summary (tests/test_private_flow.mjs)
 
 ## 전체 진행률
 
