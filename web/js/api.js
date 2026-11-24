@@ -6,7 +6,7 @@ async function request(method, url, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
   return data;
 }
 
@@ -58,6 +58,9 @@ export const api = {
   evaluations: () => request("GET", "/api/evaluations").then((data) => data.items),
   evaluation: (id) => request("GET", "/api/evaluations/" + id),
   evaluationBoard: (id) => request("GET", "/api/evaluations/" + id + "/board"),
+  moveEvalCells: (evaluationId, body) => request("POST", `/api/evaluations/${evaluationId}/cells/stage`, body),
+  patchEvalCell: (cellId, body) => request("PATCH", `/api/eval-cells/${cellId}`, body),
+  evalCellHistory: (cellId) => request("GET", `/api/eval-cells/${cellId}/history`).then((data) => data.items),
   createEvaluation: (body) => request("POST", "/api/evaluations", body),
   pagePreview: (body) => request("POST", "/api/todos/page-preview", body),
   expandPage: (id, override) => request("POST", `/api/todos/${id}/page`, { override }),

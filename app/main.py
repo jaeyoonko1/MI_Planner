@@ -58,6 +58,7 @@ def create_app(
     app.include_router(eval_templates.router)
     app.include_router(search_router.router)
     app.include_router(evaluations.router)
+    app.include_router(evaluations.cell_router)
 
     @app.middleware("http")
     async def revalidate_static(request, call_next):

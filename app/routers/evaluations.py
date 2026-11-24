@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -11,6 +11,7 @@ from app.repositories import evaluations as repo
 from app.routers.tasks import get_conn
 
 router = APIRouter(prefix="/api/evaluations")
+cell_router = APIRouter(prefix="/api/eval-cells")
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120, pattern=r"^[^\x00-\x1f]+$")]
 
 
@@ -80,3 +81,53 @@ def create_evaluation(
     if not result["created"]:
         response.status_code = 200
     return result
+
+
+StageKey = Annotated[str, StringConstraints(min_length=1, max_length=64)]
+
+
+class StageMove(BaseModel):
+    cell_id: Annotated[int, Field(strict=True, gt=0)]
+    stage_key: StageKey | None
+
+
+class StageRequest(BaseModel):
+    """Either one target for many cells, or one target per cell (undo, "next stage")."""
+
+    cell_ids: Annotated[list[Annotated[int, Field(strict=True, gt=0)]], Field(max_length=repo.MAX_MOVES)] | None = None
+    stage_key: StageKey | None = None
+    moves: Annotated[list[StageMove], Field(max_length=repo.MAX_MOVES)] | None = None
+
+    @model_validator(mode="after")
+    def one_form(self) -> StageRequest:
+        if (self.cell_ids is None) == (self.moves is None):
+            raise ValueError("cell_ids와 moves 중 하나만 보내 주세요.")
+        if self.moves is not None and "stage_key" in self.model_fields_set:
+            raise ValueError("moves와 stage_key는 함께 보낼 수 없어요.")
+        if self.cell_ids is not None and "stage_key" not in self.model_fields_set:
+            raise ValueError("stage_key가 필요해요. 미배정으로 돌리려면 null을 보내 주세요.")
+        return self
+
+
+@router.post("/{evaluation_id}/cells/stage")
+def move_cells(evaluation_id: int, body: StageRequest, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    moves = [(m.cell_id, m.stage_key) for m in body.moves] if body.moves is not None else [
+        (cell_id, body.stage_key) for cell_id in body.cell_ids or []]
+    return repo.apply_stage_moves(conn, evaluation_id, moves)
+
+
+class CellPatch(BaseModel):
+    values: dict[Annotated[str, StringConstraints(min_length=1, max_length=64)], Any] | None = None
+    note: Annotated[str, Field(max_length=repo.MAX_NOTE * 2)] | None = None
+
+
+@cell_router.patch("/{cell_id}")
+def patch_cell(cell_id: int, body: CellPatch, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    if not body.model_fields_set & {"values", "note"}:
+        raise repo.EvaluationError("바꿀 내용이 없어요.")
+    return repo.update_cell(conn, cell_id, body.values, body.note, "note" in body.model_fields_set)
+
+
+@cell_router.get("/{cell_id}/history")
+def get_cell_history(cell_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return {"items": repo.cell_history(conn, cell_id)}

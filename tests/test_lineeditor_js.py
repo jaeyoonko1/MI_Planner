@@ -63,3 +63,13 @@ def test_eval_board_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_eval_select_model():
+    """P4-05: multi-select helpers, next-stage moves and time formatting (web/test/run_eval_select.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_eval_select.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Iterator
+from datetime import datetime
 from itertools import product
 from typing import Any
 
@@ -159,3 +161,150 @@ def get_board(conn: sqlite3.Connection, evaluation_id: int) -> dict[str, Any]:
                FROM eval_cells c WHERE c.evaluation_id = ? ORDER BY c.id""", (evaluation_id,))
     ]
     return {"evaluation": evaluation, "equipment": equipment, "lots": lots, "cells": cells}
+
+
+# ---- cell edits (P4-05) ----------------------------------------------------------------------
+
+MAX_MOVES = 5_000
+MAX_NOTE = 2_000
+MAX_TEXT = 500
+_CHUNK = 400
+
+
+def _now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def _chunks(items: list[int]) -> Iterator[list[int]]:
+    for start in range(0, len(items), _CHUNK):
+        yield items[start:start + _CHUNK]
+
+
+def _stage_keys(conn: sqlite3.Connection, evaluation_id: int) -> set[str]:
+    return {stage["key"] for stage in get_evaluation(conn, evaluation_id)["stages"]}
+
+
+def apply_stage_moves(
+    conn: sqlite3.Connection, evaluation_id: int, moves: list[tuple[int, str | None]],
+) -> dict[str, Any]:
+    """Move cells to stages in ONE transaction and log each real change (D-09).
+
+    Any unknown cell, excluded cell or unknown stage rejects the whole request, so a bulk
+    transition never half-applies. Cells already at the target stage are reported as unchanged.
+    """
+    if not moves:
+        raise EvaluationError("옮길 칸을 하나 이상 선택해 주세요.")
+    if len(moves) > MAX_MOVES:
+        raise EvaluationError(f"한 번에 {MAX_MOVES:,}칸까지만 옮길 수 있어요.")
+    ids = [cell_id for cell_id, _ in moves]
+    if len(set(ids)) != len(ids):
+        raise EvaluationError("같은 칸이 두 번 들어 있어요.")
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        stages = _stage_keys(conn, evaluation_id)
+        if any(stage is not None and stage not in stages for _, stage in moves):
+            raise EvaluationError("이 평가에 없는 단계예요.", 422)
+        current: dict[int, tuple[str | None, int]] = {}
+        for chunk in _chunks(ids):
+            marks = ",".join("?" * len(chunk))
+            for row in conn.execute(
+                f"SELECT id, stage_key, excluded FROM eval_cells WHERE evaluation_id = ? AND id IN ({marks})",
+                (evaluation_id, *chunk),
+            ):
+                current[row["id"]] = (row["stage_key"], row["excluded"])
+        missing = [cell_id for cell_id in ids if cell_id not in current]
+        if missing:
+            raise EvaluationError(f"이 평가에 없는 칸이 {len(missing)}개 있어요. 현황판을 새로 불러와 주세요.", 404)
+        excluded = [cell_id for cell_id in ids if current[cell_id][1]]
+        if excluded:
+            raise EvaluationError(f"제외한 칸 {len(excluded)}개는 단계를 바꿀 수 없어요.", 409)
+        at = _now()
+        changed, unchanged = [], []
+        for cell_id, target in moves:
+            before = current[cell_id][0]
+            if before == target:
+                unchanged.append(cell_id)
+                continue
+            conn.execute("UPDATE eval_cells SET stage_key = ? WHERE id = ?", (target, cell_id))
+            conn.execute(
+                "INSERT INTO eval_stage_log (cell_id, from_stage, to_stage, at) VALUES (?, ?, ?, ?)",
+                (cell_id, before, target, at))
+            changed.append({"id": cell_id, "from": before, "to": target})
+    return {"changed": changed, "unchanged": unchanged, "at": at}
+
+
+def _load_cell(conn: sqlite3.Connection, cell_id: int) -> sqlite3.Row:
+    row = conn.execute(
+        "SELECT c.id, c.evaluation_id, c.stage_key, c.excluded, c.field_values, c.note, e.fields "
+        "FROM eval_cells c JOIN evaluations e ON e.id = c.evaluation_id WHERE c.id = ?", (cell_id,)).fetchone()
+    if row is None:
+        raise EvaluationError("칸을 찾을 수 없습니다.", 404)
+    return row
+
+
+def _clean_value(field: dict[str, Any], value: Any) -> Any:
+    """Return the stored value for one field, or None to clear it. Raises on a wrong type."""
+    label = field["label"]
+    if value is None or value == "":
+        return None
+    kind = field["type"]
+    if kind == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise EvaluationError(f"'{label}'에는 숫자를 입력해 주세요.", 422)
+        if value != value or value in (float("inf"), float("-inf")):
+            raise EvaluationError(f"'{label}'에는 유한한 숫자를 입력해 주세요.", 422)
+        return value
+    if kind == "okng":
+        if value not in ("ok", "ng"):
+            raise EvaluationError(f"'{label}'은 OK 또는 NG만 고를 수 있어요.", 422)
+        return value
+    if kind == "check":
+        if not isinstance(value, bool):
+            raise EvaluationError(f"'{label}'은 체크 여부만 저장해요.", 422)
+        return value
+    if not isinstance(value, str):
+        raise EvaluationError(f"'{label}'에는 글자를 입력해 주세요.", 422)
+    text = value.strip()
+    if len(text) > MAX_TEXT:
+        raise EvaluationError(f"'{label}'은 {MAX_TEXT}자까지 입력할 수 있어요.", 422)
+    return text or None
+
+
+def update_cell(
+    conn: sqlite3.Connection, cell_id: int, values: dict[str, Any] | None, note: str | None, has_note: bool,
+) -> dict[str, Any]:
+    """Merge field values (null clears one) and/or replace the memo of a cell."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = _load_cell(conn, cell_id)
+        if row["excluded"]:
+            raise EvaluationError("제외한 칸은 수정할 수 없어요.", 409)
+        stored = json.loads(row["field_values"])
+        if values:
+            fields = {field["key"]: field for field in json.loads(row["fields"])}
+            unknown = [key for key in values if key not in fields]
+            if unknown:
+                raise EvaluationError("이 평가에 없는 값 항목이에요: " + ", ".join(unknown), 422)
+            for key, raw in values.items():
+                clean = _clean_value(fields[key], raw)
+                if clean is None:
+                    stored.pop(key, None)
+                else:
+                    stored[key] = clean
+        new_note = row["note"]
+        if has_note:
+            text = (note or "").strip()
+            if len(text) > MAX_NOTE:
+                raise EvaluationError(f"메모는 {MAX_NOTE:,}자까지 쓸 수 있어요.", 422)
+            new_note = text or None
+        conn.execute(
+            "UPDATE eval_cells SET field_values = ?, note = ? WHERE id = ?",
+            (json.dumps(stored, ensure_ascii=False), new_note, cell_id))
+    return {"id": cell_id, "values": stored, "note": new_note}
+
+
+def cell_history(conn: sqlite3.Connection, cell_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    _load_cell(conn, cell_id)
+    return [dict(row) for row in conn.execute(
+        "SELECT id, from_stage, to_stage, at FROM eval_stage_log WHERE cell_id = ? "
+        "ORDER BY at DESC, id DESC LIMIT ?", (cell_id, limit))]

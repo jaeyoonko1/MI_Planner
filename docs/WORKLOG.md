@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P4-05
+- 한 일: 현황판 칸 패널과 다중 선택 일괄 단계 전환. 선택이 패널을 결정(0 닫힘/1 상세/N 일괄). 클릭·Ctrl·Shift·드래그·머리글(열/행/Lot/전체)·방향키·Space·Enter·Ctrl+A·Esc 선택, 제외 칸은 선택에서 빼고 개수 안내. 단일 패널(단계 칩, 다음 단계, 값 입력, 메모, 단계 이력, 범위 넓히기 칩)과 일괄 패널(단계 분포, 옮길 단계 칩 + 옮기기, 각 칸 다음 단계로), 토스트 되돌리기, 오류·오래된 보드(404/409)는 새로고침 버튼. 드롭다운 없음(D-12).
+- API: `POST /api/evaluations/{id}/cells/stage`(원자적, cell_ids 또는 moves, 바뀐 칸만 eval_stage_log 기록), `PATCH /api/eval-cells/{id}`(값 검증·병합, 메모), `GET /api/eval-cells/{id}/history`. 마이그레이션 없음.
+- 바뀐 파일: app/(main.py, repositories/evaluations.py, routers/evaluations.py), web/js/(eval-board, eval-board-model, eval-select-model, eval-panel, api).js, web/css/evaluations.css, web/test/run_eval_select.mjs, tests/(test_evaluation_creation, test_lineeditor_js).py, docs/SPEC.md, project_flow.html.
+- 테스트: pytest 통과(원자성·제외/없는 칸/다른 평가 칸 거부·로그·되돌리기·값 검증·5,000칸 일괄 + Node 선택 모델). 브라우저(앱 내 패널, 합성 데이터): 클릭·Shift·Ctrl·열 선택, 일괄 전환·되돌리기, 값·메모 저장과 칸 전환 시 미저장 값 자동 저장, 방향키·Shift+방향키·Ctrl+A·Esc·Enter, 800px(떠 있는 패널) 다크/라이트. 5,000칸: 전체 선택 약 170ms, 일괄 전환 약 1초(서버 5,000건 이력 포함).
+- 다음에 할 것 / 막힌 것: 1280px 실화면 배치와 1024px은 창 크기 제약으로 800px 화면 + DOM 좌표로만 확인(VERIFY 참고). 일괄 값·메모 입력, 제외 해제(칸 복원), 다른 탭 동시 수정 충돌 감지는 범위 밖. 대기 시간 경고 색은 P4-06이 `at` 사용. 엑셀 내보내기는 P4-07.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P4-04
 - 한 일: 평가 현황판 화면. `GET /api/evaluations/{id}/board`(설비·Lot·웨이퍼·칸 평면 목록, `at`는 단계 이력 최신 시각)와 `web/js/eval-board.js`. D-30에 따라 고정 폭 네이티브 표 + 이벤트 위임, 가상화 없음. 보기 토글 칩(설비별/Lot별/단계별, 남은 것만, 칸 표시=단계 또는 값 항목, D-12 드롭다운 없음), 요약 카드(큰 진행률·단계 분포 막대·범례·새로고침), 설비 열 머리글 진행 막대, Lot 띠, 제외 칸 빗금, 미배정 표시. 단계 색은 막대·틴트에만 쓰고 칸 텍스트에 단계 이름을 항상 표기. 빈 상태(남은 평가 없음 → 전체 보기)·오류 상태(다시 시도)·스켈레톤. 표는 role=grid, 방향키·Home/End·PageUp/Down·Ctrl+Home/End, roving tabindex, 칸별 aria-label, 보기 전환 시 live region 안내. 순수 로직은 `eval-board-model.js`(Node 시험).
 - 성능(5,000칸, Edge, 앱 내 합성 데이터): 최초 표 생성 26ms, 보기 전환·칸 표시 전환 레이아웃 포함 약 50–160ms(1초 목표 이내). 회사 PC는 미측정.

@@ -195,3 +195,124 @@ def test_board_for_large_evaluation_has_one_row_per_cell(env):
     data = client.get(f"/api/evaluations/{evaluation['id']}/board").json()
     assert len(data["cells"]) == 5000
     assert len({(c["equipment_id"], c["wafer_id"]) for c in data["cells"]}) == 5000
+
+
+# ---- P4-05: cell stage moves, edits, history -------------------------------------------------
+
+def _board(client):
+    created = client.post("/api/evaluations", json=draft()).json()["evaluation"]
+    data = client.get(f"/api/evaluations/{created['id']}/board").json()
+    return created, data, {c["id"]: c for c in data["cells"]}
+
+
+def _log(db_path):
+    with db.connect(db_path) as conn:
+        return [tuple(r) for r in conn.execute("SELECT cell_id, from_stage, to_stage FROM eval_stage_log ORDER BY id")]
+
+
+def test_bulk_stage_move_logs_each_change(env):
+    client, db_path, _ = env
+    created, data, cells = _board(client)
+    stages = [s["key"] for s in created["stages"]]
+    active = [c["id"] for c in data["cells"] if not c["excluded"]]
+    res = client.post(f"/api/evaluations/{created['id']}/cells/stage", json={"cell_ids": active, "stage_key": stages[0]})
+    assert res.status_code == 200, res.text
+    assert len(res.json()["changed"]) == len(active) and res.json()["unchanged"] == []
+    assert _log(db_path) == [(i, None, stages[0]) for i in active]
+    again = client.post(f"/api/evaluations/{created['id']}/cells/stage", json={"cell_ids": active, "stage_key": stages[0]}).json()
+    assert again["changed"] == [] and len(again["unchanged"]) == len(active)
+    assert len(_log(db_path)) == len(active)  # no-op moves are not logged
+    board = client.get(f"/api/evaluations/{created['id']}/board").json()
+    assert {c["stage_key"] for c in board["cells"] if not c["excluded"]} == {stages[0]}
+    assert all(c["at"] for c in board["cells"] if not c["excluded"])
+
+
+def test_bulk_move_is_atomic_on_bad_input(env):
+    client, db_path, _ = env
+    created, data, cells = _board(client)
+    stages = [s["key"] for s in created["stages"]]
+    url = f"/api/evaluations/{created['id']}/cells/stage"
+    active = [c["id"] for c in data["cells"] if not c["excluded"]]
+    excluded = next(c["id"] for c in data["cells"] if c["excluded"])
+    for body, status in [
+        ({"cell_ids": active + [excluded], "stage_key": stages[1]}, 409),
+        ({"cell_ids": active + [999_999], "stage_key": stages[1]}, 404),
+        ({"cell_ids": active, "stage_key": "no-such-stage"}, 422),
+        ({"cell_ids": active + active[:1], "stage_key": stages[1]}, 400),
+        ({"cell_ids": [], "stage_key": stages[1]}, 400),
+        ({"cell_ids": active}, 422),
+        ({"cell_ids": active, "stage_key": stages[1], "moves": []}, 422),
+    ]:
+        res = client.post(url, json=body)
+        assert res.status_code == status, (body, res.text)
+        assert "error" in res.json()
+    assert _log(db_path) == []
+    board = client.get(f"/api/evaluations/{created['id']}/board").json()
+    assert all(c["stage_key"] is None for c in board["cells"])
+    assert client.post("/api/evaluations/999/cells/stage", json={"cell_ids": [1], "stage_key": None}).status_code == 404
+
+
+def test_cell_from_other_evaluation_is_rejected(env):
+    client, db_path, _ = env
+    first, data, _cells = _board(client)
+    second = client.post("/api/evaluations", json=draft(name="두 번째 평가")).json()["evaluation"]
+    foreign = [c["id"] for c in data["cells"] if not c["excluded"]][:1]
+    res = client.post(f"/api/evaluations/{second['id']}/cells/stage", json={"cell_ids": foreign, "stage_key": first["stages"][0]["key"]})
+    assert res.status_code == 404 and _log(db_path) == []
+
+
+def test_moves_form_supports_undo_and_unassign(env):
+    client, db_path, _ = env
+    created, data, _cells = _board(client)
+    s = [x["key"] for x in created["stages"]]
+    a, b = [c["id"] for c in data["cells"] if not c["excluded"]][:2]
+    url = f"/api/evaluations/{created['id']}/cells/stage"
+    client.post(url, json={"cell_ids": [a], "stage_key": s[0]})
+    moved = client.post(url, json={"moves": [{"cell_id": a, "stage_key": s[1]}, {"cell_id": b, "stage_key": s[2]}]}).json()
+    assert [(m["id"], m["from"], m["to"]) for m in moved["changed"]] == [(a, s[0], s[1]), (b, None, s[2])]
+    undo = client.post(url, json={"moves": [{"cell_id": m["id"], "stage_key": m["from"]} for m in moved["changed"]]})
+    assert undo.status_code == 200
+    board = {c["id"]: c for c in client.get(f"/api/evaluations/{created['id']}/board").json()["cells"]}
+    assert board[a]["stage_key"] == s[0] and board[b]["stage_key"] is None
+    history = client.get(f"/api/eval-cells/{b}/history").json()["items"]
+    assert [(h["from_stage"], h["to_stage"]) for h in history] == [(s[2], None), (None, s[2])]
+    assert client.get("/api/eval-cells/999999/history").status_code == 404
+
+
+def test_patch_cell_values_and_note(env):
+    client, _db, _ = env
+    created, data, _cells = _board(client)
+    fields = {f["key"]: f["type"] for f in created["fields"]}
+    num = next(k for k, t in fields.items() if t == "number")
+    okng = next(k for k, t in fields.items() if t == "okng")
+    chk = next(k for k, t in fields.items() if t == "check")
+    txt = next(k for k, t in fields.items() if t == "text")
+    cell = next(c["id"] for c in data["cells"] if not c["excluded"])
+    url = f"/api/eval-cells/{cell}"
+    res = client.patch(url, json={"values": {num: 12.5, okng: "ok", chk: True, txt: "  메모 값 "}, "note": " 첫 메모 "})
+    assert res.status_code == 200, res.text
+    assert res.json()["values"] == {num: 12.5, okng: "ok", chk: True, txt: "메모 값"} and res.json()["note"] == "첫 메모"
+    res = client.patch(url, json={"values": {num: None, okng: ""}})  # merge; null/empty clears
+    assert res.json()["values"] == {chk: True, txt: "메모 값"} and res.json()["note"] == "첫 메모"
+    assert client.patch(url, json={"note": ""}).json()["note"] is None
+    for bad in [{num: "abc"}, {okng: "maybe"}, {chk: "yes"}, {txt: 5}, {"nope": 1}, {num: True}, {txt: "x" * 501}]:
+        assert client.patch(url, json={"values": bad}).status_code == 422, bad
+    assert client.patch(url, json={"note": "x" * 2001}).status_code == 422
+    assert client.patch(url, json={}).status_code == 400
+    assert client.patch("/api/eval-cells/999999", json={"note": "x"}).status_code == 404
+    excluded = next(c["id"] for c in data["cells"] if c["excluded"])
+    assert client.patch(f"/api/eval-cells/{excluded}", json={"note": "x"}).status_code == 409
+    board = {c["id"]: c for c in client.get(f"/api/evaluations/{created['id']}/board").json()["cells"]}
+    assert board[cell]["values"] == {chk: True, txt: "메모 값"} and board[cell]["note"] is None
+
+
+def test_large_bulk_move_is_fast_and_atomic(env):
+    client, db_path, _ = env
+    lots = [{"lot_no": f"LOT-TEST-{i:03d}", "wafers": [f"{w:02d}" for w in range(1, 26)]} for i in range(1, 21)]
+    created = client.post("/api/evaluations", json=draft(lots=lots, excluded=[],
+        equipment=[{"name": f"EQ-A{i:02d}"} for i in range(1, 11)])).json()["evaluation"]
+    cells = [c["id"] for c in client.get(f"/api/evaluations/{created['id']}/board").json()["cells"]]
+    assert len(cells) == 5000
+    res = client.post(f"/api/evaluations/{created['id']}/cells/stage", json={"cell_ids": cells, "stage_key": created["stages"][0]["key"]})
+    assert res.status_code == 200 and len(res.json()["changed"]) == 5000
+    assert len(_log(db_path)) == 5000

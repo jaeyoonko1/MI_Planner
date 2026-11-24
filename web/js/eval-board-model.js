@@ -16,6 +16,7 @@ export function buildBoard(data) {
     }
   }
   const equipmentIndex = new Map(data.equipment.map((item, i) => [item.id, i]));
+  const byId = new Map(data.cells.map((cell) => [cell.id, cell]));
   const grid = new Map();
   for (const cell of data.cells) {
     const row = wafers.get(cell.wafer_id);
@@ -23,7 +24,21 @@ export function buildBoard(data) {
     if (!row || column === undefined) continue;
     grid.set(row.index * data.equipment.length + column, cell);
   }
-  return { ...data, fields: data.evaluation.fields || [], stages, lastKey, stageIndex, rows, grid, columns: data.equipment.length };
+  return {
+    ...data, fields: data.evaluation.fields || [], stages, lastKey, stageIndex, rows, grid, byId,
+    rowByWafer: wafers, columnById: equipmentIndex, columns: data.equipment.length,
+  };
+}
+
+// "11/24 14:03" plus a short relative phrase for the cell panel's stage history.
+export function formatAt(iso, now = new Date()) {
+  const when = new Date(iso);
+  if (!iso || Number.isNaN(when.getTime())) return { text: "", ago: "" };
+  const pad = (n) => String(n).padStart(2, "0");
+  const text = `${when.getMonth() + 1}/${when.getDate()} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+  const min = Math.floor((now - when) / 60000);
+  const ago = min < 1 ? "방금" : min < 60 ? `${min}분 전` : min < 1440 ? `${Math.floor(min / 60)}시간 전` : `${Math.floor(min / 1440)}일 전`;
+  return { text, ago };
 }
 
 export const cellAt = (board, row, column) => board.grid.get(row * board.columns + column);
