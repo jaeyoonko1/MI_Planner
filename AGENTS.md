@@ -97,3 +97,10 @@ MI_Planner/
 - 필요한 파일만, 필요한 부분만 읽는다. 같은 파일을 반복해서 통째로 읽지 않는다.
 - 응답은 짧게: 변경 요약 + 테스트 결과 + 다음 할 일.
 - 이미 설계가 끝난 내용(SPEC)을 다시 논의하지 않는다. 바꿔야 하면 사용자에게 먼저 묻는다.
+
+## 9. 에이전트용 CLI (앱 없이 정형 데이터 읽기·쓰기)
+`python -m app.cli [--db data/mi_planner.db] [--vault vault] <명령>` — 출력은 항상 JSON, 오류는 `{"error": "..."}`(종료 코드 1).
+- 할일: `task list [--open --overdue --due-within N --status todo --eval-id N --q 글자]` · `task show ID` · `task add "제목" [--priority 1..3 --due YYYY-MM-DD --planned … --requester … --eval-id N --note …]` · `task set ID --status doing --due none` · `task done ID`
+- 평가·MOS: `eval list` · `eval show ID [--full]` · `eval stalled` (대기 경고 칸) · `eval set-stage ID --cells 1,2,3 --stage 단계키 [--at 2026-11-24T09:30]` (MOS 시각은 --at) · `eval set-cell CELL --value 항목=값 --note 메모` · `eval history CELL`
+- 검색: `search 글자`
+- 노트·일지는 `vault/`의 일반 파일이므로 직접 읽고 쓴다. RCP 쓰기 명령은 없다(D-11). 값에 `none`을 주면 비운다.

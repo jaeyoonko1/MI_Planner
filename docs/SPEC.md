@@ -501,6 +501,7 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 **1단계 — 파일 + 스킬 + CLI** (사내 OpenCode / Claude Code / Codex 공통)
 - 노트·일지가 일반 파일이라 에이전트가 바로 읽고 쓴다.
 - 정형 데이터는 에이전트용 CLI로: `python -m app.cli eval show <id>`, `task add ...`, `eval set-stage ...`
+  - **구현(P7-01)**: `app/cli.py`, JSON 출력·오류는 `{"error"}`+종료 코드 1. `task list|show|add|set|done`, `eval list|show [--full]|stalled|set-stage <id> --cells 1,2 --stage KEY [--at ISO]|set-cell <cell> --value K=V --note|history <cell>`, `search <q>`. 전역 옵션 `--db`·`--vault`. 값에 `none`을 주면 날짜·메모 등을 비움.
 - `skills/` 폴더 (에이전트가 읽는 SKILL.md):
   | 스킬 | 예시 요청 |
   |---|---|

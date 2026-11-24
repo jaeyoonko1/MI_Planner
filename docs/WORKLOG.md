@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P7-01
+- 한 일: 에이전트용 CLI `python -m app.cli`(표준 라이브러리 argparse, 새 의존성 없음). 기존 repository를 그대로 호출하므로 앱과 같은 검증·로그 규칙(D-09)을 따르고 출력은 항상 JSON 한 덩어리, 오류는 `{"error": ...}` + 종료 코드 1. 명령: `task list|show|add|set|done`, `eval list|show [--full]|stalled|set-stage|set-cell|history`, `search`. `--db`·`--vault`로 경로 지정(기본은 data/·vault/). RCP 쓰기 명령은 만들지 않음(D-11). AGENTS.md 9장에 사용법 추가, SPEC 4.7 갱신.
+- 바뀐 파일: app/cli.py, tests/test_cli.py, AGENTS.md, docs/(SPEC, WORKLOG), project_flow.html
+- 테스트: pytest 426 passed(test_flow_site 제외), 신규 tests/test_cli.py 5건(임시 DB·가짜 데이터).
+- 다음에 할 것 / 막힌 것: MOS는 별도 저장소 없이 `eval set-stage --at <시각>`(MOS 시각을 로그 시각으로)과 `eval stalled`로 다룸. 일지·노트는 파일이므로 CLI 대상 아님. 다음은 P7-02(skills/ 구조).
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-003
 - 한 일: 오늘·주간·월간 줄 편집기 개선(D-47). (1) 불릿: 모든 줄 종류가 고정 폭 마커 칸(`.le-mk`)을 써서 수준과 관계없이 같은 점(5px·같은 색)·같은 정렬, 수준은 들여쓰기 + 부모 마커 아래 얇은 안내선으로만 표시, ☐ ☑ ★ ! 는 그대로. (2) 줄 안 서식: 순수 `lineeditor-format.js`(노트와 같은 저장 표기·프리셋, 서식 명령을 쓴 줄만 다시 쓰므로 열기·저장만으로는 불변, 한 줄 선택=그 글자만 / 선택 없음·여러 줄=줄 본문 전체, 불렛·표시·`→ 할일 #N` 꼬리 제외, 이스케이프 보존), `note-format-core.js` 단축키·툴팁·`editorKeys` 켬/끔 재사용(Ctrl+B/I/U·Ctrl+-·Ctrl+Space·Ctrl+Shift+./,·Ctrl+Alt+H), 토글 칩 도구줄(오늘·확대 창 — 밀도 24/28/32px) / 월간·주간 칸은 편집 중에만 칸 아래 작은 띠(B I U S·노랑·더 보기: 크기·색·형광펜·서식 지우기·단축키 스위치), 보기 모드 클릭 위치→원문 오프셋 매핑(서식 표식 건너뜀), 한글 조합 중 서식 단축키·서식 붙여넣기 건너뜀. (3) 붙여넣기: `lineeditor-paste.js`가 `paste-doc.js`(V-007)로 클립보드 HTML을 줄·수준·서식으로 변환(빈 불렛 줄 대체, 코드·그림·순수 표는 일반 붙여넣기). (4) 서버: `app/inline_format.py strip_inline`(JS와 같은 규칙, pytest가 같은 입력 비교)을 줄→이슈 승격 제목·연결 줄 ↔ 이슈 제목 동기화·검색 본문에 사용, 이슈 상태·표시 변경으로 줄을 다시 쓸 때 서식 보존. (5) V-010: 편집기 호스트에 `registerContext`(편집 중=텍스트 그룹+서식 항목, 보기 모드=누른 줄에 적용, 크기·글자색·형광펜 하위 메뉴, 체크 표시).
 - 바뀐 파일: web/js/(lineeditor, lineeditor-core, lineeditor-format 신규, lineeditor-paste 신규).js, web/css/(lineeditor, theme).css, web/test/(lineeditor_cases, lineeditor_format_cases 신규, run_lineeditor_format 신규, run_lineeditor_paste 신규).js/mjs, app/(inline_format 신규, journal, journal_links, search).py, tests/(test_inline_format 신규, test_lineeditor_js).py, docs/(DECISIONS D-47, DESIGN, VOC, WORKLOG), project_flow.html
