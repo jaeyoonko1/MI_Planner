@@ -86,11 +86,13 @@ def test_export_structure_and_content(env):
     stage_rows = {r[0]: r for r in book["요약"] if r and r[0] in ("검사완료", "검사대기", "미배정")}
     assert stage_rows["검사완료"][1] == "1" and stage_rows["미배정"][1] == "2"
     cells = book["칸 목록"]
-    assert cells[0][:9] == ["설비", "설비사", "Lot", "웨이퍼", "단계", "제외", "단계 진입 시각", "대기(시간)", "대기 상태"]
-    assert cells[0][9:] == ["반복도", "스캔 시간 (분)", "디펙 모수", "분류 완료", "이슈", "메모"]
+    assert cells[0][:11] == ["설비", "설비사", "Lot", "웨이퍼", "단계", "제외", "단계 진입 시각", "대기(시간)", "대기 상태",
+                             "설비 상태", "Lot 상태"]
+    assert cells[0][11:] == ["반복도", "스캔 시간 (분)", "디펙 모수", "분류 완료", "이슈", "메모"]
     assert len(cells) == 1 + 4                       # excluded cells are listed too
     done = next(r for r in cells[1:] if r[4] == "검사완료")
-    assert done[9:] == ["NG", "12.5", "", "예", "테스트 이슈", "메모\n둘째 줄"] and done[8] == "정상"
+    assert done[11:] == ["NG", "12.5", "", "예", "테스트 이슈", "메모\n둘째 줄"] and done[8] == "정상"
+    assert done[9:11] == ["진행", "진행"]
     assert sum(r[5] == "제외" for r in cells[1:]) == 1
     grid = book["설비별 단계"]
     assert grid[0] == ["Lot · 웨이퍼", "EQ-A01", "EQ-A02"]

@@ -320,6 +320,10 @@ vault/
   - 단일 칸 패널: 단계 칩(즉시 전환) · 다음 단계 버튼 · 값 입력(number/text는 Enter·포커스 이동 때 저장, okng·check는 칩 토글) · 메모(포커스 이동·Ctrl+Enter 저장, 2,000자) · 단계 이력(`eval_stage_log`, 최신순). 저장 상태는 패널 하단에 표시한다.
   - 일괄 패널: 지금 단계 분포 · 옮길 단계 칩을 고른 뒤 '옮기기' 버튼 · '각 칸을 다음 단계로'. 이미 같은 단계인 칸은 그대로 두고 알려 준다. 결과는 토스트의 **되돌리기**로 취소한다(되돌리기도 새 이력으로 남는다).
   - API: `POST /api/evaluations/{id}/cells/stage`는 `{cell_ids:[...], stage_key}`(`null`=미배정) 또는 `{moves:[{cell_id, stage_key}]}` 중 하나를 받아 한 트랜잭션에서 처리한다(최대 5,000칸). 없는 칸(404)·다른 평가의 칸(404)·제외 칸(409)·없는 단계(422)·중복 칸(400)이 하나라도 있으면 아무것도 바꾸지 않는다. 응답 `{changed:[{id,from,to}], unchanged:[id], at}`이며 실제로 바뀐 칸만 `eval_stage_log`에 기록한다. `PATCH /api/eval-cells/{id}`는 `{values?:{key:value|null}, note?:string}`을 병합 저장한다(number 유한 숫자, okng `ok|ng`, check bool, text 500자, 메모 2,000자, `null`·빈 값은 삭제, 제외 칸 409). `GET /api/eval-cells/{id}/history` → `{items:[{id,from_stage,to_stage,at}]}`(최신순 50건).
+- **구현 (V-005) — 설비·Lot 상태 편집**: 마이그레이션 011이 `eval_equipment`·`eval_lots`에 `status TEXT NOT NULL DEFAULT 'active' CHECK IN ('wait','active','hold','done')`(대기·진행·보류·완료)과 `note TEXT`(500자)를 추가한다. 상태는 사람이 붙이는 라벨이라 단계·진행률·대기 시간 계산에 쓰지 않는다(D-09 유지). 보드 응답의 `equipment[]`·`lots[]`에 `status`·`note`가 붙는다.
+  - API: `PATCH /api/evaluations/{id}` `{status: active|hold|done}`(평가 상태) → `{from, status}` · `PATCH /api/evaluations/{id}/equipment/{eid}` `{name?, vendor?, status?, note?}` · `PATCH /api/evaluations/{id}/lots/{lid}` `{lot_no?, status?, note?}` → `{id, kind, name, status, note, vendor?}`(보낸 키만 바꿈, 이름 중복 409·빈 이름/없는 상태 422·다른 평가의 대상 404·바꿀 내용 없음 400) · `POST /api/evaluations/{id}/status` `{targets:[{kind:equipment|lot, id, status}]}` → `{changed:[{kind,id,from,to}], unchanged:[{kind,id}]}`(한 트랜잭션, 하나라도 잘못되면 전부 취소) · `POST /api/evaluations/{id}/cells/exclude` `{cell_ids, excluded}` → `{changed:[id], unchanged:[id], excluded, at}`(원자적, 평가할 칸이 하나도 안 남으면 409). 제외해도 `stage_key`는 그대로이고, 포함으로 되돌릴 때 단계가 있는 칸에는 `eval_stage_log`에 같은 단계로의 재진입 한 줄을 남겨 제외돼 있던 시간이 대기로 잡히지 않게 한다(D-09).
+  - 화면: 설비 열 머리글·Lot 띠·Lot별 보기 머리글에 **아이콘+글자 상태 배지**(대기 ◔ 점선 · 진행 ▷ · 보류 ❚❚ · 완료 ✓, 색만으로 구분하지 않음). 배지를 누르면 팝오버(상태 칩 — `1`~`4` 키, 이름, 설비사(설비만), 메모; Enter 저장·Esc 닫기·포커스 복귀·바깥 클릭 닫기), 헤더 이름 더블클릭은 이름 입력에 포커스, 칸에서 `E`/`L`은 그 칸의 설비/Lot 팝오버. 요약의 평가 상태 배지(진행 중·보류·완료)도 같은 팝오버. 칸 패널(단일)에 `설비 · Lot` 행(배지+편집 버튼), 다중 선택 패널에 선택한 칸이 속한 설비 N개·Lot M개 일괄 상태 칩(섞여 있으면 분포 표시)과 `선택한 N칸 평가에서 제외`, 제외한 칸 패널에 `평가에 포함하기`. 단계별 보기 카드에는 "진행"이 아닌 설비·Lot 상태만 작은 태그로 표시. 상태·이름·제외 변경은 모두 토스트 `되돌리기`로 취소한다. `남은 것만` 필터는 칸 기준 그대로다(상태 완료 Lot·설비를 숨기지 않음).
+  - 엑셀: `칸 목록`에 `설비 상태`·`Lot 상태` 열(대기 상태 다음), `요약` 시트 아래에 설비·Lot 상태·메모 표.
 - 단계별 진행률 막대(전체 / 설비별).
 - 엑셀 내보내기.
 
@@ -603,10 +607,10 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 | start_date, due_date | TEXT | |
 
 ### eval_equipment
-`id INTEGER PK, evaluation_id FK, name TEXT, vendor TEXT, sort INTEGER` (평가 안에서 이름 고유).
+`id INTEGER PK, evaluation_id FK, name TEXT, vendor TEXT, sort INTEGER, status TEXT(011), note TEXT(011)` (평가 안에서 이름 고유).
 
 ### eval_lots / eval_wafers
-- `eval_lots: id INTEGER PK, evaluation_id FK, lot_no TEXT, sort INTEGER` (평가 안에서 Lot 번호 고유).
+- `eval_lots: id INTEGER PK, evaluation_id FK, lot_no TEXT, sort INTEGER, status TEXT(011), note TEXT(011)` (평가 안에서 Lot 번호 고유).
 - `eval_wafers: id INTEGER PK, evaluation_id INTEGER, lot_id INTEGER, wafer_no TEXT, sort INTEGER` (Lot 안에서 웨이퍼 번호 고유). `(lot_id, evaluation_id)`는 같은 평가에 속한 Lot을 참조한다.
 
 ### eval_cells  ← 현황판 핵심
@@ -698,6 +702,10 @@ POST   /api/evaluations/{id}/save-as-template   GET /api/evaluations/{id}/export
 GET/POST /api/evaluations        GET /api/evaluations/{id}/board
 POST   /api/evaluations/{id}/cells/stage   # {cell_ids[], stage_key}
 PATCH  /api/eval-cells/{id}               # values, note
+PATCH  /api/evaluations/{id}              # status (V-005)
+PATCH  /api/evaluations/{id}/equipment/{eid}  /lots/{lid}   # name, vendor, status, note
+POST   /api/evaluations/{id}/status       # {targets[]} 설비·Lot 상태 일괄
+POST   /api/evaluations/{id}/cells/exclude # {cell_ids[], excluded}
 GET    /api/evaluations/{id}/export.xlsx
 # MOS
 POST   /api/lot-status/paste     GET /api/lot-status?lot_no=   # (미구현) P4-08은 cells/stage + settings.mos_mapping 사용

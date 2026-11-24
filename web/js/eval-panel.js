@@ -3,6 +3,10 @@
 import { UNASSIGNED, formatAt } from "./eval-board-model.js";
 import { describeSelection, locate, nextStageMoves, stageDistribution, targetMoves } from "./eval-select-model.js";
 import { LEVEL_TEXT, boardNow, cellWait, formatThreshold, formatWait, historyDurations, waitSentence, waitSummary } from "./eval-wait-model.js";
+import { statusBadge } from "./eval-entity.js";
+import {
+  ENTITY_STATUS, KIND_LABEL, entityName, findEntity, statusMeta, statusOf, statusSummary, touchedEntities,
+} from "./eval-entity-model.js";
 import { el, svg } from "./ui.js";
 
 const NOTE_MAX = 2000;
@@ -27,8 +31,74 @@ export function createPanel(ctx) {
   let pending = null; // bulk: chosen target stage (undefined = none yet)
   let busy = false;
   let statusEl = null;
+  let entityViews = []; // rebuilders of the equipment / Lot rows, run after a status or name change
 
   const board = () => ctx.board();
+
+  // A node that rebuilds itself on refreshEntities(), so badges and names never go stale (V-005).
+  function live(build) {
+    let node = build();
+    entityViews.push(() => {
+      const next = build();
+      node.replaceWith(next);
+      node = next;
+    });
+    return node;
+  }
+
+  function refreshEntities() {
+    const keep = root.contains(document.activeElement) ? document.activeElement.dataset?.keep : undefined;
+    entityViews.forEach((rebuild) => rebuild());
+    if (keep) root.querySelector(`[data-keep="${CSS.escape(keep)}"]`)?.focus();
+  }
+
+  // Equipment / Lot this cell belongs to: name + status badge + edit button (opens the same popover as the header).
+  function entityRow(kind, id) {
+    return live(() => {
+      const item = findEntity(board(), kind, id);
+      const row = el("div", "eb-prow");
+      if (!item) return row;
+      const name = entityName(kind, item);
+      const edit = button("icon-btn eb-pedit", "", () => ctx.editEntity(edit, kind, id));
+      edit.dataset.keep = `edit-${kind}`;
+      edit.setAttribute("aria-haspopup", "dialog");
+      edit.setAttribute("aria-label", `${KIND_LABEL[kind]} ${name} 상태·이름 편집`);
+      edit.title = `${KIND_LABEL[kind]} 상태·이름 편집 (${kind === "lot" ? "L" : "E"})`;
+      edit.append(svg("edit"));
+      const label = el("span", "eb-pname");
+      label.append(el("span", "eb-pk", KIND_LABEL[kind]), el("b", "", name));
+      row.append(label, statusBadge(kind, statusOf(item)), edit);
+      if (item.note) row.append(el("p", "eb-pnote", item.note));
+      return row;
+    });
+  }
+
+  // Status chips for many equipment / Lots at once; "pressed" only when they all share one status.
+  function bulkStatus(kind, ids) {
+    return live(() => {
+      const sum = statusSummary(board(), kind, ids);
+      const box = el("div", "eb-bstat");
+      const head = el("p", "eb-bhead");
+      head.append(el("b", "", `${KIND_LABEL[kind]} ${num(ids.length)}개`));
+      if (sum.uniform === null) {
+        head.append(el("span", "", "상태가 섞여 있어요: " + ENTITY_STATUS.filter((item) => sum.counts.get(item.key) > 0)
+          .map((item) => `${item.label} ${sum.counts.get(item.key)}`).join(" · ")));
+      }
+      const group = el("div", "chips eb-schips");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", `${KIND_LABEL[kind]} ${num(ids.length)}개 상태`);
+      for (const item of ENTITY_STATUS) {
+        const chip = button("chip eb-schip s-" + item.key, "", () => ctx.setStatuses(kind, ids, item.key));
+        chip.dataset.keep = `${kind}-${item.key}`;
+        chip.title = `${KIND_LABEL[kind]} ${num(ids.length)}개를 ${item.label} 상태로 — ${item.hint}`;
+        chip.setAttribute("aria-pressed", String(sum.uniform === item.key));
+        chip.append(svg(item.icon), el("span", "", item.label));
+        group.append(chip);
+      }
+      box.append(head, group);
+      return box;
+    });
+  }
 
   // Wait line: icon + words, so the level never relies on color alone.
   function waitBadge(info) {
@@ -279,11 +349,15 @@ export function createPanel(ctx) {
     const body = el("div", "eb-pbody");
     if (cell.excluded) {
       const none = el("div", "eb-excluded");
-      none.append(el("b", "", "제외한 조합이에요"), el("p", "", "평가 만들기에서 빼 둔 칸이라 단계나 값을 바꿀 수 없어요."));
-      body.append(none, section("선택 범위", scopeButtons()));
+      none.append(el("b", "", "제외한 조합이에요"), el("p", "", "평가에서 빼 둔 칸이라 단계나 값을 바꿀 수 없어요. 포함하면 이전 단계 그대로 돌아오고 대기 시간은 새로 시작해요."));
+      const include = button("btn eb-include", "평가에 포함하기", () => ctx.setExcluded([cell.id], false));
+      none.append(include);
+      body.append(none, section("설비 · Lot", entityRow("equipment", equipment.id), entityRow("lot", row.lot.id)),
+        section("선택 범위", scopeButtons()));
       frag.append(body);
       return frag;
     }
+    body.append(section("설비 · Lot", entityRow("equipment", equipment.id), entityRow("lot", row.lot.id)));
     const stageBox = section("단계");
     const refreshStage = () => {
       const at = formatAt(cell.at);
@@ -309,7 +383,9 @@ export function createPanel(ctx) {
     const noteBox = section("메모", noteRow(cell));
     body.append(noteBox);
     const histBox = section("단계 이력", el("p", "eb-empty", "불러오는 중…"));
-    body.append(histBox, section("선택 범위", scopeButtons()));
+    const exclude = button("btn quiet sm eb-exclude", "이 칸 평가에서 제외", () => ctx.setExcluded([cell.id], true));
+    exclude.title = "제외하면 진행률에서 빠지고 단계·값을 바꿀 수 없어요. 언제든 되돌릴 수 있어요.";
+    body.append(histBox, section("선택 범위", scopeButtons()), section("칸 관리", exclude));
     const mine = session;
     const loadHistory = async () => {
       try {
@@ -389,7 +465,12 @@ export function createPanel(ctx) {
       hint.textContent = same ? `이미 같은 단계인 ${num(same)}칸은 그대로 두어요.` : "모든 칸의 단계가 바뀌어요.";
     }
     sync();
-    body.append(section("옮길 단계", group, hint, apply, next), section("선택 범위", scopeButtons()));
+    const touched = touchedEntities(b, ids);
+    const exclude = button("btn quiet sm eb-exclude", `선택한 ${num(ids.length)}칸 평가에서 제외`, () => ctx.setExcluded(ids, true));
+    exclude.title = "제외하면 진행률에서 빠지고 단계·값을 바꿀 수 없어요. 언제든 되돌릴 수 있어요.";
+    body.append(section("옮길 단계", group, hint, apply, next),
+      section("설비 · Lot 상태", bulkStatus("equipment", touched.equipment), bulkStatus("lot", touched.lots)),
+      section("선택 범위", scopeButtons()), section("칸 관리", exclude));
     root._refresh = () => { render(); sync(); };
     statusEl = el("p", "eb-pstatus");
     statusEl.setAttribute("role", "status");
@@ -412,6 +493,7 @@ export function createPanel(ctx) {
     info = { skipped: 0, ...nextInfo };
     pending = undefined;
     commits = [];
+    entityViews = [];
     root._refresh = null;
     statusEl = null;
     if (!ids.length) { root.hidden = true; root.replaceChildren(); return; }
@@ -443,6 +525,7 @@ export function createPanel(ctx) {
     refresh() {
       const stage = root.contains(document.activeElement) ? document.activeElement.dataset?.stage : undefined;
       root._refresh?.();
+      refreshEntities();
       if (stage !== undefined) root.querySelector(`.eb-pchip[data-stage="${CSS.escape(stage)}"]`)?.focus();
     },
     status,

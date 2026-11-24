@@ -144,16 +144,17 @@ def get_board(
     now = now or eval_wait.now_seoul()
     evaluation = get_evaluation(conn, evaluation_id)
     equipment = [dict(row) for row in conn.execute(
-        "SELECT id, name, vendor FROM eval_equipment WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))]
+        "SELECT id, name, vendor, status, note FROM eval_equipment WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))]
     wafers_by_lot: dict[int, list[dict[str, Any]]] = {}
     for row in conn.execute(
         "SELECT id, lot_id, wafer_no FROM eval_wafers WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,)
     ):
         wafers_by_lot.setdefault(row["lot_id"], []).append({"id": row["id"], "wafer_no": row["wafer_no"]})
     lots = [
-        {"id": row["id"], "lot_no": row["lot_no"], "wafers": wafers_by_lot.get(row["id"], [])}
+        {"id": row["id"], "lot_no": row["lot_no"], "status": row["status"], "note": row["note"],
+         "wafers": wafers_by_lot.get(row["id"], [])}
         for row in conn.execute(
-            "SELECT id, lot_no FROM eval_lots WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))
+            "SELECT id, lot_no, status, note FROM eval_lots WHERE evaluation_id = ? ORDER BY sort, id", (evaluation_id,))
     ]
     rows = conn.execute(
         """SELECT c.id, c.equipment_id, c.wafer_id, c.stage_key, c.excluded, c.field_values, c.note,
@@ -382,3 +383,134 @@ def cell_history(conn: sqlite3.Connection, cell_id: int, limit: int = 50) -> lis
     return [dict(row) for row in conn.execute(
         "SELECT id, from_stage, to_stage, at FROM eval_stage_log WHERE cell_id = ? "
         "ORDER BY at DESC, id DESC LIMIT ?", (cell_id, limit))]
+
+
+# ---- board attributes: equipment / Lot status, names, memo; exclusion (V-005) -----------------------
+
+ENTITY_STATUSES = ("wait", "active", "hold", "done")
+EVALUATION_STATUSES = ("active", "hold", "done")
+_ENTITY = {"equipment": ("eval_equipment", "name"), "lot": ("eval_lots", "lot_no")}
+MAX_ENTITY_NOTE = 500
+
+
+def _entity_row(conn: sqlite3.Connection, evaluation_id: int, kind: str, entity_id: int) -> sqlite3.Row:
+    table, _ = _ENTITY[kind]
+    row = conn.execute(f"SELECT * FROM {table} WHERE id = ? AND evaluation_id = ?", (entity_id, evaluation_id)).fetchone()
+    if row is None:
+        raise EvaluationError("설비 또는 Lot을 찾을 수 없어요. 현황판을 새로 불러와 주세요.", 404)
+    return row
+
+
+def _entity_dict(kind: str, row: sqlite3.Row) -> dict[str, Any]:
+    out = {"id": row["id"], "kind": kind, "name": row[_ENTITY[kind][1]], "status": row["status"], "note": row["note"]}
+    if kind == "equipment":
+        out["vendor"] = row["vendor"]
+    return out
+
+
+def update_entity(
+    conn: sqlite3.Connection, evaluation_id: int, kind: str, entity_id: int, patch: dict[str, Any],
+) -> dict[str, Any]:
+    """Patch one equipment/Lot: `name`, `vendor` (equipment), `status`, `note`. Only keys present change."""
+    table, name_col = _ENTITY[kind]
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        _entity_row(conn, evaluation_id, kind, entity_id)
+        sets: dict[str, Any] = {}
+        if "name" in patch:
+            name = (patch["name"] or "").strip()
+            if not name:
+                raise EvaluationError("이름을 입력해 주세요.", 422)
+            dup = conn.execute(
+                f"SELECT 1 FROM {table} WHERE evaluation_id = ? AND {name_col} = ? AND id != ?",
+                (evaluation_id, name, entity_id)).fetchone()
+            if dup:
+                raise EvaluationError(f"같은 이름이 이미 있어요: {name}", 409)
+            sets[name_col] = name
+        if "vendor" in patch:
+            if kind != "equipment":
+                raise EvaluationError("Lot에는 설비사가 없어요.", 422)
+            sets["vendor"] = (patch["vendor"] or "").strip() or None
+        if "status" in patch:
+            if patch["status"] not in ENTITY_STATUSES:
+                raise EvaluationError("알 수 없는 상태예요.", 422)
+            sets["status"] = patch["status"]
+        if "note" in patch:
+            text = (patch["note"] or "").strip()
+            if len(text) > MAX_ENTITY_NOTE:
+                raise EvaluationError(f"메모는 {MAX_ENTITY_NOTE}자까지 쓸 수 있어요.", 422)
+            sets["note"] = text or None
+        if not sets:
+            raise EvaluationError("바꿀 내용이 없어요.")
+        conn.execute(f"UPDATE {table} SET " + ", ".join(f"{col} = ?" for col in sets) + " WHERE id = ?",
+                     (*sets.values(), entity_id))
+        return _entity_dict(kind, _entity_row(conn, evaluation_id, kind, entity_id))
+
+
+def set_entity_statuses(conn: sqlite3.Connection, evaluation_id: int, targets: list[dict[str, Any]]) -> dict[str, Any]:
+    """Set the status of many equipment/Lots in ONE transaction; any bad target rejects the whole request."""
+    if not targets:
+        raise EvaluationError("바꿀 설비 또는 Lot을 선택해 주세요.")
+    keys = [(t["kind"], t["id"]) for t in targets]
+    if len(set(keys)) != len(keys):
+        raise EvaluationError("같은 대상이 두 번 들어 있어요.")
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        changed, unchanged = [], []
+        for target in targets:
+            if target["kind"] not in _ENTITY or target["status"] not in ENTITY_STATUSES:
+                raise EvaluationError("알 수 없는 대상 또는 상태예요.", 422)
+            row = _entity_row(conn, evaluation_id, target["kind"], target["id"])
+            if row["status"] == target["status"]:
+                unchanged.append({"kind": target["kind"], "id": target["id"]})
+                continue
+            conn.execute(f"UPDATE {_ENTITY[target['kind']][0]} SET status = ? WHERE id = ?", (target["status"], target["id"]))
+            changed.append({"kind": target["kind"], "id": target["id"], "from": row["status"], "to": target["status"]})
+    return {"changed": changed, "unchanged": unchanged}
+
+
+def set_evaluation_status(conn: sqlite3.Connection, evaluation_id: int, status: str) -> dict[str, Any]:
+    if status not in EVALUATION_STATUSES:
+        raise EvaluationError("알 수 없는 상태예요.", 422)
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        before = get_evaluation(conn, evaluation_id)["status"]
+        conn.execute("UPDATE evaluations SET status = ? WHERE id = ?", (status, evaluation_id))
+    return {"from": before, "status": status}
+
+
+def set_cells_excluded(
+    conn: sqlite3.Connection, evaluation_id: int, cell_ids: list[int], excluded: bool,
+) -> dict[str, Any]:
+    """Exclude / include cells atomically. The stage is kept; re-including a staged cell logs a fresh entry
+    (stage -> same stage) so time spent excluded never counts as waiting (D-09). At least one cell must stay."""
+    if not cell_ids:
+        raise EvaluationError("칸을 하나 이상 선택해 주세요.")
+    if len(cell_ids) > MAX_MOVES or len(set(cell_ids)) != len(cell_ids):
+        raise EvaluationError("칸 목록이 올바르지 않아요.")
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        found: dict[int, sqlite3.Row] = {}
+        for chunk in _chunks(cell_ids):
+            marks = ",".join("?" * len(chunk))
+            for row in conn.execute(
+                f"SELECT id, stage_key, excluded FROM eval_cells WHERE evaluation_id = ? AND id IN ({marks})",
+                (evaluation_id, *chunk),
+            ):
+                found[row["id"]] = row
+        if len(found) != len(cell_ids):
+            raise EvaluationError("이 평가에 없는 칸이 있어요. 현황판을 새로 불러와 주세요.", 404)
+        todo = [cid for cid in cell_ids if bool(found[cid]["excluded"]) != excluded]
+        if excluded and todo:
+            active = conn.execute(
+                "SELECT count(*) FROM eval_cells WHERE evaluation_id = ? AND excluded = 0", (evaluation_id,)).fetchone()[0]
+            if active - len(todo) < 1:
+                raise EvaluationError("평가할 칸을 하나 이상 남겨 주세요.", 409)
+        at = _now()
+        for cell_id in todo:
+            conn.execute("UPDATE eval_cells SET excluded = ? WHERE id = ?", (int(excluded), cell_id))
+            stage = found[cell_id]["stage_key"]
+            if not excluded and stage is not None:
+                conn.execute("INSERT INTO eval_stage_log (cell_id, from_stage, to_stage, at) VALUES (?, ?, ?, ?)",
+                             (cell_id, stage, stage, at))
+    return {"changed": todo, "unchanged": [c for c in cell_ids if c not in todo], "excluded": excluded, "at": at}

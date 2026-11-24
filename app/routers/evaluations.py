@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -104,6 +104,81 @@ class SaveTemplateBody(BaseModel):
 @router.post("/{evaluation_id}/save-as-template", status_code=201)
 def save_as_template(evaluation_id: int, body: SaveTemplateBody, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return template_repo.from_evaluation(conn, evaluation_id, body.name, body.is_master)
+
+
+Status = Literal["wait", "active", "hold", "done"]
+Vendor = Annotated[str, StringConstraints(strip_whitespace=True, max_length=120, pattern=r"^[^\x00-\x1f]*$")]
+EntityNote = Annotated[str, StringConstraints(max_length=repo.MAX_ENTITY_NOTE * 2)]
+
+
+class EvaluationPatch(BaseModel):
+    status: Literal["active", "hold", "done"]
+
+
+class EquipmentPatch(BaseModel):
+    name: Name | None = None
+    vendor: Vendor | None = None
+    status: Status | None = None
+    note: EntityNote | None = None
+
+
+class LotPatch(BaseModel):
+    lot_no: Name | None = None
+    status: Status | None = None
+    note: EntityNote | None = None
+
+
+class StatusTarget(BaseModel):
+    kind: Literal["equipment", "lot"]
+    id: Annotated[int, Field(strict=True, gt=0)]
+    status: Status
+
+
+class StatusRequest(BaseModel):
+    targets: Annotated[list[StatusTarget], Field(max_length=500)]
+
+
+class ExcludeRequest(BaseModel):
+    cell_ids: Annotated[list[Annotated[int, Field(strict=True, gt=0)]], Field(max_length=repo.MAX_MOVES)]
+    excluded: bool
+
+
+def _patch_of(body: BaseModel, rename: dict[str, str] | None = None) -> dict:
+    """Keys the client sent. A null name/status is an error; null vendor/note clears the value."""
+    data = {key: getattr(body, key) for key in body.model_fields_set}
+    for key in ("name", "lot_no", "status"):
+        if key in data and data[key] is None:
+            raise repo.EvaluationError("이름 또는 상태를 비울 수 없어요.", 422)
+    for old, new in (rename or {}).items():
+        if old in data:
+            data[new] = data.pop(old)
+    return data
+
+
+@router.patch("/{evaluation_id}")
+def patch_evaluation(evaluation_id: int, body: EvaluationPatch, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.set_evaluation_status(conn, evaluation_id, body.status)
+
+
+@router.patch("/{evaluation_id}/equipment/{equipment_id}")
+def patch_equipment(evaluation_id: int, equipment_id: int, body: EquipmentPatch,
+                    conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.update_entity(conn, evaluation_id, "equipment", equipment_id, _patch_of(body))
+
+
+@router.patch("/{evaluation_id}/lots/{lot_id}")
+def patch_lot(evaluation_id: int, lot_id: int, body: LotPatch, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.update_entity(conn, evaluation_id, "lot", lot_id, _patch_of(body, {"lot_no": "name"}))
+
+
+@router.post("/{evaluation_id}/status")
+def set_statuses(evaluation_id: int, body: StatusRequest, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.set_entity_statuses(conn, evaluation_id, [t.model_dump() for t in body.targets])
+
+
+@router.post("/{evaluation_id}/cells/exclude")
+def exclude_cells(evaluation_id: int, body: ExcludeRequest, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.set_cells_excluded(conn, evaluation_id, body.cell_ids, body.excluded)
 
 
 @router.get("/{evaluation_id}")

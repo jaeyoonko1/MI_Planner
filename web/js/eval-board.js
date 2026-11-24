@@ -5,6 +5,11 @@ import {
   stageCounts, visibleRows,
 } from "./eval-board-model.js";
 import { createPanel } from "./eval-panel.js";
+import { badgeHtml, createEntityEditor, miniTag } from "./eval-entity.js";
+import {
+  KIND_LABEL, applyEntity, applyStatusChanges, entityName, entitySentence, findEntity, statusMessage, statusMeta,
+  statusOf, statusTargets, undoTargets,
+} from "./eval-entity-model.js";
 import { openSaveAsTemplate } from "./eval-templates.js";
 import { openMosPaste } from "./mos-paste.js";
 import { undoMoves } from "./mos-paste-model.js";
@@ -24,6 +29,14 @@ const PREFS_KEY = "mi.board.prefs";
 const esc = (text) => String(text).replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
 const num = (n) => n.toLocaleString("ko-KR");
+
+// Status badge that doubles as the button opening the edit popover (V-005). Kept out of the roving grid tab order;
+// keyboard users reach it with E / L on a cell or from the cell panel.
+function editButton(kind, item) {
+  const label = entitySentence(kind, item);
+  return `<button type="button" class="eb-stbtn" tabindex="-1" data-edit="${kind}" data-id="${item.id}" aria-haspopup="dialog"` +
+    ` title="${esc(label)} — 눌러서 상태·이름 수정" aria-label="${esc(label)}, 편집">${badgeHtml(kind, statusOf(item))}</button>`;
+}
 
 // Stage colors come from the template; they paint bars and tints only. Text always names the stage.
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -89,8 +102,17 @@ function summary(board, onRefresh, warnOn = true, onMos = null) {
   big.innerHTML = `<b>${total.percent}</b><span>%</span>`;
   const text = el("div", "eb-sum-text");
   const last = board.stages[board.stages.length - 1].label;
+  const stateBtn = el("button", "eb-state " + evaluation.status);
+  stateBtn.type = "button";
+  stateBtn.dataset.edit = "evaluation";
+  stateBtn.dataset.id = String(evaluation.id);
+  stateBtn.setAttribute("aria-haspopup", "dialog");
+  const stateMeta = statusMeta("evaluation", evaluation.status);
+  stateBtn.setAttribute("aria-label", `평가 상태 ${stateMeta.label}, 편집`);
+  stateBtn.title = "평가 상태 수정";
+  stateBtn.append(svg(stateMeta.icon), document.createTextNode(STATE[evaluation.status] || evaluation.status));
   text.append(
-    el("span", "eb-state " + evaluation.status, STATE[evaluation.status] || evaluation.status),
+    stateBtn,
     el("p", "eb-line", `${num(total.done)} / ${num(total.active)}칸 ${last}`),
     el("p", "eb-sub", `설비 ${evaluation.equipment_count} · Lot ${evaluation.lot_count} · 웨이퍼 ${evaluation.wafer_count} · 제외 ${num(evaluation.excluded_count)}칸`),
   );
@@ -190,7 +212,7 @@ function matrixView(board, prefs) {
     const p = progress[c];
     return `<th scope="col" class="eb-col"><button type="button" class="eb-hbtn" tabindex="-1" data-sel="col" data-c="${c}"` +
       ` title="${esc(item.name)}의 모든 칸 선택 (Ctrl·Shift: 추가)" aria-label="${esc(item.name)} 열 전체 선택"><span class="eb-eq">${esc(item.name)}</span></button>` +
-      (item.vendor ? `<small>${esc(item.vendor)}</small>` : "") +
+      (item.vendor ? `<small>${esc(item.vendor)}</small>` : "") + editButton("equipment", item) +
       `<span class="eb-mini" aria-hidden="true"><i style="width:${p.percent}%"></i></span>` +
       `<small class="eb-pct">${num(p.done)}/${num(p.active)} · ${p.percent}%</small></th>`;
   }).join("");
@@ -206,7 +228,7 @@ function matrixView(board, prefs) {
       html += `<tbody data-lot="${row.lot.id}"><tr class="eb-band"><th scope="rowgroup" colspan="${board.columns + 1}">` +
         `<span><button type="button" class="eb-hbtn" tabindex="-1" data-sel="lot" data-lot="${row.lot.id}"` +
         ` title="${esc(row.lot.lot_no)}의 모든 칸 선택" aria-label="${esc(row.lot.lot_no)} 전체 선택"><b>${esc(row.lot.lot_no)}</b></button>` +
-        `<small>${num(p.done)}/${num(p.active)} 완료</small></span></th></tr>`;
+        editButton("lot", row.lot) + `<small>${num(p.done)}/${num(p.active)} 완료</small></span></th></tr>`;
       lastLot = row.lot;
     }
     html += `<tr><th scope="row" class="eb-row"><button type="button" class="eb-hbtn" tabindex="-1" data-sel="row" data-r="${r}"` +
@@ -248,7 +270,7 @@ function lotWarnings(board, lot, equipmentId, nowMs) {
 function lotView(board, prefs) {
   const nowMs = boardNow(board);
   const head = board.equipment.map((item) => `<th scope="col" class="eb-col"><span class="eb-eq">${esc(item.name)}</span>` +
-    (item.vendor ? `<small>${esc(item.vendor)}</small>` : "") + "</th>").join("");
+    (item.vendor ? `<small>${esc(item.vendor)}</small>` : "") + editButton("equipment", item) + "</th>").join("");
   let html = `<table class="eb-table eb-lots" aria-label="평가 현황판 (Lot별)"><thead><tr>` +
     `<th scope="col" class="eb-corner">Lot</th>${head}</tr></thead><tbody>`;
   let shown = 0;
@@ -258,7 +280,8 @@ function lotView(board, prefs) {
     shown++;
     html += `<tr><th scope="row" class="eb-row lot"><button type="button" class="eb-lotbtn" data-lot="${lot.id}"` +
       ` title="${esc(lot.lot_no)}의 웨이퍼별 상태 보기"><b>${esc(lot.lot_no)}</b>` +
-      `<small>${num(total.done)}/${num(total.active)} · ${total.percent}%</small></button></th>`;
+      `<small>${num(total.done)}/${num(total.active)} · ${total.percent}%</small></button>` +
+      editButton("lot", lot) + `</th>`;
     for (const item of board.equipment) {
       const p = lotProgress(board, lot, item.id);
       if (!p.active) { html += `<td class="eb-cell ex"><span class="eb-t">제외</span></td>`; continue; }
@@ -275,6 +298,13 @@ function lotView(board, prefs) {
     html += "</tr>";
   }
   return { html: html + "</tbody></table>", shown };
+}
+
+// Equipment / Lot status shows in the stage list only when it is not the default "진행".
+function tagsHtml(equipment, lot) {
+  const tags = [["설비", "equipment", equipment], ["Lot", "lot", lot]].filter(([, , item]) => statusOf(item) !== "active")
+    .map(([label, kind, item]) => miniTag(label, kind, statusOf(item)).outerHTML);
+  return tags.length ? `<span class="eb-tags">${tags.join("")}</span>` : "";
 }
 
 function stageView(board, prefs, state) {
@@ -295,6 +325,7 @@ function stageView(board, prefs, state) {
       return `<li role="option" aria-selected="false" tabindex="${i ? -1 : 0}" data-id="${cell.id}"${level ? ` class="w${level}"` : ""}` +
         (info ? ` aria-label="${esc(`${board.equipment[c].name} ${row.lot.lot_no} ${row.wafer.wafer_no} · ${waitSentence(info, prefs.warn)}`)}"` : "") +
         `><b>${esc(board.equipment[c].name)}</b><span>${esc(row.lot.lot_no)} · ${esc(row.wafer.wafer_no)}</span>` +
+        tagsHtml(board.equipment[c], row.lot) +
         (info ? `<em class="eb-w${level ? "" : " plain"}" aria-hidden="true">${level ? iconHtml(WAIT_ICON[level]) : ""}${esc(info.text)}</em>` : "") + `</li>`;
     }).join("");
     column.innerHTML = `<header><i></i><h3>${esc(label)}</h3><b>${num(items.length)}</b></header>` +
@@ -352,6 +383,11 @@ function bindGrid(scroll, rows, h) {
     const mod = event.ctrlKey || event.metaKey;
     if (mod && !event.shiftKey && event.key.toLowerCase() === "a") { event.preventDefault(); h.line("all", 0, "replace"); return; }
     if (event.key === "Escape") { if (h.hasSelection()) { event.preventDefault(); h.clear(); } return; }
+    if (!mod && !event.shiftKey && (event.key === "e" || event.key === "E" || event.key === "l" || event.key === "L")) {
+      event.preventDefault();
+      h.edit(event.key.toLowerCase() === "e" ? "equipment" : "lot", td);
+      return;
+    }
     if (event.key === "Enter") { event.preventDefault(); activate(td, "replace", true); return; }
     if (event.key === " ") { event.preventDefault(); activate(td, "toggle"); return; }
     let move;
@@ -476,9 +512,20 @@ export async function renderBoard(host, page, onError) {
 
   // ---- selection -------------------------------------------------------------------------------
 
+  const editor = createEntityEditor({
+    host: root,
+    board: () => board,
+    release: () => focusGrid(),
+    commit: (kind, id, patch) => commitEntity(kind, id, patch),
+    setStatus: (kind, id, status) => setStatuses(kind, [id], status, { quiet: false }),
+  });
+
   const panel = createPanel({
     board: () => board,
     warnOn: () => prefs.warn,
+    editEntity: (anchor, kind, id) => editor.open(anchor, kind, id),
+    setStatuses: (kind, ids, status) => setStatuses(kind, ids, status),
+    setExcluded: (ids, excluded) => setExcluded(ids, excluded),
     moveCells: (moves, opts) => moveCells(moves, opts),
     saveCell: async (id, patch) => {
       const res = await api.patchEvalCell(id, patch);
@@ -556,6 +603,13 @@ export async function renderBoard(host, page, onError) {
 
   // Controller handed to the grid and list bindings.
   const handlers = {
+    edit(kind, td) {
+      const cell = board.byId.get(Number(td.dataset.id));
+      const id = kind === "lot" ? board.rowByWafer.get(cell?.wafer_id)?.lot.id : cell?.equipment_id;
+      if (!id) return;
+      const anchor = root.querySelector(`[data-edit="${kind}"][data-id="${id}"]`) || td;
+      editor.open(anchor, kind, id);
+    },
     focusId: () => sel.focusId,
     setFocusId: (id) => { sel.focusId = id; },
     hasSelection: () => sel.ids.length > 0,
@@ -570,6 +624,21 @@ export async function renderBoard(host, page, onError) {
       setSelection(found.ids, { skipped: found.skipped, lastId: found.ids[found.ids.length - 1] ?? sel.lastId });
     },
   };
+
+  root.addEventListener("click", (event) => {
+    const btn = event.target.closest?.("[data-edit]");
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+    editor.open(btn, btn.dataset.edit, Number(btn.dataset.id));
+  }, true);
+  root.addEventListener("dblclick", (event) => {
+    const head = event.target.closest?.('[data-sel="col"], [data-sel="lot"]');
+    if (!head) return;
+    const kind = head.dataset.sel === "lot" ? "lot" : "equipment";
+    const id = kind === "lot" ? Number(head.dataset.lot) : board.equipment[Number(head.dataset.c)]?.id;
+    if (id) editor.open(head, kind, id, { focus: "name" });
+  });
 
   root.addEventListener("board-cell", (event) => {
     const { id, r, c, mode, panel: focusPanel } = event.detail;
@@ -670,6 +739,126 @@ export async function renderBoard(host, page, onError) {
     }
   }
 
+  // ---- equipment / Lot / evaluation attributes + exclusion (V-005) ------------------------------------
+
+  let attrBusy = false;
+  // Errors for attribute edits: the popover shows its own message, so only stale/blocked states toast then.
+  function attrFailure(error) {
+    announce(error.message);
+    if (editor.isOpen() && error.status !== 404) return;
+    toast(error.message, { error: true, ...(error.status === 404 ? { action: { label: "새로고침", run: reload } } : {}) });
+  }
+
+  // One undoable edit. `forward`/`back` are API patches; the model is updated only after the server confirmed.
+  async function commitEntity(kind, id, patch, { undoing = false } = {}) {
+    if (kind === "evaluation") return setEvaluation(patch.status, { undoing });
+    const item = findEntity(board, kind, id);
+    if (!item) throw new Error("설비 또는 Lot을 찾을 수 없어요. 현황판을 새로 불러와 주세요.");
+    const before = {};
+    for (const key of Object.keys(patch)) before[key] = key === "name" ? entityName(kind, item) : item[key] ?? (key === "status" ? "active" : "");
+    const body = { ...patch };
+    if (kind === "lot" && "name" in body) { body.lot_no = body.name; delete body.name; }
+    let res;
+    try {
+      res = await (kind === "lot" ? api.patchEvalLot : api.patchEvalEquipment)(evaluationId, id, body);
+    } catch (error) {
+      attrFailure(error);
+      throw error;
+    }
+    applyEntity(board, kind, id, { name: res.name, status: res.status, note: res.note, ...(kind === "equipment" ? { vendor: res.vendor } : {}) });
+    refreshAfterChange();
+    const label = `${KIND_LABEL[kind]} ${res.name}`;
+    const message = undoing ? `${label} · 되돌렸어요` : `${label} · 저장했어요`;
+    announce(message);
+    toast(message, undoing ? {} : { ms: 8000, action: { label: "되돌리기", run: () => commitEntity(kind, id, before, { undoing: true }) } });
+    return res;
+  }
+
+  async function setEvaluation(status, { undoing = false } = {}) {
+    const before = board.evaluation.status;
+    if (before === status) return;
+    try {
+      await api.setEvaluationStatus(evaluationId, status);
+    } catch (error) {
+      attrFailure(error);
+      throw error;
+    }
+    board.evaluation.status = status;
+    replaceSummary();
+    const label = statusMeta("evaluation", status).label;
+    const message = undoing ? `평가를 ${label} 상태로 되돌렸어요` : `평가를 ${label} 상태로 바꿨어요`;
+    announce(message);
+    toast(message, undoing ? {} : { ms: 8000, action: { label: "되돌리기", run: () => setEvaluation(before, { undoing: true }) } });
+  }
+
+  // Status of many equipment/Lots in one request (header popover = 1 target, cell panel = many). Undo sends the reverse.
+  async function setStatuses(kind, ids, status, { undoing = false } = {}) {
+    if (kind === "evaluation") return setEvaluation(status);
+    if (attrBusy || !ids.length) return;
+    attrBusy = true;
+    try {
+      const result = await api.setEvalStatuses(evaluationId, statusTargets(kind, ids, status));
+      applyStatusChanges(board, result.changed);
+      refreshAfterChange();
+      panel.refresh();
+      const changed = result.changed.length;
+      if (!changed) {
+        const same = `이미 ${statusMeta(kind, status).label} 상태예요.`;
+        announce(same);
+        toast(same);
+        return;
+      }
+      const message = undoing ? `${num(changed)}개를 되돌렸어요` : statusMessage(kind, changed, status)
+        + (result.unchanged.length ? ` · ${num(result.unchanged.length)}개는 이미 같은 상태` : "");
+      announce(message);
+      const back = undoTargets(result.changed);
+      toast(message, undoing ? {} : { ms: 10000, action: { label: "되돌리기", run: async () => {
+        const res = await api.setEvalStatuses(evaluationId, back);
+        applyStatusChanges(board, res.changed);
+        refreshAfterChange();
+        panel.refresh();
+        const text = `${num(res.changed.length)}개를 되돌렸어요`;
+        announce(text);
+        toast(text);
+      } } });
+    } catch (error) {
+      attrFailure(error);
+      throw error;
+    } finally {
+      attrBusy = false;
+    }
+  }
+
+  // Exclude / include cells. The server keeps the stage and restarts the wait clock on re-include (D-09).
+  async function setExcluded(ids, excluded) {
+    if (attrBusy || !ids.length) return;
+    attrBusy = true;
+    try {
+      const result = await api.excludeEvalCells(evaluationId, ids, excluded);
+      const changed = result.changed;
+      await reload({ keepIds: excluded ? [] : ids });
+      if (!changed.length) {
+        const same = excluded ? "이미 제외한 칸이에요." : "이미 평가에 포함된 칸이에요.";
+        announce(same);
+        toast(same);
+        return;
+      }
+      const message = excluded ? `${num(changed.length)}칸을 평가에서 제외했어요` : `${num(changed.length)}칸을 평가에 포함했어요`;
+      announce(message);
+      toast(message, { ms: 10000, action: { label: "되돌리기", run: async () => {
+        await api.excludeEvalCells(evaluationId, changed, !excluded);
+        await reload({ keepIds: excluded ? changed : [] });
+        const text = `${num(changed.length)}칸을 되돌렸어요`;
+        announce(text);
+        toast(text);
+      } } });
+    } catch (error) {
+      attrFailure(error);
+    } finally {
+      attrBusy = false;
+    }
+  }
+
   // ---- warning thresholds (stored with this evaluation's stages, never per cell) -----------------------
 
   const limitsHost = el("div", "eb-limits-host");
@@ -762,6 +951,7 @@ export async function renderBoard(host, page, onError) {
     const next = summary(board, () => reload(), prefs.warn, () => startMos());
     summaryEl.replaceWith(next);
     summaryEl = next;
+    editor.refresh();
   }
 
   // Repaint after a data change without losing scroll position or keyboard focus.
@@ -780,12 +970,12 @@ export async function renderBoard(host, page, onError) {
     repaint();
   }
 
-  async function reload() {
+  async function reload({ keepIds } = {}) {
     try {
       board = buildBoard(await api.evaluationBoard(evaluationId));
       replaceSummary();
       paint();
-      const keep = pruneSelection(board, sel.ids);
+      const keep = keepIds?.length ? pruneSelection(board, keepIds) : pruneSelection(board, sel.ids);
       await setSelection(keep, { quiet: true });
       announce("현황판을 새로 불러왔어요.");
     } catch (error) {
