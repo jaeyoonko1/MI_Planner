@@ -5,11 +5,13 @@ from datetime import date
 from fastapi import APIRouter, Request
 
 from app import db, journal, journal_links
+from app.repositories import evaluations as eval_repo
 from app.repositories import tasks as repo
 
 router = APIRouter(prefix="/api/dashboard")
 
 DUE_SOON_DAYS = 3
+STALLED_TOP_N = 8
 
 
 @router.get("/today")
@@ -26,6 +28,7 @@ def today(request: Request) -> dict:
         planned_all = repo.list_tasks(conn, planned_date=day.isoformat())
         tasks = journal_links.task_map(conn, [journal_body])
         requesters = repo.requesters(conn)
+        stalled = eval_repo.stalled_cells(conn, STALLED_TOP_N)
     finally:
         conn.close()
     return {
@@ -39,5 +42,6 @@ def today(request: Request) -> dict:
         "marked": marked,
         "planned_all": planned_all,
         "tasks": tasks,
-        "evaluations": [],  # filled in by P4-08
+        "evaluations": stalled["items"],
+        "evaluations_stalled": {"total": stalled["total"], "levels": stalled["levels"], "limit": STALLED_TOP_N}
     }

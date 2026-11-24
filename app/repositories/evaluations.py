@@ -5,7 +5,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from itertools import product
 from typing import Any
 
@@ -174,6 +174,39 @@ def get_board(
             "now": now.isoformat(timespec="seconds")}
 
 
+def stalled_cells(
+    conn: sqlite3.Connection, limit: int = 8, now: datetime | None = None,
+) -> dict[str, Any]:
+    """Cells over their stage's warn_hours across active evaluations, longest wait first (P4-08, D-09).
+
+    `total` counts every warned cell; `items` holds at most `limit`. Nothing is stored: the same
+    `get_board` rules (P4-06) run per evaluation.
+    """
+    now = now or eval_wait.now_seoul()
+    found: list[dict[str, Any]] = []
+    for row in conn.execute("SELECT id FROM evaluations WHERE status = 'active' ORDER BY id"):
+        board = get_board(conn, row["id"], now)
+        warned = [c for c in board["cells"] if c["warn"] and c["wait_h"] is not None]
+        if not warned:
+            continue
+        evaluation = board["evaluation"]
+        stages = {stage["key"]: stage for stage in evaluation["stages"]}
+        names = {e["id"]: e["name"] for e in board["equipment"]}
+        wafers = {w["id"]: (lot["lot_no"], w["wafer_no"]) for lot in board["lots"] for w in lot["wafers"]}
+        for cell in warned:
+            stage = stages[cell["stage_key"]]
+            lot_no, wafer_no = wafers.get(cell["wafer_id"], ("", ""))
+            found.append({
+                "cell_id": cell["id"], "evaluation_id": evaluation["id"], "evaluation_name": evaluation["name"],
+                "page_path": evaluation["page_path"], "equipment": names.get(cell["equipment_id"], ""),
+                "lot_no": lot_no, "wafer_no": wafer_no, "stage_key": cell["stage_key"], "stage_label": stage["label"],
+                "wait_h": cell["wait_h"], "warn": cell["warn"], "warn_hours": stage.get("warn_hours"), "at": cell["at"],
+            })
+    found.sort(key=lambda item: (-item["warn"], -item["wait_h"], item["cell_id"]))
+    return {"total": len(found), "items": found[:max(0, limit)],
+            "levels": {"1": sum(1 for i in found if i["warn"] == 1), "2": sum(1 for i in found if i["warn"] == 2)}}
+
+
 def set_warn_hours(conn: sqlite3.Connection, evaluation_id: int, warn: dict[str, float | None]) -> dict[str, Any]:
     """Set per-stage warning thresholds of ONE evaluation (stored with its stage copy, not per cell)."""
     with conn:
@@ -214,9 +247,12 @@ def _stage_keys(conn: sqlite3.Connection, evaluation_id: int) -> set[str]:
 
 
 def apply_stage_moves(
-    conn: sqlite3.Connection, evaluation_id: int, moves: list[tuple[int, str | None]],
+    conn: sqlite3.Connection, evaluation_id: int, moves: list[tuple],
 ) -> dict[str, Any]:
     """Move cells to stages in ONE transaction and log each real change (D-09).
+
+    A move is `(cell_id, stage_key)` or `(cell_id, stage_key, at)`; `at` (ISO, e.g. a MOS time, P4-08) is the
+    log time instead of "now". A time in the future or an unparsable one rejects the whole request.
 
     Any unknown cell, excluded cell or unknown stage rejects the whole request, so a bulk
     transition never half-applies. Cells already at the target stage are reported as unchanged.
@@ -225,14 +261,22 @@ def apply_stage_moves(
         raise EvaluationError("옮길 칸을 하나 이상 선택해 주세요.")
     if len(moves) > MAX_MOVES:
         raise EvaluationError(f"한 번에 {MAX_MOVES:,}칸까지만 옮길 수 있어요.")
-    ids = [cell_id for cell_id, _ in moves]
+    ids = [move[0] for move in moves]
     if len(set(ids)) != len(ids):
         raise EvaluationError("같은 칸이 두 번 들어 있어요.")
     with conn:
         conn.execute("BEGIN IMMEDIATE")
         stages = _stage_keys(conn, evaluation_id)
-        if any(stage is not None and stage not in stages for _, stage in moves):
+        if any(move[1] is not None and move[1] not in stages for move in moves):
             raise EvaluationError("이 평가에 없는 단계예요.", 422)
+        stamp = eval_wait.now_seoul()
+        times: dict[int, str] = {}
+        for move in moves:
+            if len(move) > 2 and move[2]:
+                when = eval_wait.parse_at(move[2])
+                if when is None or when > stamp + timedelta(minutes=5):
+                    raise EvaluationError("단계 시각이 올바르지 않거나 미래예요.", 422)
+                times[move[0]] = when.isoformat(timespec="seconds")
         current: dict[int, tuple[str | None, int]] = {}
         for chunk in _chunks(ids):
             marks = ",".join("?" * len(chunk))
@@ -249,7 +293,8 @@ def apply_stage_moves(
             raise EvaluationError(f"제외한 칸 {len(excluded)}개는 단계를 바꿀 수 없어요.", 409)
         at = _now()
         changed, unchanged = [], []
-        for cell_id, target in moves:
+        for move in moves:
+            cell_id, target = move[0], move[1]
             before = current[cell_id][0]
             if before == target:
                 unchanged.append(cell_id)
@@ -257,8 +302,8 @@ def apply_stage_moves(
             conn.execute("UPDATE eval_cells SET stage_key = ? WHERE id = ?", (target, cell_id))
             conn.execute(
                 "INSERT INTO eval_stage_log (cell_id, from_stage, to_stage, at) VALUES (?, ?, ?, ?)",
-                (cell_id, before, target, at))
-            changed.append({"id": cell_id, "from": before, "to": target})
+                (cell_id, before, target, times.get(cell_id, at)))
+            changed.append({"id": cell_id, "from": before, "to": target, "at": times.get(cell_id, at)})
     return {"changed": changed, "unchanged": unchanged, "at": at}
 
 

@@ -1,9 +1,11 @@
 // Today (P2B-05): today's journal beside what needs attention. Same hub, same task rows.
 import { api } from "./api.js";
+import { formatWait, formatThreshold } from "./eval-wait-model.js";
 import { hub } from "./hub.js";
 import { mountDay } from "./dayeditor.js";
 import { taskRow } from "./taskrow.js";
-import { debounce, el, emptyState, errorState, parseISO, skeleton, svg, WD } from "./ui.js";
+import { chipRow, debounce, el, emptyState, errorState, parseISO, skeleton, svg, WD } from "./ui.js";
+import { pageHash } from "./wikilinks.js";
 
 const TABS = [["due", "납기 임박"], ["mark", "★ ! 중요"], ["plan", "오늘 일지"]];
 
@@ -23,8 +25,67 @@ function link(href, label, iconId) {
   return a;
 }
 
+// "밀린 단계" (P4-08): the evaluation cells waiting longest past their stage's warn_hours (P4-06). Click -> board, cell selected.
+function stalledPanel(data, filter, onFilter) {
+  const info = data.evaluations_stalled || { total: 0, levels: {}, limit: 0 };
+  const items = data.evaluations || [];
+  const shown = filter === "severe" ? items.filter((item) => item.warn === 2) : items;
+  const section = el("section", "panel stall");
+  section.setAttribute("aria-label", "밀린 평가 단계");
+  const counts = el("span", "stall-counts");
+  if (info.levels["2"]) counts.append(el("b", "wn2", `심각 ${info.levels["2"]}칸`));
+  if (info.levels["1"]) counts.append(el("b", "wn1", `경고 ${info.levels["1"]}칸`));
+  const filters = chipRow([["all", "전체"], ["severe", "심각만"]], filter, onFilter);
+  filters.setAttribute("aria-label", "밀린 단계 보기");
+  const all = el("a", "btn quiet sm", "평가 현황판");
+  all.href = "#/evaluations";
+  all.append(svg("chev", "i s"));
+  section.append(panelHead("clock", "밀린 단계", counts, ...(info.total ? [filters] : []), all));
+  if (!shown.length) {
+    const none = el("p", "stall-empty");
+    none.append(svg("check", "i s"), el("b", "", info.total ? "심각하게 밀린 단계는 없어요" : "밀린 단계가 없어요"),
+      el("span", "", info.total ? "‘전체’로 바꾸면 경고 단계도 볼 수 있어요." : "진행 중인 평가에서 기준 시간을 넘긴 칸이 생기면 여기에 모여요."));
+    section.append(none);
+    return section;
+  }
+  const list = el("ul", "stall-list");
+  for (const item of shown) {
+    const li = el("li");
+    const a = el("a", "stall-row w" + item.warn);
+    a.href = item.page_path ? `${pageHash(item.page_path)}?cell=${item.cell_id}` : "#/evaluations";
+    const wafer = item.wafer_no ? ` · ${item.wafer_no}` : "";
+    a.setAttribute("aria-label", `${item.warn === 2 ? "심각" : "경고"}, ${item.equipment} ${item.lot_no}${wafer}, ${item.stage_label} 단계 ${formatWait(item.wait_h)} 대기, 현황판에서 열기`);
+    const badge = el("span", "stall-badge");
+    badge.append(svg(item.warn === 2 ? "alert" : "clock", "i s"), item.warn === 2 ? "심각" : "경고");
+    const what = el("span", "stall-what");
+    what.append(el("b", "", `${item.equipment} · ${item.lot_no}${wafer}`), el("small", "", `${item.evaluation_name} · ${item.stage_label}`));
+    const wait = el("span", "stall-wait");
+    wait.append(el("b", "", formatWait(item.wait_h)), el("small", "", item.warn_hours ? `기준 ${formatThreshold(item.warn_hours)}` : ""));
+    a.append(badge, what, wait, svg("chev", "i s go"));
+    li.append(a);
+    list.append(li);
+  }
+  section.append(list);
+  if (shown.length > 5) {
+    // Narrow windows show the top five first (CSS); this chip reveals the rest.
+    const more = el("button", "chip stall-more", `나머지 ${shown.length - 5}칸 보기`);
+    more.type = "button";
+    more.setAttribute("aria-pressed", "false");
+    more.addEventListener("click", () => {
+      const open = section.classList.toggle("open");
+      more.setAttribute("aria-pressed", String(open));
+      more.textContent = open ? "접기" : `나머지 ${shown.length - 5}칸 보기`;
+    });
+    section.append(more);
+  }
+  if (info.total > items.length) section.append(el("div", "panel-foot", `오래 기다린 순 상위 ${items.length}칸 · 전체 ${info.total}칸은 평가 현황판에서 확인해요`));
+  return section;
+}
+
 export async function renderToday(container) {
   let tab = "due";
+  let stallFilter = "all";
+  const stallHost = el("div", "stall-host");
   let data = null;
   let editor = null;
   const view = el("div", "page");
@@ -99,7 +160,12 @@ export async function renderToday(container) {
     const l = el("div"); l.append(left);
     const r = el("div"); r.append(right);
     grid.append(l, r);
-    view.replaceChildren(hero, grid);
+    view.replaceChildren(hero, stallHost, grid);
+    paintStall();
+  }
+
+  function paintStall() {
+    stallHost.replaceChildren(stalledPanel(data, stallFilter, (value) => { stallFilter = value; paintStall(); }));
   }
 
   async function load(first) {
@@ -115,6 +181,7 @@ export async function renderToday(container) {
     }
     if (first) { container.replaceChildren(view); build(); }
     paintRight();
+    paintStall();
   }
 
   const reload = debounce(() => load(false), 60);

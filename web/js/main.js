@@ -31,7 +31,7 @@ const TYPES = [
 
 // ---- routing: #/ (home) or #/page/<encoded path> ---------------------------
 function currentPath() {
-  const m = location.hash.match(/^#\/page\/(.+)$/);
+  const m = location.hash.match(/^#\/page\/([^?]+)(?:\?.*)?$/); // "?cell=ID" selects a board cell (P4-08)
   return m ? m[1].split("/").map(decodeURIComponent).join("/") : null;
 }
 

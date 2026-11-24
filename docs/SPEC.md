@@ -276,10 +276,11 @@ vault/
   - `POST /api/todos`(title 필수, 201), `GET /{id}`, `PATCH /{id}`(보낸 필드만 수정, null로 비우기 가능), `DELETE /{id}` → `{ok:true}`. 상위 할일 삭제 시 하위는 최상위로 풀림. 순환·자기 참조 거부.
   - 오류: 검증 400, 없음 404, 요청 형식 오류 422 — 모두 `{"error": "..."}`.
 - **확정(P2-05/06) API**:
-  - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off 기본 on, `theme` system|light|dark 기본 system, `density` compact|normal|cozy 기본 normal, `memo_folds` JSON 객체 문자열 기본 `{}`(메모·노트 제목 접힘 상태, P2B-10). theme·density는 그 외 값이면 400). 정적 파일(비 `/api`)은 `Cache-Control: no-cache`로 서빙.
+  - `GET /api/settings` → `{settings}`, `PUT /api/settings/{key}` `{value}` (허용 키: `journal_auto_show` on/off 기본 on, `theme` system|light|dark 기본 system, `density` compact|normal|cozy 기본 normal, `memo_folds` JSON 객체 문자열 기본 `{}`(메모·노트 제목 접힘 상태, P2B-10), `mos_mapping` JSON 객체 문자열 기본 빈 문자열(MOS 붙여넣기 열 매핑, P4-08; 형식이 틀리면 400). theme·density는 그 외 값이면 400). 정적 파일(비 `/api`)은 `Cache-Control: no-cache`로 서빙.
   - `GET /api/journal/{yyyy-mm}/auto` → `{month, enabled, days: {"YYYY-MM-DD": [{id,title,status,priority,due_date}]}}` (납기가 그날이고 done 아닌 할일, 읽기 전용·파일에 쓰지 않음).
   - `POST /api/todos/from-line` `{date, line_index}` → 201 `{task, month, path, days}`. 체크박스 줄만, 할일 `planned_date`=그 날짜, 줄 끝에 ` → 할일 #id` 추가(이미 있으면 거부). (경로는 `/api/tasks`가 아니라 `/api/todos`)
-  - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations:[]}` + (P2B-05) `planned_all`(오늘 계획, 완료 포함), `marked`(★·! 미완료), `requesters`, `tasks`(오늘 일지가 연결한 할일 `{id: task}`).
+  - `GET /api/dashboard/today` → `{date, month, journal, planned, due_soon(3일), overdue, evaluations, evaluations_stalled}` + (P2B-05) `planned_all`(오늘 계획, 완료 포함), `marked`(★·! 미완료), `requesters`, `tasks`(오늘 일지가 연결한 할일 `{id: task}`).
+- **밀린 단계 (P4-08)**: 오늘 화면 맨 위 패널. `evaluations`는 진행 중(`status='active'`) 평가에서 P4-06 규칙으로 경고(1)·심각(2)인 칸을 심각 먼저·오래 기다린 순으로 상위 8개(`cell_id, evaluation_id, evaluation_name, page_path, equipment, lot_no, wafer_no, stage_key, stage_label, wait_h, warn, warn_hours, at`), `evaluations_stalled`는 `{total, levels:{"1","2"}, limit}`. 행을 누르면 `#/page/<board 경로>?cell=<id>`로 이동해 현황판이 보기를 설비별로 바꾸고(저장 안 함) 그 칸을 선택·스크롤한다. `전체/심각만` 토글 칩, 1100px 이하는 상위 5개 + `나머지 N칸 보기`.
 - **일지 줄 ↔ 할일 동기화 (P2B-05, `app/journal_links.py`)**: 연결된 줄은 끝이 ` → 할일 #<id>`다. 오늘·주간·월간·할일 목록·상세 패널은 같은 ID를 읽는다.
   - 할일 → 일지: `POST/PATCH/DELETE /api/todos`가 제목·완료·표시(`mark`)·`planned_date` 변화를 해당 줄에 반영한다. 응답에 `journal_days: {날짜: 본문}`(바뀐 날). `planned_date`를 새 날짜로 바꾸면 줄(들여쓴 하위 줄 포함)이 그날 칸 끝으로 이동하고, 줄이 없으면 새로 만든다. `planned_date`를 비우면 하위 줄 없는 줄은 삭제, 하위 줄이 있으면 텍스트만 남기고 연결을 끊는다. 할일 삭제는 줄의 연결만 끊고, 페이지 없는 이슈의 `vault/.issue-files/<id>`는 `.trash/`로 옮긴다. 납기(`due_date`)는 건드리지 않는다.
   - 일지 → 할일: `PUT /api/journal/{yyyy-mm}/{dd}`가 저장 전에 그날의 연결 줄을 동기화한다(제목, `[x]` 완료, `[*]`·`[!]` 표시, 붙여넣어 옮긴 줄 = 계획일 변경). 같은 ID가 두 줄이면 뒤 줄은 연결을 푼다(복제로 이슈가 늘지 않음). 줄이 사라지면 그날의 계획 연결만 해제(할일은 남음). 응답 `{..., content(정규화된 본문), changed:[id], other_days, tasks}`.
@@ -342,6 +343,12 @@ vault/
 ### 4.4 Lot 상태 (MOS) (P4)
 - **붙여넣기 어댑터**: MOS 화면에서 복사한 표를 붙여넣으면 Lot 번호·step·Hold·위치를 읽어 `lot_status`에 시각과 함께 저장. 열 매핑은 처음 한 번 지정.
 - 현황판 Lot 행에 최신 MOS 상태 배지 표시.
+- **구현 (P4-08, 평가 칸 단계 갱신 범위)**: `lot_status` 저장·Lot 배지는 아직 없다(Q: MOS의 step/Hold/위치 열을 실제 화면으로 본 뒤 결정). 대신 붙여넣은 표로 **평가 칸의 단계**를 갱신한다.
+  - 화면: 현황판 요약의 `MOS에서 붙여넣기`(`web/js/mos-paste.js`) → 붙여넣기 → 열 매핑 → 미리보기 → `N칸 적용`. 미리보기 전에는 아무것도 쓰지 않고, 적용은 기존 원자적 일괄 API(`POST /api/evaluations/{id}/cells/stage`, 이력 기록) 한 번뿐이다. 적용 뒤 토스트의 `되돌리기`는 바뀐 칸을 이전 단계로 되돌리는 같은 API 호출이다(이력은 되돌림 시각으로 추가되므로 대기 시계는 그 시각부터 다시 시작).
+  - 순수 로직은 `web/js/mos-paste-model.js`(Node 시험 `web/test/run_mos_paste.mjs`). 표 구분은 탭·쉼표·세미콜론·`|`·2칸 이상 공백(따옴표 CSV, BOM, CRLF), 첫 줄이 머리글, 최대 5,000줄.
+  - **열 매핑**은 머리글 이름으로 찾고(대소문자·띄어쓰기·`_`·`-` 무시, 쉼표로 여러 이름) `settings.mos_mapping`(JSON 문자열: `lot`·`wafer`·`equipment`·`stage`·`time` 이름 목록 + `stageMap {MOS 값: 평가 단계 이름}`)에 저장한다. 필수는 Lot·설비·단계, 웨이퍼·시각은 선택(웨이퍼 열이 없거나 비면 그 Lot의 모든 웨이퍼, `01`·`W1`·`1-3`·`01,03` 허용). 단계 값은 평가 단계 이름·키 또는 `stageMap`으로 찾는다. 시각은 `2026-11-24 09:30[:15]`·`2026/11/24`·`2026.11.24`·`20261124093015`·ISO·`오전/오후`·AM/PM, 오프셋이 없으면 Asia/Seoul.
+  - **덮어쓰지 않는 규칙**: 줄마다 칸별로 `적용`(미배정이거나 앞 단계로 진행)·`이미 같음`·`단계 되돌림`·`MOS가 더 오래됨`(MOS 시각이 칸의 최신 이력보다 이전)·`뒤의 줄이 덮어씀`(같은 칸이 여러 줄이면 더 늦은 MOS 시각, 시각이 없으면 뒤의 줄)·`제외`로 분류한다. 되돌림·오래됨은 **기본으로 건너뛰고** 토글 칩으로 켜야 적용한다. 이 평가에 없는 Lot·설비·웨이퍼·단계, 읽을 수 없는 시각, 빈 필수 값은 줄 오류로 목록에 보이고 건너뛴다.
+  - API 보강: 단계 전환 `moves[].at`(선택, ISO)을 로그 시각으로 쓴다(MOS 시각을 대기 시계에 반영). 읽을 수 없거나 5분 넘는 미래면 422로 전체 거부. 응답 `changed[].at`. 화면은 정상 진행(`적용`) 칸에만 `at`을 보낸다.
 - 나중에: 회사 PC에서 dcoll Python 스크립트가 **같은 테이블**에 넣는다(`source = 'dcoll'`). 앱은 출처를 몰라도 된다.
 
 ### 4.5 MI 정보 (table 타입, P5)
@@ -558,7 +565,8 @@ POST   /api/evaluations/{id}/cells/stage   # {cell_ids[], stage_key}
 PATCH  /api/eval-cells/{id}               # values, note
 GET    /api/evaluations/{id}/export.xlsx
 # MOS
-POST   /api/lot-status/paste     GET /api/lot-status?lot_no=
+POST   /api/lot-status/paste     GET /api/lot-status?lot_no=   # (미구현) P4-08은 cells/stage + settings.mos_mapping 사용
+GET    /api/evaluations/stalled?limit=8   # 오늘 화면 '밀린 단계' (진행 중 평가의 경고 칸, 오래 기다린 순)
 # 오늘
 GET    /api/dashboard/today
 ```

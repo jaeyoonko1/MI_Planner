@@ -69,4 +69,4 @@ def test_dashboard_today(client) -> None:
     assert [t["title"] for t in d["planned"]] == ["오늘 하기로"]
     assert [t["title"] for t in d["due_soon"]] == ["곧 납기"]
     assert [t["title"] for t in d["overdue"]] == ["지난 납기"]
-    assert d["evaluations"] == []
+    assert d["evaluations"] == [] and d["evaluations_stalled"]["total"] == 0  # stalled cells: test_mos_stalled.py

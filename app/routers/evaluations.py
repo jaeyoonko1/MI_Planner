@@ -66,6 +66,11 @@ def list_evaluations(conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return {"items": repo.list_evaluations(conn)}
 
 
+@router.get("/stalled")
+def get_stalled(limit: int = 8, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.stalled_cells(conn, max(1, min(limit, 50)))
+
+
 @router.get("/{evaluation_id}/board")
 def get_board(evaluation_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return repo.get_board(conn, evaluation_id)
@@ -122,6 +127,7 @@ StageKey = Annotated[str, StringConstraints(min_length=1, max_length=64)]
 class StageMove(BaseModel):
     cell_id: Annotated[int, Field(strict=True, gt=0)]
     stage_key: StageKey | None
+    at: Annotated[str, StringConstraints(max_length=40)] | None = None  # P4-08: MOS time as the log time
 
 
 class StageRequest(BaseModel):
@@ -144,7 +150,7 @@ class StageRequest(BaseModel):
 
 @router.post("/{evaluation_id}/cells/stage")
 def move_cells(evaluation_id: int, body: StageRequest, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
-    moves = [(m.cell_id, m.stage_key) for m in body.moves] if body.moves is not None else [
+    moves = [(m.cell_id, m.stage_key, m.at) for m in body.moves] if body.moves is not None else [
         (cell_id, body.stage_key) for cell_id in body.cell_ids or []]
     return repo.apply_stage_moves(conn, evaluation_id, moves)
 

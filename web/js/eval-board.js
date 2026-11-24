@@ -6,6 +6,8 @@ import {
 } from "./eval-board-model.js";
 import { createPanel } from "./eval-panel.js";
 import { openSaveAsTemplate } from "./eval-templates.js";
+import { openMosPaste } from "./mos-paste.js";
+import { undoMoves } from "./mos-paste-model.js";
 import {
   allIds, applyChanged, columnIds, locate, lotIds, mergeSelection, pruneSelection, rectIds, rowIds,
 } from "./eval-select-model.js";
@@ -76,7 +78,7 @@ function waitBlock(board, warnOn) {
   return box;
 }
 
-function summary(board, onRefresh, warnOn = true) {
+function summary(board, onRefresh, warnOn = true, onMos = null) {
   const { evaluation } = board;
   const total = stageCounts(board);
   const box = el("section", "eb-summary");
@@ -106,7 +108,12 @@ function summary(board, onRefresh, warnOn = true) {
   saveMaster.title = "이 평가의 단계·값 항목을 템플릿으로 복사해요";
   saveMaster.prepend(svg("copy"));
   saveMaster.addEventListener("click", () => openSaveAsTemplate(evaluation));
-  head.append(big, text, el("span", "grow"), exportLink, saveMaster, refresh);
+  const mos = el("button", "btn sm eb-mos", "MOS에서 붙여넣기");
+  mos.type = "button";
+  mos.title = "MOS 화면에서 복사한 표로 단계를 한꺼번에 갱신해요 (미리보기 후 확인)";
+  mos.prepend(svg("paste"));
+  mos.addEventListener("click", () => onMos?.());
+  head.append(big, text, el("span", "grow"), mos, exportLink, saveMaster, refresh);
   const bar = el("div", "eb-bar");
   bar.setAttribute("role", "img");
   bar.setAttribute("aria-label", "단계별 분포: " + [...board.stages, { key: UNASSIGNED, label: "미배정" }]
@@ -462,7 +469,7 @@ export async function renderBoard(host, page, onError) {
   const stageState = { open: new Set(), repaint: () => paint() };
   const sel = { ids: [], anchor: null, lastId: null, focusId: null, token: 0 };
   let busy = false;
-  let summaryEl = summary(board, () => reload(), prefs.warn);
+  let summaryEl = summary(board, () => reload(), prefs.warn, () => startMos());
   const body = el("div", "eb-body");
   const rowsNow = () => visibleRows(board, prefs.remaining);
   const announce = (text) => { status.textContent = text; };
@@ -624,6 +631,27 @@ export async function renderBoard(host, page, onError) {
     }
   }
 
+  // MOS paste (P4-08): the dialog already showed the dry run; this is the one atomic write + undo.
+  function startMos() {
+    openMosPaste({
+      board,
+      apply: async (moves) => {
+        const result = await api.moveEvalCells(evaluationId, { moves });
+        await reload();
+        const changed = result.changed.length;
+        const message = changed ? `MOS 내용으로 ${num(changed)}칸의 단계를 갱신했어요` : "바뀐 칸이 없어요";
+        announce(message);
+        toast(message, changed ? { ms: 12000, action: { label: "되돌리기", run: async () => {
+          await runMoves(undoMoves(result.changed));
+          await reload();
+          announce(`${num(changed)}칸을 되돌렸어요.`);
+          toast(`${num(changed)}칸을 되돌렸어요`);
+        } } } : {});
+        return result;
+      },
+    });
+  }
+
   async function undo(moves, count) {
     if (busy) return;
     busy = true;
@@ -731,7 +759,7 @@ export async function renderBoard(host, page, onError) {
   // ---- rendering ---------------------------------------------------------------------------------------
 
   function replaceSummary() {
-    const next = summary(board, () => reload(), prefs.warn);
+    const next = summary(board, () => reload(), prefs.warn, () => startMos());
     summaryEl.replaceWith(next);
     summaryEl = next;
   }
@@ -846,4 +874,19 @@ export async function renderBoard(host, page, onError) {
     root.append(notes);
   }
   host.replaceChildren(root);
+  await focusLinkedCell();
+
+  // "#/page/<board>?cell=ID" (the 오늘 screen's "밀린 단계") opens the board with that cell selected.
+  async function focusLinkedCell() {
+    const want = Number(new URLSearchParams(location.hash.split("?")[1] || "").get("cell"));
+    const cell = want ? board.byId.get(want) : null;
+    if (!cell || cell.excluded) return;
+    if (prefs.view !== "equipment") { prefs.view = "equipment"; paint(); } // not saved: a one-time jump
+    await setSelection([want], { lastId: want, quiet: true });
+    const node = root.querySelector(`td[data-id="${want}"]`) || root.querySelector(`[data-id="${want}"]`);
+    node?.scrollIntoView({ block: "center", inline: "center" });
+    node?.focus({ preventScroll: true });
+    const where = root.querySelector(`[data-id="${want}"]`)?.getAttribute("aria-label");
+    announce(where ? `${where} 칸을 선택했어요.` : "칸을 선택했어요.");
+  }
 }

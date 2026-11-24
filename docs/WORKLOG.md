@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P4-08
+- 한 일: (1) MOS 붙여넣기 어댑터. 현황판 요약의 `MOS에서 붙여넣기` 창: 붙여넣기(클립보드 버튼 포함) → 열 매핑(머리글 이름 목록, 단계 값 대응, 못 찾은 열은 붙여넣은 머리글 칩으로 지정, `settings.mos_mapping`에 저장) → 미리보기(적용/이미 같음/확인 필요/건너뛴 줄 카드, 줄별 결과 배지, 없는 Lot·설비·단계 모음, 보기 칩) → `N칸 적용`(기존 원자적 일괄 API 한 번, 이력 기록) → 토스트 `되돌리기`. 단계 되돌림·MOS가 더 오래된 칸은 기본 건너뜀(토글 칩으로 명시 적용), 같은 칸 중복 줄은 더 늦은 MOS 시각이 이김. 단계 전환 `moves[].at`로 MOS 시각을 이력 시각으로 기록(미래·형식 오류 422). (2) 오늘 화면 `밀린 단계` 패널: `GET /api/dashboard/today`의 `evaluations`(상위 8, 심각 먼저·오래된 순)·`evaluations_stalled`, `GET /api/evaluations/stalled`. 행 클릭 → `#/page/<평가 페이지>?cell=<id>`로 현황판을 열고 칸 선택·스크롤.
+- 바뀐 파일: app/(repositories/evaluations, routers/(dashboard, evaluations, settings)).py, web/js/(mos-paste-model, mos-paste, eval-board, today, main).js, web/css/evaluations.css, web/index.html(paste 아이콘), web/test/run_mos_paste.mjs, tests/(test_mos_stalled, test_p2_extras, test_lineeditor_js).py, docs/SPEC.md, project_flow.html. 마이그레이션·새 의존성 없음.
+- 테스트: pytest 204 passed(MOS 시각 이력·미래/형식 오류 원자적 거부·되돌리기·밀린 칸 정렬/제한/종료된 평가 제외·설정 검증·Node 순수 로직: 표 형식 6종, 열 이름 변형, 시각 형식 12종, 웨이퍼 지정, 줄 오류, 되돌림/오래됨/제외/중복 규칙). Edge 앱 내 브라우저(가짜 데이터)에서 1280px 다크·1024px 라이트로 오늘 패널, 행 클릭 칸 선택, 붙여넣기→미리보기→적용→되돌리기, 열 못 찾음→머리글 칩 지정→매핑 저장 확인.
+- 다음에 할 것 / 막힌 것: `lot_status` 테이블·Lot 행 MOS 배지·`POST /api/lot-status/paste`는 만들지 않음(MOS의 step/Hold/위치 열을 실제로 보고 결정, SPEC 4.4에 적음). 되돌리기는 이력을 되돌림 시각으로 추가하므로 그 칸의 대기 시계가 다시 시작됨. 일지 자동 표시(flow 설명의 "일지 자동 표시 연결")는 하지 않음. 미리보기는 앞 200줄만 나열(집계·적용은 전체). 실제 MOS 클립보드 형식은 회사 PC에서 확인(VERIFY). 오늘 화면은 열려 있는 동안 밀린 단계를 자동 갱신하지 않음(할일·일지 변경 때만 다시 읽음).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P4-07
 - 한 일: 평가 템플릿 편집 창(`#/evaluations`의 `템플릿 편집`)과 현황판 엑셀 내보내기. 편집은 P2B-07과 같은 초안·적용/취소 방식: 단계 추가·이름·순서(↑↓, Alt+↑↓)·삭제(사용 중이면 영향 확인), 단계별 경고 기본 시간(비우면 끔), 색 팔레트(색 이름·번호 병기), 값 항목 추가·이름·입력 방식 토글 칩·순서·삭제, 마스터 지정, 복사해서 새 템플릿, 템플릿 지우기(마스터 제외). 현황판 요약에 `새 마스터로 저장`(평가의 단계·값 항목을 템플릿으로 복사)과 `엑셀 내보내기`.
 - 서버: `GET /api/eval-templates/{id}/usage`, `DELETE /api/eval-templates/{id}`, `POST /api/evaluations/{id}/save-as-template`, `GET /api/evaluations/{id}/export.xlsx`. 엑셀은 표준 라이브러리(`app/xlsx.py`, `app/eval_export.py`)로 요약·칸 목록·설비별 단계 3시트를 쓴다(새 의존성 없음, D-31). 마이그레이션 없음.
