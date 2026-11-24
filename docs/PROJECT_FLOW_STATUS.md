@@ -2,29 +2,29 @@
 
 > 🔒 **이 문서는 비공개 GitHub 저장소 안에서만 볼 수 있습니다.** GitHub Pages에 공개하지 않습니다.
 
-**최종 갱신:** 2026. 11. 24. 21:04 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [05f48bc](https://github.com/jaeyoonko1/MI_Planner/commit/05f48bc209d83ae27a77319c5b9deabac975f1c7)
+**최종 갱신:** 2026. 11. 24. 23:32 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [b65fcd6](https://github.com/jaeyoonko1/MI_Planner/commit/b65fcd6aadc62e894e67f726a29cae3c5e21cd0f)
 
 **최신 작업:** Merge remote-tracking branch 'origin/master'
 
 ## 전체 진행률
 
-### 84% · 66/79개 작업 완료
+### 84% · 67/80개 작업 완료
 
 🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦⬜⬜⬜
 
 ## 다음 작업
 
+- **V-011** [개선·우선1(추정)] Jira식 이슈 계층: 구조에서 모든 수준 직접 추가·수정·삭제 · Codex
 - **P2-07** 회사 PC 시험 설치 + 1주일 실사용 · 직접
 - **P3-09** 원노트 이관 가능성 시험 (회사 PC) · 사내LLM
 - **P6-05** 레시피 수정·업로드 (선택) · Opus
 - **P7-05** pptx-company 스킬 · 사내LLM
-- **P7-07** lecture-html 스킬 + 스터디 로드맵 · Opus
 
 ## 단계별 현황
 
 | 단계 | 완료 | 진행률 |
 |:--|--:|--:|
-| **V · VOC (사용자 의견)** | 10/10 | 100% |
+| **V · VOC (사용자 의견)** | 10/11 | 91% |
 | **P0 · 준비 · 설계** | 5/5 | 100% |
 | **P1 · 뼈대** | 5/5 | 100% |
 | **P2 · 일지 · 할일 (1순위)** | 6/7 | 86% |
@@ -33,15 +33,16 @@
 | **P4 · 평가 현황판 (3순위)** | 8/8 | 100% |
 | **P5 · MI 정보** | 4/4 | 100% |
 | **P6 · RCP 관리** | 4/5 | 80% |
-| **P7 · LLM 연동** | 5/10 | 50% |
+| **P7 · LLM 연동** | 6/10 | 60% |
 | **P8 · 이식 · 운영** | 0/5 | 0% |
 
 ## 전체 작업 목록
 
-<details><summary><strong>V · VOC (사용자 의견)</strong> — 10/10 완료</summary>
+<details><summary><strong>V · VOC (사용자 의견)</strong> — 10/11 완료</summary>
 
 | 상태 | 작업 ID | 제목 | 담당 |
 |:--:|:--|:--|:--|
+| ⬜ | V-011 | [개선·우선1(추정)] Jira식 이슈 계층: 구조에서 모든 수준 직접 추가·수정·삭제 | Codex |
 | ✅ | V-001 | [개선·우선1] 엑셀 복붙 서식 보존 + 셀 편집 | Sonnet |
 | ✅ | V-003 | [개선·우선1] 오늘 줄 편집: 들여쓰기별 불릿 일관성 + 노트 수준 서식 | Sonnet |
 | ✅ | V-006 | [버그·우선1] 이슈 상세에서 에픽·유형이 안 보임 / 분류 선택지가 '없음'만 뜸 | Sonnet |
@@ -165,7 +166,7 @@
 
 </details>
 
-<details><summary><strong>P7 · LLM 연동</strong> — 5/10 완료</summary>
+<details><summary><strong>P7 · LLM 연동</strong> — 6/10 완료</summary>
 
 | 상태 | 작업 ID | 제목 | 담당 |
 |:--:|:--|:--|:--|
@@ -175,7 +176,7 @@
 | ✅ | P7-04 | status-brief · fill-table 스킬 | Opus |
 | ⬜ | P7-05 | pptx-company 스킬 | 사내LLM |
 | ✅ | P7-06 | paper-patent 스킬 | Opus |
-| ⬜ | P7-07 | lecture-html 스킬 + 스터디 로드맵 | Opus |
+| ✅ | P7-07 | lecture-html 스킬 + 스터디 로드맵 | Opus |
 | ⬜ | P7-08 | recipe-parser-maker 스킬 | 사내LLM |
 | ⬜ | P7-09 | 사내 LLM API 직접 연동 (채팅 패널) | 사내LLM |
 | ⬜ | P7-10 | MOS dcoll 수집 스크립트 | 사내LLM |
