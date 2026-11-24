@@ -34,3 +34,12 @@ test('escapes untrusted flow text in GitHub Markdown', () => {
   assert.ok(md.includes('&lt;img src=x'));
   assert.ok(!md.includes('<script>'));
 });
+
+test('shows only the first line of a Git squash commit message', () => {
+  const flow = { updated: 'today', phases: [{ id: 'A', name: 'a', tasks: [
+    { id: 'X', title: 'Task', tool: 'Codex', done: true },
+  ] }] };
+  const md = renderFlow(flow, { subject: '[P8-06] 최신 작업\n\n* many commit details' });
+  assert.match(md, /\*\*최신 작업:\*\* \[P8-06\] 최신 작업/);
+  assert.ok(!md.includes('many commit details'));
+});
