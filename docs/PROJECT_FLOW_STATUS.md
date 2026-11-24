@@ -2,7 +2,7 @@
 
 > 🔒 **이 문서는 비공개 GitHub 저장소 안에서만 볼 수 있습니다.** GitHub Pages에 공개하지 않습니다.
 
-**최종 갱신:** 2026. 11. 24. 19:18 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [4854a39](https://github.com/jaeyoonko1/MI_Planner/commit/4854a39f67a86e1064809eacdc4c0271905ec0c3)
+**최종 갱신:** 2026. 11. 24. 19:18 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [b203899](https://github.com/jaeyoonko1/MI_Planner/commit/b20389954121ae09a77d643674ae2a8c84096ad1)
 
 **최신 작업:** Merge remote-tracking branch 'origin/master'
 
