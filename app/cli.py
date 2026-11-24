@@ -163,6 +163,50 @@ def _parse_values(items: list[str]) -> dict[str, Any]:
     return values
 
 
+_TRUE = {"true", "1", "y", "yes", "o", "on", "v", "✓", "체크"}
+_FALSE = {"false", "0", "n", "no", "x", "off"}
+
+
+def _coerce(field: dict[str, Any], raw: str) -> Any:
+    """Turn a command-line string into the JSON type the field stores (number/okng/check/text)."""
+    kind, label, text = field.get("type"), field.get("label", field.get("key")), raw.strip()
+    if kind == "number":
+        try:
+            number = float(text.replace(",", ""))
+        except ValueError:
+            raise CliError(f"'{label}'에는 숫자를 입력해 주세요: {raw}") from None
+        return int(number) if number.is_integer() and "." not in text and "e" not in text.lower() else number
+    if kind == "okng":
+        if text.lower() not in ("ok", "ng"):
+            raise CliError(f"'{label}'은 ok 또는 ng만 쓸 수 있어요: {raw}")
+        return text.lower()
+    if kind == "check":
+        if text.lower() in _TRUE:
+            return True
+        if text.lower() in _FALSE:
+            return False
+        raise CliError(f"'{label}'은 true 또는 false로 써 주세요: {raw}")
+    return raw
+
+
+def _typed_values(conn, cell_id: int, values: dict[str, Any]) -> dict[str, Any]:
+    """Accept a field key or its label and convert each value to the field's type."""
+    row = conn.execute("SELECT e.fields FROM eval_cells c JOIN evaluations e ON e.id = c.evaluation_id "
+                       "WHERE c.id = ?", (cell_id,)).fetchone()
+    if row is None:
+        return values  # the repository reports the missing cell
+    fields = json.loads(row["fields"])
+    by_name = {f["key"]: f for f in fields} | {f["label"]: f for f in fields if f.get("label")}
+    out: dict[str, Any] = {}
+    for name, raw in values.items():
+        field = by_name.get(name)
+        if field is None:
+            out[name] = raw  # unknown key: the repository names it in its error
+        else:
+            out[field["key"]] = None if raw is None else _coerce(field, raw)
+    return out
+
+
 def _eval(conn, args: argparse.Namespace) -> Any:
     if args.cmd == "list":
         keys = ("id", "name", "status", "start_date", "due_date", "page_path",
@@ -180,7 +224,7 @@ def _eval(conn, args: argparse.Namespace) -> Any:
         moves = [(i, args.stage, args.at) if args.at else (i, args.stage) for i in ids]
         return ev.apply_stage_moves(conn, args.id, moves)
     if args.cmd == "set-cell":
-        values = _parse_values(args.value)
+        values = _typed_values(conn, args.cell, _parse_values(args.value))
         if not values and args.note is None:
             raise CliError("--value 또는 --note를 지정하세요.")
         return ev.update_cell(conn, args.cell, values or None, args.note, args.note is not None)

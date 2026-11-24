@@ -504,6 +504,7 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
   - **구현(P7-01)**: `app/cli.py`, JSON 출력·오류는 `{"error"}`+종료 코드 1. `task list|show|add|set|done`, `eval list|show [--full]|stalled|set-stage <id> --cells 1,2 --stage KEY [--at ISO]|set-cell <cell> --value K=V --note|history <cell>`, `search <q>`. 전역 옵션 `--db`·`--vault`. 값에 `none`을 주면 날짜·메모 등을 비움.
 - `skills/` 폴더 (에이전트가 읽는 SKILL.md):
   - **구현(P7-02)**: `skills/<이름>/SKILL.md`(frontmatter `name`=폴더명·`description` + 본문), 형식·공통 규칙은 `skills/README.md`, 검사기 `python scripts/check_skills.py`(표준 라이브러리, 외부 URL 금지 검사 포함). `skill-maker`만 구현됨.
+  - **구현(P7-04)**: `status-brief`(읽기 전용 — `skills/status-brief/scripts/brief.py --equipment 이름|--eval ID [--days N] [--md]`가 CLI `eval list/show/stalled`·`task list`·`search`만 불러 설비별 단계 묶음·다음 단계·경고 칸·기한 지남/임박 할일·빈 값·참고 페이지를 모음), `fill-table`(`skills/fill-table/scripts/fill_table.py raw|tables|md|board` — CSV/TSV/공백 raw(UTF-8·CP949)를 key 열로 맞춰 노트 GFM 표 또는 현황판 칸을 채움. 기본 미리보기, 빈 칸만, `--overwrite`·`--add-missing`·`--apply`는 명시해야 함. md 적용은 원본을 `vault/.backup/fill-table/`에 복사 후 표 줄만 수정, board는 `eval set-cell`로만). CLI `eval set-cell --value`는 항목 key 또는 label을 받고 값을 항목 형식(number/okng/check)으로 변환한다.
   - **구현(P7-03)**: 상단 바 `AI에게 요청` 버튼 — 현재 위치·선택 글·스킬 칩·요청을 요청문으로 만들어 복사. `GET /api/skills` → `{"skills":[{"name","description"}]}`(skills/ 폴더의 형식이 맞는 SKILL.md만).
   | 스킬 | 예시 요청 |
   |---|---|
