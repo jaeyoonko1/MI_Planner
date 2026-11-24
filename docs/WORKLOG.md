@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-004
+- 한 일: 구조 화면에서 Delete 키·삭제 버튼으로 이슈·자유 배치 그룹을 삭제하고 Ctrl+Z(·되돌리기 버튼·토스트)로 복원, Ctrl+Shift+Z/Ctrl+Y로 다시 삭제(D-40). 서버 `app/repositories/structure_trash.py`: 한 트랜잭션 소프트 삭제 + `structure_trash` 스냅샷(마이그레이션 012), 그룹 삭제는 하위를 그 자리로 올리거나(기본) 하위까지 삭제, 이슈 페이지·이미지 폴더는 `vault/.trash`로(`Vault.restore_page`·`restore_issue_files`로 복원), 일지 연결은 풀었다가 줄이 그대로면 복원 시 다시 연결, 하위 할일 부모 연결·형제 순서 복원, 실패하면 DB·페이지 이동 전부 원복. 화면: 행 다중 선택(클릭·Shift·Ctrl·Shift+방향키·Ctrl+A, `structselect.js`), 순수 되돌리기 스택 `structundo.js`(다중 단계, 진행 중 중복 입력 무시), 영향 확인 창 `structdelete.js`(그룹·페이지·일지·하위 할일이 걸릴 때만, 하위 처리 칩), 삭제 뒤 이웃 행 선택·포커스, `aria-live` 안내. 입력창·열린 창·상세 패널 안에서는 키를 가로채지 않고 Z는 `e.code`로도 판별(한글 입력 상태 대응).
+- 바뀐 파일: app/(repositories/structure_trash, routers/structure, vault).py, migrations/012_structure_trash.sql, web/js/(structure, structselect, structundo, structdelete, api).js, web/css/structure.css, web/index.html(undo 아이콘), web/test/run_structure_undo.mjs, tests/(test_structure_trash, test_lineeditor_js).py, docs/(SPEC, DECISIONS D-40, VOC, WORKLOG), project_flow.html
+- 테스트: structure 신규 pytest 18(복원 정확도·중첩 그룹·순환 방지·다중 단계·사이 편집·페이지/일지/하위 할일·실패 원복·409·미배치) 전부 통과, Node 순수 테스트 통과. 격리 DB 가짜 데이터로 앱 내 브라우저에서 Delete→토스트→Ctrl+Z 위치·선택 복원, 그룹 삭제 확인 창(위로 올리기/함께 삭제), 다중 선택, 입력창 키 비가로채기, 라이트 테마 1024px, 콘솔 오류 없음. 전체 pytest 중 `test_flow_site`(tzdata 없음)·`test_lineeditor_core_cases`(V-003 작업 중)는 이번 변경과 무관.
+- 다음에 할 것 / 막힌 것: 휴지통 목록·영구 비우기 화면은 없음(API `GET /api/structure/trash`만). 분류 기준 보기 그룹 삭제는 분류 관리 담당. 되돌리기 스택은 탭을 새로고침하면 비워짐(서버 기록은 남음). 1280px·실제 Edge IME는 VERIFY.
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-006
 - 한 일: 이슈 상세에서 에픽·유형(분류) 값이 안 보이고 선택지가 '없음'만 뜨던 버그. 원인: `inspector.js`가 분류 목록을 모듈 변수에 한 번만 읽어 캐시(`if (!fields)`; 첫 읽기 실패 시 `[]`까지 영구 캐시) — 이후 분류 관리·계층 편집으로 만든 '제품' 같은 분류·선택지가 반영되지 않았고, 현재 값이 선택지에서 빠진(보관·삭제) 경우도 값이 사라져 보였음. 수정: 열 때마다 서버에서 다시 읽고(실패 시 마지막 좋은 목록 유지), 분류 관리·계층 적용 시 `hub.emit({kind:"fields"})`로 열린 상세를 즉시 갱신. 순수 모델 `web/js/inspector-fields.js`(활성 choice/multi 분류 전부, 하위 선택지 들여쓰기, 보관 선택지 숨김 단 현재 값이면 표시, 사라진 값은 점선 칩, 선택지 0개는 '선택지가 없어요 + 선택지 추가' 링크, '없음'은 해제 칩으로만).
 - 바뀐 파일: web/js/(inspector, inspector-fields, classes, leveldialog).js, web/css/screens.css, web/test/run_inspector_fields.mjs, tests/test_inspector_fields.py, docs/(VOC, WORKLOG), project_flow.html

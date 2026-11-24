@@ -565,6 +565,8 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 - `POST /api/structure/free/move` `{kind:"group"|"issue", id, parent_id|null, before?:{kind,id}}` → `{free, changed:[task_id…]}`. 그룹은 하위와 함께 이동하고 자기 하위로 옮기면 400 `순환`. 옮긴 이슈(그룹이면 하위 이슈 전체)는 새 경로의 분류 값을 받는다. 이슈 ID 불변. 분류 보기에서의 이동은 `PATCH /api/todos/{id}`의 `props`.
 - `POST /api/structure/free/groups` `{label, parent_id|null}` → `free` (분류 값에 묶이지 않은 그룹).
 - `POST /api/structure/copy` — `{kind:"issue", task_id}`(제목 + " · 복사본"), `{kind:"group", field_key, value, task_ids}`(분류 보기: choice 분류의 새 선택지 "X · 복사본"을 만들고 그 값으로 복사. `field_key:"epic"`이면 다른 유형 가지의 같은 에픽 이슈 전부 포함), `{kind:"node", node_id}`(자유 배치: 선택한 하위 트리만, 바인딩된 그룹은 새 선택지). 응답 `{created:[새 id…], map, option?, node_id?, free?}`. 복사본은 새 ID이며 상태·메모·props는 값 복사(원본과 독립). 계획일·페이지·평가 연결은 복사하지 않는다.
+- `POST /api/structure/delete-preview` · `POST /api/structure/delete` `{items:[{kind:"issue"|"group", id}], children:"move_up"|"delete"}` — 소프트 삭제(V-004, D-40, 마이그레이션 `012_structure_trash`). 미리보기는 `{issues, groups, children, moved_up, moved_groups, pages, journal_lines, subtasks, group_labels, issue_titles, needs_confirm}`; 삭제는 `{trash_id, summary, issues, groups, impact, journal_days, free}`. 한 요청 = 한 트랜잭션(실패하면 DB·휴지통으로 옮긴 페이지 모두 원복), 최대 500개. 그룹은 `children:"move_up"`이면 하위를 그 자리로 올리고 `"delete"`이면 하위 전체를 삭제. 이슈 페이지·이미지 폴더는 `vault/.trash`로.
+- `POST /api/structure/trash/{id}/restore` → `{trash_id, summary, issues, groups, journal_days, journal_skipped, free}` — 같은 ID·값·순서·그룹 소속·페이지 연결로 복원. 이미 복원했으면 409, 같은 번호 이슈·그룹이 이미 있으면 409(변경 없음). `GET /api/structure/trash` → `{items:[{id, summary, created_at, restored_at}]}`.
 
 ### tasks
 | 컬럼 | 타입 | 설명 |

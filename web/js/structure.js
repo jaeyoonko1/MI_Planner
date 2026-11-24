@@ -10,7 +10,10 @@ import { openInspector } from "./inspector.js";
 import { openLevelEditor } from "./leveldialog.js";
 import { issueIcon, levelIcon } from "./levels.js";
 import { buildFieldTree, buildFreeTree, flatten, isInside, visibleRows } from "./structmodel.js";
+import { openDeleteSheet } from "./structdelete.js";
 import { openAddGroupSheet, openMoveSheet } from "./structmove.js";
+import { click as selClick, deleteItems, isTypingTarget, moveTo, neighbourAfterRemoval, prune, selectAll, single, toggleActive } from "./structselect.js";
+import { createUndoStack } from "./structundo.js";
 import { toast } from "./toast.js";
 import { dueInfo, el, emptyState, errorState, fmtMD, skeleton, svg } from "./ui.js";
 
@@ -18,6 +21,8 @@ const STATUS = { todo: "할일", doing: "진행", hold: "보류", done: "완료"
 let folded = new Set(); // folded group ids (tab session)
 let selected = ""; // selected row id
 let activeRefresh = null; // the mounted worksheet's task reload (hub subscriber)
+const history = createUndoStack(); // deletions of this browser session (V-004); the server keeps the snapshots
+let detachKeys = null; // removes the mounted worksheet's document key handler
 
 const labelOf = (field, v) => (v === undefined || v === null || v === "" ? "" : field?.options?.find((o) => o.value === v)?.label ?? String(v));
 
@@ -39,6 +44,9 @@ async function renderTree(container, initialView, reloadScreen) {
   let view = initialView;
   let tasks = [], fields = {}, free = null, tree = [], index = new Map(), rowEls = new Map();
   let dragging = null;
+  let picked = new Set(); // every selected row id; `selected` is the active one (keyboard focus, single-row tools)
+  let anchor = ""; // where a Shift range grows from
+  detachKeys?.();
 
   const free_ = () => view.mode === "free";
   const levelByKey = () => Object.fromEntries([...view.levels, ...view.available].map((l) => [l.key, l]));
@@ -53,8 +61,10 @@ async function renderTree(container, initialView, reloadScreen) {
   function rebuild() {
     tree = free_() ? buildFreeTree(free, tasks, levelByKey()) : buildFieldTree(tasks, view.mode === "fields" ? view.levels : [], fields);
     index = new Map(flatten(tree).map((n) => [n.id, n]));
-    if (!index.has(selected)) selected = "";
+    adopt(prune(cur(), new Set(index.keys())));
   }
+  const cur = () => ({ ids: picked, anchor, active: selected });
+  const adopt = (sel) => { picked = sel.ids; anchor = sel.anchor; selected = sel.active; };
 
   // ---- hierarchy bar -------------------------------------------------------------------
   const bar = el("div", "hbar");
@@ -67,6 +77,7 @@ async function renderTree(container, initialView, reloadScreen) {
   const rows = el("div", "srows");
   rows.setAttribute("role", "treegrid");
   rows.setAttribute("aria-label", "업무 구조");
+  rows.setAttribute("aria-multiselectable", "true");
   const foot = el("div", "panel-foot");
   panel.append(head, rows, foot);
   const notice = el("div");
@@ -75,7 +86,7 @@ async function renderTree(container, initialView, reloadScreen) {
   const persistView = async (levels, mode = "fields") => {
     view = await api.saveStructureView({ mode, levels, styles: saveStyles() });
     folded = new Set();
-    selected = "";
+    adopt(single(""));
     await fetchAll();
     draw();
   };
@@ -186,12 +197,17 @@ async function renderTree(container, initialView, reloadScreen) {
   const bMove = iconBtn("move-to", "이동", "이동…");
   const bOpen = iconBtn("note", "이슈 열기");
   const bAdd = iconBtn("plus", "그룹 추가");
+  const bDelete = iconBtn("trash", "삭제", "삭제");
+  const bUndo = iconBtn("undo", "되돌리기", "되돌리기");
+  bDelete.classList.add("danger");
   const info = el("small", "sinfo");
-  toolbar.append(bExpand, bCollapse, el("span", "vr"), bCopy, bMove, bOpen, bAdd, el("span", "grow"), live);
+  toolbar.append(bExpand, bCollapse, el("span", "vr"), bCopy, bMove, bOpen, bAdd, el("span", "vr"), bDelete, bUndo, el("span", "grow"), live);
   bExpand.addEventListener("click", () => { folded = new Set(); draw(); });
   bCollapse.addEventListener("click", () => { folded = new Set(flatten(tree).filter((n) => n.kind === "group").map((n) => n.id)); draw(); });
   bOpen.addEventListener("click", () => { const n = index.get(selected); if (n?.task) openInspector(n.task.id); });
   bCopy.addEventListener("click", () => copySelected());
+  bDelete.addEventListener("click", () => requestDelete());
+  bUndo.addEventListener("click", () => undoLast());
   bMove.addEventListener("click", () => {
     const n = index.get(selected);
     if (!n) return;
@@ -213,12 +229,14 @@ async function renderTree(container, initialView, reloadScreen) {
   });
 
   function syncTools() {
-    const n = index.get(selected);
+    const many = picked.size > 1;
+    const n = many ? null : index.get(selected);
     const group = n?.kind === "group";
     const copyLabel = !n ? "복사" : n.kind === "issue" ? "이슈 복사" : n.key === "epic" ? "에픽 복사" : "그룹 복사";
     bCopy.querySelector("span").textContent = copyLabel;
     let why = "";
-    if (!n) why = "복사할 행을 먼저 고르세요";
+    if (many) why = "행을 하나만 골라야 복사할 수 있어요";
+    else if (!n) why = "복사할 행을 먼저 고르세요";
     else if (group && !free_() && (n.none || fields[n.key]?.type !== "choice")) why = n.none ? "미분류 그룹은 복사할 수 없어요" : "이 분류의 그룹은 복사할 수 없어요";
     bCopy.disabled = Boolean(why) || !n;
     bCopy.title = why || (n?.kind === "group" && !free_() && n.key === "epic" ? "같은 에픽의 모든 유형 가지의 이슈를 새 번호로 복사해요" : "새 번호의 독립된 복사본을 만들어요");
@@ -226,6 +244,13 @@ async function renderTree(container, initialView, reloadScreen) {
     bMove.title = group && !free_() ? "그룹은 계층 순서를 바꿔 옮겨요" : "다른 그룹으로 이동";
     bOpen.disabled = !n || group;
     bAdd.hidden = !free_();
+    const doomed = deleteItems([...picked], index, { free: free_() });
+    bDelete.disabled = !doomed.items.length;
+    bDelete.querySelector("span").textContent = doomed.items.length > 1 ? `삭제 ${doomed.items.length}` : "삭제";
+    bDelete.title = !picked.size ? "삭제할 행을 먼저 고르세요" : !doomed.items.length ? "분류 기준 보기의 그룹은 분류 관리에서 정리해요" : "휴지통으로 보내요 · Delete";
+    const last = history.peekUndo();
+    bUndo.disabled = !last || history.busy;
+    bUndo.title = last ? `${last.label} 되돌리기 · Ctrl+Z` : "되돌릴 삭제가 없어요";
     const groups = flatten(tree).filter((x) => x.kind === "group").length;
     info.textContent = `${tasks.length}개 이슈 · ${groups}개 그룹`;
     if (!foot.contains(info)) foot.prepend(info);
@@ -295,6 +320,7 @@ async function renderTree(container, initialView, reloadScreen) {
     rebuild();
     rows.replaceChildren();
     rowEls = new Map();
+    adopt(prune(cur(), new Set(visibleRows(tree, folded).map((v) => v.node.id)))); // a folded-away row is never "selected"
     if (!tasks.length) {
       rows.append(emptyState({ title: "아직 이슈가 없어요", desc: "오늘·할일에서 추가하면 여기에 분류별로 모여요.", icon: "hier" }));
     } else {
@@ -304,7 +330,7 @@ async function renderTree(container, initialView, reloadScreen) {
         r.dataset.id = n.id;
         r.setAttribute("role", "row");
         r.setAttribute("aria-level", String(depth + 1));
-        r.setAttribute("aria-selected", String(n.id === selected));
+        r.setAttribute("aria-selected", String(picked.has(n.id)));
         r.style.setProperty("--d", depth);
         r.tabIndex = n.id === selected || (!selected && i === 0) ? 0 : -1;
         r.draggable = free_() || n.kind === "issue";
@@ -315,7 +341,7 @@ async function renderTree(container, initialView, reloadScreen) {
     foot.replaceChildren(
       info,
       el("span", "", free_() ? "그룹 가운데에 놓으면 하위로 · 가장자리는 앞뒤 순서 · Alt+방향키로 이동" : "이슈를 그룹에 놓으면 그 그룹의 분류 값으로 바뀌어요 · 계층 칩을 끌어 관점 변경"),
-      el("span", "", "Enter 상세 · F2 제목 수정 · 더블클릭 접기/펼치기"),
+      el("span", "", "Enter 상세 · F2 제목 수정 · Shift·Ctrl 다중 선택 · Delete 삭제 · Ctrl+Z 되돌리기"),
     );
     notice.replaceChildren();
     if (view.free_reason) {
@@ -333,13 +359,14 @@ async function renderTree(container, initialView, reloadScreen) {
     if (prevFocus && rowEls.has(prevFocus)) rowEls.get(prevFocus).focus({ preventScroll: true });
   }
 
-  function select(id, { focus = false } = {}) {
-    selected = id;
+  function select(id, opts) { choose(single(id), opts); }
+  function choose(sel, { focus = false } = {}) {
+    adopt(sel);
     rows.querySelectorAll('.srow[aria-selected="true"]').forEach((x) => x.setAttribute("aria-selected", "false"));
     rows.querySelectorAll(".srow[tabindex='0']").forEach((x) => { x.tabIndex = -1; });
-    const r = rowEls.get(id);
+    for (const id of picked) rowEls.get(id)?.setAttribute("aria-selected", "true");
+    const r = rowEls.get(selected);
     if (r) {
-      r.setAttribute("aria-selected", "true");
       r.tabIndex = 0;
       if (focus) r.focus();
     }
@@ -350,7 +377,7 @@ async function renderTree(container, initialView, reloadScreen) {
     let n = index.get(id);
     if (!n) return;
     for (let p = n.parent; p; p = p.parent) folded.delete(p.id);
-    selected = id;
+    adopt(single(id));
     draw();
     rowEls.get(id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
@@ -390,7 +417,7 @@ async function renderTree(container, initialView, reloadScreen) {
     try {
       await hub.patchTask(t.id, { props: diff });
       toast(`#${t.id} → ${pathText(dest.assign)}`, { action: { label: "되돌리기", run: () => hub.patchTask(t.id, { props: prev }) } });
-      selected = node.id;
+      adopt(single(node.id));
     } catch (e) {
       toast(`옮기지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: () => placeNode(node, dest, before) } });
     }
@@ -480,17 +507,146 @@ async function renderTree(container, initialView, reloadScreen) {
     input.select();
   }
 
+  // ---- delete / undo / redo (V-004) ----------------------------------------------------
+  // Deleting is a soft delete on the server (one trash record per operation). The stack below only remembers the
+  // record ids, so Ctrl+Z can restore several deletions in reverse order and Ctrl+Shift+Z / Ctrl+Y repeats them.
+  const labelFor = (items, res) => {
+    if (items.length === 1 && items[0].kind === "issue") {
+      const t = tasks.find((x) => x.id === items[0].id);
+      return t ? `#${t.id} ‘${t.title.length > 24 ? `${t.title.slice(0, 24)}…` : t.title}’` : res.summary;
+    }
+    return res.summary;
+  };
+
+  // Rows changed on the server: reload what the picture is made of, then repaint.
+  async function settle(res, then) {
+    if (free_() && res.free) free = res.free;
+    hub.applyDays(res.journal_days);
+    await refreshTasks(true);
+    rebuild();
+    then?.();
+    draw();
+  }
+
+  function focusRow(id) {
+    const r = rowEls.get(id);
+    if (!r) return;
+    r.focus({ preventScroll: true });
+    r.scrollIntoView({ block: "nearest" });
+  }
+
+  async function requestDelete() {
+    const ids = [...picked].filter((id) => rowEls.has(id));
+    if (!ids.length) { say("삭제할 행을 먼저 고르세요."); return; }
+    const { items, blockedGroups } = deleteItems(ids, index, { free: free_() });
+    if (!items.length) { say("분류 기준 보기의 그룹은 여기서 지울 수 없어요. 분류 관리에서 정리하세요."); return; }
+    const hasGroups = items.some((i) => i.kind === "group");
+    try {
+      let children = "move_up";
+      const impact = await api.structureDeletePreview({ items, children });
+      if (impact.needs_confirm) {
+        children = await openDeleteSheet({ hasGroups, fetchImpact: (c) => api.structureDeletePreview({ items, children: c }) });
+        if (!children) { focusRow(selected); return; }
+      }
+      await runDelete(items, children, blockedGroups);
+    } catch (e) {
+      toast(`삭제하지 못했어요 · ${e.message}`, { error: true });
+    }
+  }
+
+  async function runDelete(items, children, blockedGroups = 0) {
+    const vis = [...rowEls.keys()];
+    const res = await api.structureDelete({ items, children });
+    const label = labelFor(items, res);
+    history.push({ label, items, children, trashId: res.trash_id });
+    await settle(res, () => {
+      const gone = new Set(vis.filter((id) => !index.has(id)));
+      adopt(single(neighbourAfterRemoval(vis, gone)));
+    });
+    focusRow(selected);
+    const skip = blockedGroups ? ` · 분류 그룹 ${blockedGroups}개는 건너뛰었어요` : "";
+    say(`${label} 삭제됨. Ctrl+Z로 되돌릴 수 있어요.`);
+    toast(`${label} 삭제했어요${skip}`, { action: { label: "되돌리기", run: undoLast }, ms: 8000 });
+  }
+
+  const rowIds = (res) => [...res.groups.map((g) => `g${g}`), ...res.issues.map((t) => `i${t}`)];
+  function showRestored(res) {
+    const ids = rowIds(res).filter((id) => index.has(id));
+    for (const id of ids) for (let p = index.get(id).parent; p; p = p.parent) folded.delete(p.id);
+    const first = ids[0] ?? "";
+    adopt({ ids: new Set(ids), anchor: first, active: first });
+  }
+
+  async function undoLast() {
+    const e = history.takeUndo();
+    if (!e) { say("되돌릴 삭제가 없어요."); return; }
+    try {
+      const res = await api.structureRestore(e.trashId);
+      history.doneUndo(e);
+      await settle(res, () => showRestored(res));
+      focusRow(selected);
+      say(`${e.label} 되돌렸어요.`);
+      const note = res.journal_skipped ? ` · 일지 줄 ${res.journal_skipped}개는 바뀌어 있어 연결을 다시 걸지 못했어요` : "";
+      toast(`${e.label} 되돌렸어요${note}`, history.peekRedo() ? { action: { label: "다시 삭제", run: redoLast } } : {});
+    } catch (err) {
+      history.failUndo(e, !(err.status === 404 || err.status === 409)); // gone / already restored: drop the entry
+      toast(`되돌리지 못했어요 · ${err.message}`, { error: true });
+      syncTools();
+    }
+  }
+
+  async function redoLast() {
+    const e = history.takeRedo();
+    if (!e) { say("다시 삭제할 항목이 없어요."); return; }
+    try {
+      const vis = [...rowEls.keys()];
+      const res = await api.structureDelete({ items: e.items, children: e.children });
+      e.trashId = res.trash_id;
+      history.doneRedo(e);
+      await settle(res, () => {
+        const gone = new Set(vis.filter((id) => !index.has(id)));
+        adopt(single(neighbourAfterRemoval(vis, gone)));
+      });
+      focusRow(selected);
+      say(`${e.label} 다시 삭제했어요.`);
+      toast(`${e.label} 다시 삭제했어요`, { action: { label: "되돌리기", run: undoLast } });
+    } catch (err) {
+      history.failRedo(e, !(err.status === 404 || err.status === 409));
+      toast(`다시 삭제하지 못했어요 · ${err.message}`, { error: true });
+      syncTools();
+    }
+  }
+
+  // Document-level keys so Delete / Ctrl+Z also work right after a click on empty space. Typing targets, open dialogs
+  // and the inspector keep their own keys.
+  function onDocKey(e) {
+    if (!rows.isConnected) { detachKeys?.(); return; }
+    if (e.defaultPrevented || e.isComposing || e.altKey) return;
+    if (document.querySelector("dialog[open]") || isTypingTarget(e.target) || e.target.closest?.("aside.insp")) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const k = e.code === "KeyZ" ? "z" : e.code === "KeyY" ? "y" : e.key;
+    if (mod && k === "z") { e.preventDefault(); (e.shiftKey ? redoLast : undoLast)(); return; }
+    if (mod && !e.shiftKey && k === "y") { e.preventDefault(); redoLast(); return; }
+    const inList = e.target === document.body || panel.contains(e.target);
+    if (!mod && e.key === "Delete" && inList) { e.preventDefault(); requestDelete(); }
+    else if (e.metaKey && e.key === "Backspace" && inList) { e.preventDefault(); requestDelete(); }
+  }
+  document.addEventListener("keydown", onDocKey);
+  detachKeys = () => { document.removeEventListener("keydown", onDocKey); detachKeys = null; };
+
   // ---- events (delegated) --------------------------------------------------------------
   const rowOf = (e) => e.target.closest?.(".srow");
   const toggleFold = (id) => { folded.has(id) ? folded.delete(id) : folded.add(id); draw(); };
 
+  rows.addEventListener("mousedown", (e) => { if (e.shiftKey && rowOf(e)) e.preventDefault(); }); // no text selection while ranging
   rows.addEventListener("click", (e) => {
     const r = rowOf(e);
     if (!r) return;
     const n = index.get(r.dataset.id);
+    const mods = { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
     if (e.target.closest('[data-act="fold"]')) { select(n.id); toggleFold(n.id); return; }
-    select(n.id);
-    if (n.kind === "issue" && e.target.closest('[data-act="title"]') && e.detail === 1) renameIssue(n, r);
+    choose(selClick(cur(), n.id, mods, [...rowEls.keys()]));
+    if (!mods.shift && !mods.ctrl && n.kind === "issue" && e.target.closest('[data-act="title"]') && e.detail === 1) renameIssue(n, r);
   });
   rows.addEventListener("dblclick", (e) => {
     const r = rowOf(e);
@@ -509,7 +665,8 @@ async function renderTree(container, initialView, reloadScreen) {
     const n = index.get(r.dataset.id);
     const ids = [...rowEls.keys()];
     const i = ids.indexOf(n.id);
-    const go = (id) => { if (id) { e.preventDefault(); select(id, { focus: true }); } };
+    const go = (id) => { if (id) { e.preventDefault(); choose(moveTo(cur(), id, { shift: e.shiftKey }, ids), { focus: true }); } };
+    if ((e.ctrlKey || e.metaKey) && (e.code === "KeyA" || e.key.toLowerCase() === "a")) { e.preventDefault(); choose(selectAll(cur(), ids), { focus: true }); return; }
     if (e.altKey && free_()) {
       const sib = siblingsOf(n), k = sib.indexOf(n);
       let handled = true;
@@ -529,7 +686,8 @@ async function renderTree(container, initialView, reloadScreen) {
     else if (e.key === "ArrowLeft" && n.kind === "group" && !folded.has(n.id)) { e.preventDefault(); toggleFold(n.id); }
     else if (e.key === "ArrowLeft" && n.parent) go(n.parent.id);
     else if (e.key === "Enter") { e.preventDefault(); n.kind === "group" ? toggleFold(n.id) : openInspector(n.task.id); }
-    else if (e.key === " ") { e.preventDefault(); select(n.id); }
+    else if (e.key === " ") { e.preventDefault(); (e.ctrlKey || e.metaKey) ? choose(toggleActive(cur())) : select(n.id); }
+    else if (e.key === "Escape" && picked.size > 1) { e.preventDefault(); select(n.id); }
     else if (e.key === "F2" && n.kind === "issue") { e.preventDefault(); renameIssue(n, r); }
   });
 

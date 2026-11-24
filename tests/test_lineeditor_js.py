@@ -143,3 +143,13 @@ def test_rcp_compare_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_structure_undo_cases():
+    """V-004: undo stack + multi-selection model of the structure screen (web/test/run_structure_undo.mjs)."""
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_structure_undo.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr

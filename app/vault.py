@@ -336,6 +336,38 @@ class Vault:
                     raise VaultError("원래 페이지와 일치하지 않습니다.", 409)
             return self._rel(self._move_to_trash(page))
 
+    def _trashed(self, trashed: str) -> Path:
+        src = (self.root / trashed).resolve()
+        if self.trash.resolve() not in src.parents or not src.is_dir():
+            raise VaultError("휴지통에서 항목을 찾을 수 없습니다.", 404)
+        return src
+
+    def restore_page(self, trashed: str, original: str) -> str:
+        """Move a trashed page folder back next to where it was (V-004). The parent falls back to the root when
+        it is gone, and a taken name gets a ' (2)' suffix. Returns the new page path."""
+        with self._page_lock:
+            src = self._trashed(trashed)
+            parts = [p for p in original.strip("/").split("/") if p]
+            if not parts:
+                raise VaultError("원래 위치를 알 수 없습니다.")
+            try:
+                parent = self._dir("/".join(parts[:-1]))
+            except VaultError:
+                parent = self.root
+            dest = self._unique_dir(parent, parts[-1])
+            shutil.move(str(src), str(dest))
+            return self._rel(dest)
+
+    def restore_issue_files(self, trashed: str, task_id: int) -> bool:
+        """Put an issue's trashed image folder back under .issue-files/<id> unless that id has a new folder."""
+        src = self._trashed(trashed)
+        dest = self._issue_dir(task_id)
+        if dest.exists():
+            return False
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dest))
+        return True
+
     def _move_to_trash(self, page: Path) -> Path:
         self.trash.mkdir(exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

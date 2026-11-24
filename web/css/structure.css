@@ -311,3 +311,13 @@
 .rl-act > * { margin-left: 8px; vertical-align: middle; }
 @media (max-width: 1100px) { .rl-table th:nth-child(3), .rl-table td:nth-child(3) { display: none; } }
 @media (prefers-reduced-motion: reduce) { .rl-tray { animation: none; } }
+
+/* V-004 delete confirmation + multi-select */
+.dimpact { list-style: none; margin: 14px 0 4px; padding: 0; display: grid; gap: 8px; }
+.dimpact li { position: relative; padding: 10px 12px 10px 32px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 13px; line-height: 1.45; }
+.dimpact li::before { content: ""; position: absolute; left: 13px; top: 17px; width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.dimpact li:first-child::before { background: var(--red); }
+.dimpact li.err { color: var(--red); }
+.dmode { margin-top: 2px; }
+.stools .tbtn.danger:not(:disabled) { color: var(--red); }
+.srow[aria-selected="true"] + .srow[aria-selected="true"] { box-shadow: inset 2px 0 0 var(--blue), inset 0 1px 0 color-mix(in srgb, var(--blue) 14%, transparent); }
