@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P5-01
+- 한 일: process plan 엑셀 가져오기 + Plan/Step 표. 표준 라이브러리 `.xlsx` 읽기(`app/xlsx_read.py`, D-32: openpyxl 미추가), 머리글 자동 탐지·한영 별칭 매핑·위 셀 값 이어받기·줄 오류(`app/plan_import.py`), 저장소/라우터(`plans`, migration 008, 설정 `plan_mapping`). 미리보기(dry run) → `N개 반영`(한 트랜잭션), 같은 파일 재가져오기는 키(제품·Plan·Step ID/이름)로 갱신하고 파일에 없는 Step은 `파일에 없음` 표시(삭제 안 함). 지정하지 않은 열은 `기타 열`로 보존. 화면 `#/plans`: 제품 칩 + Plan 목록 → Step 표(찾기, 파일에 없는 Step 토글 칩), 가져오기 창(끌어놓기, 시트 칩, 머리글 줄, 열 지정 칩, 개수·줄별 결과). 가짜 샘플 생성 `scripts/make_sample_plan_xlsx.py`(`--variant 2`로 개정판).
+- 바뀐 파일: migrations/008_plans.sql, app/(xlsx_read, plan_import, main, repositories/plans, routers/(plans, settings)).py, web/js/(plans, plans-model, api, main).js, web/css/plans.css, web/index.html(nav·upload 아이콘·css), web/test/run_plans.mjs, scripts/make_sample_plan_xlsx.py, tests/(test_plans, test_lineeditor_js).py, docs/(SPEC, DECISIONS), project_flow.html.
+- 테스트: pytest 전체 통과(리더 왕복·공유 문자열·날짜·숨김, 헤더 탐지·별칭, dry run 무저장, 재가져오기 중복 없음·갱신·파일에 없음·복원, 줄 오류, 열 지정 복구, 잘못된 요청, 삭제·설정 + Node 순수 로직). Edge 앱 내 브라우저(가짜 데이터)에서 1280px 라이트·1024px 라이트/다크로 가져오기→반영→재가져오기→`파일에 없음` 토글·찾기 빈 상태·잘못된 파일 오류 확인.
+- 다음에 할 것 / 막힌 것: 실제 회사 엑셀 레이아웃 미확인(VERIFY) — 머리글 별칭·병합 셀·Step ID 유무에 따라 조정 필요. "process plan 정보 링크와 연동"(원본 파일/사내 링크 열기)은 경로를 기록만 하고 열지 않음. Plan/Step ↔ DOI 연결은 P5-02. Step 표는 읽기 전용(직접 편집·열 폭 조절·정렬 없음), 미리보기는 앞 300줄만 나열. 합쳐진 머리글(2줄 머리글)·여러 시트를 한 번에 가져오기는 미지원(시트 하나씩). 삭제한 Plan은 같은 파일을 다시 가져오면 돌아옴.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P4-08
 - 한 일: (1) MOS 붙여넣기 어댑터. 현황판 요약의 `MOS에서 붙여넣기` 창: 붙여넣기(클립보드 버튼 포함) → 열 매핑(머리글 이름 목록, 단계 값 대응, 못 찾은 열은 붙여넣은 머리글 칩으로 지정, `settings.mos_mapping`에 저장) → 미리보기(적용/이미 같음/확인 필요/건너뛴 줄 카드, 줄별 결과 배지, 없는 Lot·설비·단계 모음, 보기 칩) → `N칸 적용`(기존 원자적 일괄 API 한 번, 이력 기록) → 토스트 `되돌리기`. 단계 되돌림·MOS가 더 오래된 칸은 기본 건너뜀(토글 칩으로 명시 적용), 같은 칸 중복 줄은 더 늦은 MOS 시각이 이김. 단계 전환 `moves[].at`로 MOS 시각을 이력 시각으로 기록(미래·형식 오류 422). (2) 오늘 화면 `밀린 단계` 패널: `GET /api/dashboard/today`의 `evaluations`(상위 8, 심각 먼저·오래된 순)·`evaluations_stalled`, `GET /api/evaluations/stalled`. 행 클릭 → `#/page/<평가 페이지>?cell=<id>`로 현황판을 열고 칸 선택·스크롤.
 - 바뀐 파일: app/(repositories/evaluations, routers/(dashboard, evaluations, settings)).py, web/js/(mos-paste-model, mos-paste, eval-board, today, main).js, web/css/evaluations.css, web/index.html(paste 아이콘), web/test/run_mos_paste.mjs, tests/(test_mos_stalled, test_p2_extras, test_lineeditor_js).py, docs/SPEC.md, project_flow.html. 마이그레이션·새 의존성 없음.

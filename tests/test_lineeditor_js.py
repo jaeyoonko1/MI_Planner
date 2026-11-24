@@ -103,3 +103,13 @@ def test_eval_template_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_plans_model():
+    """P5-01: Plan/Step table filtering, columns and import apply state (web/test/run_plans.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_plans.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

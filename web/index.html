@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/css/lineeditor.css">
   <link rel="stylesheet" href="/css/screens.css">
   <link rel="stylesheet" href="/css/evaluations.css">
+  <link rel="stylesheet" href="/css/plans.css">
   <link rel="stylesheet" href="/css/structure.css">
   <link rel="stylesheet" href="/css/search.css">
 </head>
@@ -68,6 +69,7 @@
     <symbol id="refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.3-5.4M19.5 4.5v4h-4"/></symbol>
     <symbol id="paste" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="16" rx="2.5"/><path d="M9 5V4h6v1M9 11h6M9 15h4"/></symbol>
     <symbol id="download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></symbol>
+    <symbol id="upload" viewBox="0 0 24 24"><path d="M12 15.5V4.5M7.5 9 12 4.5 16.5 9M5 19.5h14"/></symbol>
     <symbol id="d-cozy" viewBox="0 0 24 24"><path d="M5 6.5h14M5 12h14M5 17.5h14"/></symbol>
   </svg>
   <div class="app" id="app">
@@ -85,6 +87,7 @@
           <a href="#/structure" data-screen="structure"><svg class="i"><use href="#hier"/></svg><span class="lbl">구조</span></a>
           <a href="#/month" data-screen="month"><svg class="i"><use href="#cal"/></svg><span class="lbl">월간 일지</span></a>
           <a href="#/evaluations" data-screen="evaluations"><svg class="i"><use href="#board"/></svg><span class="lbl">평가 현황판</span></a>
+          <a href="#/plans" data-screen="plans"><svg class="i"><use href="#stack"/></svg><span class="lbl">Plan · Step</span></a>
         </nav>
         <div class="rail-label">페이지<button id="btn-new-root" class="ib" title="최상위 페이지 추가" aria-label="최상위 페이지 추가"><svg class="i s"><use href="#plus"/></svg></button></div>
         <nav id="tree" aria-label="페이지 트리"></nav>

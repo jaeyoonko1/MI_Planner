@@ -12,10 +12,12 @@ from fastapi.exceptions import RequestValidationError
 
 from app.repositories.eval_templates import TemplateError
 from app.repositories.evaluations import EvaluationError
+from app.repositories.plans import PlanError
 from app.repositories.tasks import TaskError
 from app.routers import dashboard as dashboard_router
 from app.routers import eval_templates, evaluations
 from app.routers import html_pages
+from app.routers import plans as plans_router
 from app.routers import search as search_router
 from app.routers import settings as settings_router
 from app.routers import journal as journal_router
@@ -59,6 +61,7 @@ def create_app(
     app.include_router(search_router.router)
     app.include_router(evaluations.router)
     app.include_router(evaluations.cell_router)
+    app.include_router(plans_router.router)
 
     @app.middleware("http")
     async def revalidate_static(request, call_next):
@@ -82,6 +85,10 @@ def create_app(
 
     @app.exception_handler(EvaluationError)
     async def on_evaluation_error(_, exc: EvaluationError) -> JSONResponse:
+        return JSONResponse({"error": str(exc)}, status_code=exc.status)
+
+    @app.exception_handler(PlanError)
+    async def on_plan_error(_, exc: PlanError) -> JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=exc.status)
 
     @app.exception_handler(TaskError)

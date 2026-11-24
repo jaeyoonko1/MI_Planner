@@ -353,6 +353,10 @@ vault/
 
 ### 4.5 MI 정보 (table 타입, P5)
 - **Plan / Step 정보**: process plan **엑셀 파일 가져오기**(열 매핑 한 번 지정, 다시 가져오면 갱신) + 엑셀형 표. 원본 파일 경로를 함께 기록.
+  - **구현 (P5-01)**: 화면 `#/plans`(사이드바 `Plan · Step`) — 제품 칩으로 거른 Plan 목록 → 선택한 Plan의 Step 표(찾기, `파일에 없는 Step` 토글 칩, 비어 있는 열은 숨김, 지정하지 않은 엑셀 열은 `기타 열`로 표시). `엑셀 가져오기` 창: 파일 고르기/끌어놓기 → 자동 미리보기(시트 칩, 머리글 줄 번호, 열 지정 칩, 새로/바뀜/같음/파일에 없음/확인 필요 개수, 줄별 결과·오류) → `N개 반영`(한 트랜잭션). 반영 전에는 아무것도 저장하지 않는다.
+  - 해석: 머리글 줄 자동 탐지(위 25줄 중 별칭이 가장 많이 맞는 줄), 한·영 별칭(공백·기호·대소문자 무시), 제품·Plan 빈 칸은 위 줄 값을 이어받음(새 제품이면 Plan은 끊음), Plan 열이 없으면 시트 이름, 제품 열이 없으면 입력한 제품 이름. 숨김 시트·행 제외. 줄 오류(Step 없음·제품 모름·파일 안 중복)는 건너뛰고 목록에 보임.
+  - 재가져오기: 키 = (제품, Plan, Step ID 또는 이름). 같으면 갱신, 새로우면 추가, 파일에 없으면 `stale`(삭제 안 함).
+  - API: `GET /api/plans`, `GET /api/plans/{id}`, `DELETE /api/plans/{id}`, `POST /api/plans/import?name=&dry_run=&options=` (본문 = .xlsx 바이트, `options` = JSON `{sheet, header_row, mapping, product, fill_down, source_path}`). 설정 키 `plan_mapping`(JSON, 필드→머리글 이름).
 - **DOI 라이브러리 (D-18)**: DOI = Defect of Interest. **이미지가 핵심**이라 표가 아니라 카드+표 겸용 화면.
   - 항목: 제품, plan, step, 결함 종류, 설명, 검출 설비·조건, 이미지 여러 장, 출처(부서·작성자), 태그.
   - **PPT 가져오기**: 기존 DOI PPT에서 슬라이드별 이미지·텍스트를 뽑아 초안 생성 → 사람이 확인·수정. (python-pptx)
@@ -506,7 +510,11 @@ UNIQUE(equipment_id, wafer_id)
 ### lot_status (MOS)
 `lot_no TEXT, step TEXT, hold INTEGER, location TEXT, raw TEXT(JSON), source TEXT('paste'|'dcoll'), captured_at TEXT`
 
-### plans / steps (P5) — P5-01에서 엑셀 열 구성 보고 상세화
+### plans / steps / plan_imports (P5-01, migration 008)
+`plans: id, product, name, source_file, source_path, sheet, imported_at, UNIQUE(product, name)`
+`steps: id, plan_id FK(CASCADE), step_key, seq, step_code, name, area, tool_group, recipe, layer, note, extra TEXT(JSON, 지정 안 한 열), stale, updated_at, UNIQUE(plan_id, step_key)` — `step_key` = Step ID 또는 이름.
+`plan_imports: id, file_name, sheet, at, created, updated, unchanged, errors, missing` (가져오기 기록)
+실제 회사 엑셀 열 구성은 아직 보지 못했으므로 열 집합은 잠정(별칭 목록은 `app/plan_import.py`의 `FIELDS`).
 
 ### doi / doi_images (P5)
 `doi: product, plan, step, defect_type, title, description, tool_condition, source_dept, source_author, origin('mine'|'imported'), package_id, tags`

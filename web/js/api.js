@@ -53,6 +53,17 @@ export const api = {
   },
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
   promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
+  plans: () => request("GET", "/api/plans"),
+  plan: (id) => request("GET", `/api/plans/${id}`),
+  deletePlan: (id) => request("DELETE", `/api/plans/${id}`),
+  // Raw .xlsx bytes as the body; options (sheet, header_row, mapping, product, source_path) travel as JSON in the query.
+  importPlans: async (file, dryRun, options) => {
+    const qs = new URLSearchParams({ name: file.name, dry_run: String(dryRun), options: JSON.stringify(options) });
+    const res = await fetch(`/api/plans/import?${qs}`, { method: "POST", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
+    return data;
+  },
   today: () => request("GET", "/api/dashboard/today"),
   evalTemplates: () => request("GET", "/api/eval-templates").then((data) => data.items),
   evalTemplateUsage: (id) => request("GET", `/api/eval-templates/${id}/usage`),
