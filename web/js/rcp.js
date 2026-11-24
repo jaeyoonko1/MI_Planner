@@ -6,6 +6,7 @@ import {
   cleanRules, filterRecipes, filterSummary, formatStamp, isRunning, LAYOUTS, RULE_TYPES, runLine, runStatus,
   parseStatus, splitList, splitNames,
 } from "./rcp-model.js";
+import { basketBar, basketChip } from "./rcp-compare.js";
 import { openRecipeDetail } from "./rcp-detail.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
@@ -313,7 +314,7 @@ export async function renderRcp(host, sourceId, { go }) {
       scroll.setAttribute("aria-label", "수집한 레시피 목록");
       const table = el("table", "rcp-table");
       const hr = el("tr");
-      for (const h of ["레시피", "마지막 수집", "파싱", "파라미터", "버전"]) {
+      for (const h of ["비교", "레시피", "마지막 수집", "파싱", "파라미터", "버전"]) {
         const th = el("th", "", h);
         th.scope = "col";
         hr.append(th);
@@ -345,7 +346,9 @@ export async function renderRcp(host, sourceId, { go }) {
             pb.append(svg(pi, "i"), pl);
             ps.append(pb);
           } else ps.textContent = "—";
-          tr.append(nm, el("td", "", formatStamp(r.collected_at) || "—"), ps, el("td", "n", r.param_count ? num(r.param_count) : "—"),
+          const pick = el("td", "pick");
+          if (r.current_snapshot_id) pick.append(basketChip(r));
+          tr.append(pick, nm, el("td", "", formatStamp(r.collected_at) || "—"), ps, el("td", "n", r.param_count ? num(r.param_count) : "—"),
             el("td", "mono", r.content_hash ? r.content_hash.slice(0, 8) : "—"));
           frag.append(tr);
         }
@@ -362,7 +365,7 @@ export async function renderRcp(host, sourceId, { go }) {
       search.addEventListener("input", () => { st.query = search.value; fill(); });
       search.addEventListener("keydown", (e) => { if (e.key === "Escape" && search.value) { search.value = ""; st.query = ""; fill(); e.stopPropagation(); } });
       fill();
-      tableWrap.replaceChildren(tools, scroll, empty);
+      tableWrap.replaceChildren(tools, scroll, empty, basketBar());
     }
 
     paintStatus();

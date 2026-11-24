@@ -2,6 +2,7 @@
 // Read-only: the only action is "다시 파싱", which re-reads the locally cached files with the current mapping.
 import { api } from "./api.js";
 import { filterParams, formatStamp, groupParams, mappingLine, parseStatus } from "./rcp-model.js";
+import { renderHistory } from "./rcp-history.js";
 import { button, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
 import { chipRow, el, errorState, skeleton, svg } from "./ui.js";
@@ -28,7 +29,7 @@ export function openRecipeDetail({ recipe, onChanged }) {
     sub: `${recipe.source_name ?? ""}${recipe.equipment ? ` · ${recipe.equipment}` : ""} · 설비의 레시피는 바꾸지 않아요 (읽기 전용)`,
   });
   sheet.dlg.classList.add("rcp-sheet", "rcp-detail");
-  const st = { data: null, file: "", query: "", namedOnly: false };
+  const st = { data: null, file: "", query: "", namedOnly: false, view: "params" };
   const close = button("닫기", "", () => sheet.close());
   const reparse = button("다시 파싱", "pri", () => doReparse());
   reparse.prepend(svg("refresh"));
@@ -64,6 +65,16 @@ export function openRecipeDetail({ recipe, onChanged }) {
       for (const w of info.warnings ?? []) ul.append(el("li", "", w));
       det.append(ul);
       parts.push(det);
+    }
+    const views = chipRow([["params", "파라미터"], ["history", "변경 이력"]], st.view, (v) => { st.view = v; paint(); });
+    views.setAttribute("aria-label", "보기");
+    parts.push(views);
+    if (st.view === "history") {
+      const host = el("div", "rcp-histhost");
+      parts.push(host);
+      sheet.body.replaceChildren(...parts);
+      renderHistory(host, recipe.id);
+      return;
     }
     parts.push(fileList(files), paramTable(params, files));
     sheet.body.replaceChildren(...parts);

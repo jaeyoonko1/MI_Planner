@@ -9,10 +9,12 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from app import config, rcp_collect, rcp_ftp, rcp_parse
+from urllib.parse import quote
+
+from app import config, rcp_collect, rcp_compare, rcp_ftp, rcp_parse
 from app.repositories import recipes as repo
 from app.routers import settings as settings_router
 from app.routers.tasks import get_conn
@@ -224,3 +226,44 @@ def reparse_source(source_id: int, request: Request, conn: sqlite3.Connection = 
     if _runner(request).busy():
         raise repo.RecipeError("수집이 진행 중이에요. 끝난 뒤에 다시 파싱해 주세요.", 409)
     return rcp_parse.reparse_source(conn, _data_dir(request), source_id)
+
+
+# ---- history, diff, comparison (P6-04) --------------------------------------------------------------------------
+# Local reads only. compare/tolerance come from the mapping file at request time (not stored in the DB).
+
+@router.get("/recipes/{recipe_id}/history")
+def recipe_history(recipe_id: int, limit: int = 50, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """Snapshot timeline (newest first) with added/removed/changed counts against the previous snapshot."""
+    return rcp_compare.history(conn, recipe_id, limit)
+
+
+@router.get("/recipes/{recipe_id}/diff")
+def recipe_diff(recipe_id: int, a: int, b: int, only_changes: bool = True,
+                conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """Diff of two snapshots of this recipe (a = base, b = newer)."""
+    out = rcp_compare.snapshot_diff(conn, a, b, only_changes)
+    if out["recipe"]["id"] != recipe_id:
+        raise repo.RecipeError("이 레시피의 스냅샷이 아니에요.", 422)
+    return out
+
+
+@router.get("/recipe-compare")
+def recipe_compare(ids: str, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """ids = 'recipeId[:snapshotId],…' (2–6). Rows keyed by (file, path), column 1 is the reference."""
+    return rcp_compare.compare_recipes(conn, rcp_compare.parse_specs(ids))
+
+
+_UNSAFE_NAME = set("\\/:*?\"<>|")
+
+
+@router.get("/recipe-compare/export.xlsx")
+def recipe_compare_export(ids: str, only_diff: bool = False, group: str | None = None, q: str = "",
+                          conn: sqlite3.Connection = Depends(get_conn)) -> Response:
+    result = rcp_compare.compare_recipes(conn, rcp_compare.parse_specs(ids))
+    rows = rcp_compare.filter_rows(result["rows"], only_diff, group, q)
+    data = rcp_compare.build_compare_xlsx(result, rows)
+    stem = "".join("_" if ch in _UNSAFE_NAME or ord(ch) < 32 else ch for ch in "_".join(
+        c["name"] for c in result["columns"][:3])).strip(". ")[:80] or "recipe-compare"
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition":
+                             f"attachment; filename=recipe-compare.xlsx; filename*=UTF-8''{quote(stem + '.xlsx')}"})

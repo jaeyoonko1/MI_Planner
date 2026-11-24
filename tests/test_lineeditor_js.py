@@ -133,3 +133,13 @@ def test_rcp_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_rcp_compare_model():
+    """P6-04: comparison/diff/history helpers - filters, group headers, TSV, basket (web/test/run_rcp_compare.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_rcp_compare.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
