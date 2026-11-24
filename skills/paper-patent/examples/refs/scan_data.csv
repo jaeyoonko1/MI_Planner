@@ -1,0 +1,7 @@
+wafer,method,scan_min,refocus,defects
+01,single,41.2,124,1204
+02,single,39.5,118,1187
+03,single,40.1,121,1220
+01,dual,25.3,19,1198
+02,dual,24.6,17,1179
+03,dual,25.4,18,1215

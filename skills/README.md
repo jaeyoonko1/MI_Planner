@@ -37,6 +37,6 @@ description: 한두 문장. 무엇을 하고, 언제 쓰는지(사용자가 할 
 | `status-brief` | 완료 (P7-04) — 설비·평가의 남은 일 브리핑(읽기 전용, `scripts/brief.py`) |
 | `fill-table` | 완료 (P7-04) — raw data로 노트 표·현황판 값 채우기(미리보기 → `--apply`, `scripts/fill_table.py`) |
 | `pptx-company` | P7-05 |
-| `paper-patent` | P7-06 |
+| `paper-patent` | 완료 (P7-06) — 참고 자료 → 논문·특허·기술자산화 초안 페이지(`scripts/paper_patent.py` refs·outline·check) |
 | `lecture-html` | P7-07 |
 | `recipe-parser-maker` | P7-08 |

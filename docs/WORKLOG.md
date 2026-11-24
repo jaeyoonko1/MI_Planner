@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Opus) · P7-06
+- 한 일: `paper-patent` 스킬. SKILL.md — 종류(paper/patent/asset) 판단, 처음 묻는 것(종류·핵심 주장 한 문장·제목·위치), 자료 모으기 → **논리 뼈대(주장→근거 표) 먼저 확인** → 뼈대 페이지 → 본문(이론·시뮬레이션·실험·데이터·시각화·논리 축별 기준, 숫자 문장 출처 규칙, 청구항 작성 규칙) → 검사 → 보고. 도우미 `scripts/paper_patent.py`(표준 라이브러리 + `app.vault`): `refs`(vault 페이지·md/txt/html/csv/tsv/json·폴더를 R1..Rn으로, UTF-8/CP949, 링크는 열지 않고 `links`로, PDF·Office는 `skipped`로 본문 복사 안내, csv는 열·행 수), `outline --kind --title [--refs] [--parent 성과] [--apply]`(기본 미리보기, `--apply`는 `Vault.create`로 새 노트 페이지만 — 이름이 겹치면 `(2)`, `_page.json`에 `skill`·`doc_kind`), `check`(빠진 장, 정의 안 된/안 쓴 `[R#]`, 남은 `[확인 필요]`, 출처 없는 수치 문장, 외부 링크, 청구항 번호·인용 순서·`상기 X` 선행 도입). 예시 `skills/paper-patent/examples/refs/`(가짜 데이터).
+- 바뀐 파일: skills/(paper-patent/SKILL.md, paper-patent/scripts/paper_patent.py, paper-patent/examples/refs/*, README.md), tests/test_skill_paper_patent.py, docs/(SPEC, WORKLOG), project_flow.html
+- 테스트: pytest 446 passed(test_flow_site 제외), 신규 tests/test_skill_paper_patent.py 6건, `python scripts/check_skills.py` OK.
+- 다음에 할 것 / 막힌 것: 장 구성은 일반적인 국내 특허 명세서·논문 형식 기준 — 회사 양식과 다르면 `SECTIONS`를 고쳐야 함(VERIFY P7-06). `상기 X` 검사는 첫 단어 기준 휴리스틱(한 글자 단어는 건너뜀). PDF·Office 본문 추출은 의존성 추가가 필요해 하지 않음. 다음은 P7-07(lecture-html).
+
 ## 2026-11-24 · Claude Code(Opus) · P7-04
 - 한 일: 스킬 2개. `status-brief`(읽기 전용) — `scripts/brief.py`가 CLI만 불러(eval list/show --full/stalled, task list, search) 설비 이름(부분·대소문자 무시) 또는 평가 ID 기준으로 단계 묶음·다음 단계·최장 대기·경고 칸·기한 지남/임박 할일·빈 값 항목·참고 페이지를 JSON 또는 한국어 마크다운 초안(`--md`)으로 출력, SKILL.md에 우선순위 규칙(경고 → 기한 지남 → 다음 단계 → 임박 → 빈 값)과 출력 형식. `fill-table` — `scripts/fill_table.py raw|tables|md|board`: CSV/TSV/공백 raw(UTF-8·CP949) 읽기, 노트 GFM 표 찾기(코드펜스·들여쓰기 제외, 이스케이프 규칙은 note-table-model.js와 같음), key 열 매칭(공백·대소문자 무시, `01`=`1`), 기본 미리보기·빈 칸만 채움, 충돌·형식 오류·중복 key·표에 없는 raw 행 보고, `--overwrite`/`--add-missing`/`--apply` 명시. md 적용은 `vault/.backup/fill-table/`에 원본 복사 후 바뀐 표 줄만 다시 씀, board 적용은 `eval set-cell`만. 예시 `skills/fill-table/examples/`(가짜 데이터).
 - 버그 수정(범위 안 — fill-table이 의존): CLI `eval set-cell --value`가 문자열을 그대로 넘겨 number/okng/check 항목이 항상 거부되던 문제. 항목 형식으로 변환하고 label도 받게 함(AGENTS.md 9장·SPEC 4.7 갱신).
