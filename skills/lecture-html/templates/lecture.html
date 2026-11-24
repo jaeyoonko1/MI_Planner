@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mi-kind" content="lecture">
+<meta name="mi-module" content="{{MODULE}}">
+<title>{{TITLE}}</title>
+<!-- mi-lecture-runtime:start v1 — 이 블록은 고치지 않는다(lecture-html 스킬 공용 런타임) -->
+<style>
+:root{color-scheme:light;
+  --bg:#f3f5f9;--bg-2:#eaeef5;--panel:#ffffff;--panel-2:#f7f9fc;--raise:#ffffff;--hover:#eef3fb;
+  --line:rgba(24,44,84,.11);--line-2:rgba(24,44,84,.22);
+  --text:#101828;--text-2:#344054;--muted:#556179;--dim:#6b778d;
+  --blue:#2f6be0;--cyan:#0b7a8a;--violet:#6a46d8;--green:#14804c;--red:#cf2e52;--yellow:#8a5800;
+  --glow:rgba(47,107,224,.10);--shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  --font:"Segoe UI Variable Text","Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);--r:16px;--top:56px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}}
+:root[data-theme=dark]{color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}
+*{box-sizing:border-box}
+html{scroll-padding-top:calc(var(--top) + 16px)}
+body{margin:0;background:var(--bg);color:var(--text);font:15.5px/1.75 var(--font);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 420px at 85% -120px,var(--glow),transparent 70%)}
+::selection{background:color-mix(in srgb,var(--blue) 28%,transparent)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+button{font:inherit;color:inherit}
+a{color:var(--blue)}
+code,kbd{font-family:var(--mono);font-size:.88em;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:.05em .35em}
+math{font-size:1.08em}
+/* top bar */
+.lx-bar{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:14px;padding:0 20px;
+  background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--line)}
+.lx-crumb{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em}
+.lx-crumb b{color:var(--text-2);font-weight:600}
+.lx-bar-title{flex:1;min-width:0;font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transform:translateY(4px);transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.lx-bar.scrolled .lx-bar-title{opacity:1;transform:none}
+.lx-save{font-size:11.5px;color:var(--dim);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.lx-save::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.lx-save[data-s=app]::before,.lx-save[data-s=local]::before{background:var(--green)}
+.lx-save[data-s=busy]::before{background:var(--yellow)}
+.lx-save[data-s=fail]{color:var(--red)}.lx-save[data-s=fail]::before{background:var(--red)}
+.lx-save button{border:0;background:none;color:var(--blue);cursor:pointer;padding:0;font-size:11.5px;text-decoration:underline}
+.lx-ring{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.lx-ring svg{width:26px;height:26px;transform:rotate(-90deg)}
+.lx-ring circle{fill:none;stroke-width:3}
+.lx-ring .bg{stroke:var(--line-2)}.lx-ring .fg{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset .5s var(--ease)}
+.lx-ring.full .fg{stroke:var(--green)}
+.lx-btn.lx-tocbtn{display:none}
+/* chips (D-12: 드롭다운 대신 토글 칩) */
+.lx-chips{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2)}
+.lx-chip{border:0;background:transparent;border-radius:999px;padding:3px 11px;font-size:12.5px;line-height:1.6;color:var(--muted);cursor:pointer;
+  transition:background .15s var(--ease),color .15s var(--ease)}
+.lx-chip:hover{color:var(--text);background:var(--hover)}
+.lx-chip[aria-pressed=true]{background:var(--raise);color:var(--text);box-shadow:0 0 0 1px var(--line-2),0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.lx-btn{border:1px solid var(--line-2);background:var(--panel);border-radius:10px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--text-2);
+  display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s}
+.lx-btn:hover{background:var(--hover);border-color:var(--blue)}
+/* shell */
+.lx-shell{display:grid;grid-template-columns:200px minmax(0,780px);gap:56px;justify-content:center;padding:0 28px 120px}
+.lx-toc{position:sticky;top:calc(var(--top) + 28px);align-self:start;max-height:calc(100vh - var(--top) - 56px);overflow:auto;padding-top:40px}
+.lx-toc h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.lx-toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
+.lx-toc a{display:flex;gap:8px;align-items:baseline;padding:5px 0 5px 14px;margin-left:-1px;border-left:2px solid transparent;color:var(--muted);
+  text-decoration:none;font-size:13px;line-height:1.45;transition:color .15s,border-color .15s}
+.lx-toc a:hover{color:var(--text)}
+.lx-toc a[aria-current=true]{color:var(--text);border-left-color:var(--blue);font-weight:600}
+.lx-toc a .ck{margin-left:auto;color:var(--green);font-size:12px;opacity:0}
+.lx-toc a.done .ck{opacity:1}
+.lx-toc-foot{margin-top:18px;font-size:11.5px;color:var(--dim);line-height:1.6}
+.lx-toc-foot kbd{font-size:10.5px}
+main.lx{min-width:0}
+/* hero */
+.lx-hero{padding:56px 0 28px}
+.lx-eyebrow{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.lx-tag{font-size:11.5px;font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);background:var(--panel)}
+.lx-tag.hl{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%,transparent);background:color-mix(in srgb,var(--blue) 9%,transparent)}
+.lx-hero h1{font-size:clamp(28px,4vw,40px);line-height:1.18;letter-spacing:-.022em;margin:0 0 14px;font-weight:720}
+.lx-lead{font-size:17px;color:var(--text-2);margin:0;max-width:62ch}
+/* sections */
+.lx-goals,.lx-sec,.lx-refs{margin:28px 0}
+.lx-goals{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:20px 24px;box-shadow:var(--shadow)}
+.lx-goals h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.lx-goals ul{margin:0;padding-left:20px}.lx-goals li{margin:3px 0}
+.lx-goals li::marker{color:var(--blue)}
+.lx-prereq{margin:12px 0 0;font-size:13px;color:var(--muted)}
+.lx-sec{padding-top:12px}
+.lx-sec h2{font-size:24px;letter-spacing:-.015em;line-height:1.3;margin:28px 0 12px;font-weight:700}
+.lx-sec h3{font-size:17px;margin:26px 0 8px;font-weight:650}
+.lx-sec p,.lx-sec li{color:var(--text-2)}
+.lx-sec strong{color:var(--text)}
+.lx-eq{position:relative;margin:18px 0;padding:16px 56px 16px 20px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);overflow-x:auto;text-align:center}
+.lx-eq[data-n]::after{content:attr(data-n);position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:13px;font-family:var(--mono)}
+.lx-callout{margin:18px 0;padding:14px 18px 14px 18px;border-radius:12px;border:1px solid var(--line);border-left:3px solid var(--blue);background:var(--panel)}
+.lx-callout[data-kind=mi]{border-left-color:var(--cyan)}
+.lx-callout[data-kind=warn]{border-left-color:var(--yellow)}
+.lx-callout-t{display:block;font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--blue);margin-bottom:2px}
+.lx-callout[data-kind=mi] .lx-callout-t{color:var(--cyan)}
+.lx-callout[data-kind=warn] .lx-callout-t{color:var(--yellow)}
+.lx-callout p{margin:.2em 0}
+details.lx-deriv{margin:16px 0;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+details.lx-deriv summary{cursor:pointer;padding:10px 16px;font-size:13.5px;font-weight:600;color:var(--text-2);list-style:none;display:flex;gap:8px;align-items:center}
+details.lx-deriv summary::before{content:"›";display:inline-block;transition:transform .2s var(--ease);color:var(--blue);font-size:16px}
+details.lx-deriv[open] summary::before{transform:rotate(90deg)}
+details.lx-deriv > :not(summary){margin:0 16px 14px}
+table.lx-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+table.lx-table th,table.lx-table td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left}
+table.lx-table th{color:var(--muted);font-weight:600;font-size:12.5px}
+table.lx-table td{font-variant-numeric:tabular-nums}
+/* widgets */
+figure.lx-widget{margin:24px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+figure.lx-widget > figcaption{padding:14px 20px 0;font-size:13px;color:var(--muted)}
+figure.lx-widget > figcaption b{display:block;color:var(--text);font-size:15px;margin-bottom:2px}
+.lx-w-body{display:grid;grid-template-columns:minmax(200px,240px) minmax(0,1fr);gap:20px;padding:16px 20px 18px}
+.lx-w-ctl{display:flex;flex-direction:column;gap:14px}
+.lx-w-stage{min-width:0;display:flex;flex-direction:column;gap:10px}
+.lx-w-reads{display:flex;flex-wrap:wrap;gap:8px}
+.lx-ctl{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
+.lx-ctl-top{display:flex;justify-content:space-between;gap:8px}
+.lx-ctl output{font-family:var(--mono);color:var(--text);font-size:12px}
+.lx-ctl input[type=range]{width:100%;accent-color:var(--blue);margin:0}
+.lx-read{display:flex;flex-direction:column;padding:8px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);min-width:120px}
+.lx-read span{font-size:11.5px;color:var(--muted)}
+.lx-read b{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.lx-read[data-tone=ok] b{color:var(--green)}.lx-read[data-tone=warn] b{color:var(--yellow)}.lx-read[data-tone=bad] b{color:var(--red)}
+.lx-plot{position:relative}.lx-plot canvas{display:block;width:100%}
+.lx-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:4px}
+.lx-legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.lx-field{display:block;width:100%;max-width:300px;aspect-ratio:1;border-radius:10px;border:1px solid var(--line);image-rendering:pixelated}
+.lx-w-err{margin:12px 20px 18px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--red);font-size:13px}
+/* quiz */
+.lx-quiz{margin:24px 0;padding:18px 20px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel)}
+.lx-quiz-h{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--violet);margin-bottom:6px}
+.lx-quiz .q{margin:0 0 12px;color:var(--text);font-weight:600}
+.lx-opts{display:grid;gap:8px}
+.lx-opt{display:flex;gap:12px;align-items:flex-start;text-align:left;width:100%;padding:10px 14px;border-radius:12px;border:1px solid var(--line-2);
+  background:var(--panel-2);cursor:pointer;font-size:14.5px;line-height:1.55;transition:border-color .15s,background .15s,transform .15s var(--ease)}
+.lx-opt:hover{border-color:var(--blue);background:var(--hover)}
+.lx-opt:active{transform:scale(.995)}
+.lx-opt .k{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;border:1px solid var(--line-2);color:var(--muted);margin-top:1px}
+.lx-opt[data-s=right]{border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--panel))}
+.lx-opt[data-s=right] .k{background:var(--green);border-color:var(--green);color:var(--panel)}
+.lx-opt[data-s=wrong]{border-color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--panel))}
+.lx-opt[data-s=wrong] .k{background:var(--red);border-color:var(--red);color:var(--panel)}
+.lx-quiz.answered .lx-opt:not([data-s]){opacity:.55}
+.lx-quiz-r{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13.5px;font-weight:600}
+.lx-quiz-r[data-ok=true]{color:var(--green)}.lx-quiz-r[data-ok=false]{color:var(--red)}
+.lx-why{margin-top:8px;font-size:14px;color:var(--text-2);padding:10px 14px;border-radius:10px;background:var(--panel-2)}
+.lx-why[hidden]{display:none}
+/* section done */
+.lx-done{margin:22px 0 0;display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:999px;border:1px solid var(--line-2);
+  background:var(--panel);font-size:13px;color:var(--muted);cursor:pointer;transition:all .2s var(--ease)}
+.lx-done .box{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;font-size:11px;color:transparent;transition:all .2s var(--ease)}
+.lx-done:hover{border-color:var(--green);color:var(--text)}
+.lx-done[aria-pressed=true]{border-color:color-mix(in srgb,var(--green) 50%,transparent);color:var(--green);background:color-mix(in srgb,var(--green) 8%,var(--panel))}
+.lx-done[aria-pressed=true] .box{background:var(--green);border-color:var(--green);color:var(--panel)}
+.lx-refs ol{padding-left:20px;color:var(--text-2);font-size:14px}
+.lx-foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+/* narrow */
+@media (max-width:980px){
+  .lx-shell{grid-template-columns:minmax(0,1fr);gap:0;padding:0 18px 96px}
+  .lx-toc{position:fixed;top:var(--top);left:0;bottom:0;width:min(300px,86vw);max-height:none;z-index:30;padding:20px;background:var(--panel);
+    border-right:1px solid var(--line);box-shadow:var(--shadow);transform:translateX(-102%);transition:transform .25s var(--ease)}
+  .lx-toc.open{transform:none}
+  .lx-btn.lx-tocbtn{display:inline-flex}
+  .lx-w-body{grid-template-columns:minmax(0,1fr)}
+  .lx-crumb{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media print{.lx-bar,.lx-toc,.lx-done{display:none}.lx-shell{display:block;padding:0}body{background:#fff}}
+</style>
+<script>
+/* MI lecture runtime v1 — offline, no network, works inside the MI_Planner sandbox iframe and as a plain file. */
+(() => {
+  "use strict";
+  const widgets = new Map();
+  const MI = (window.MI = { version: 1, widget(name, fn) { widgets.set(name, fn); }, math: {} });
+
+  /* ---------- math helpers ---------- */
+  const M = MI.math;
+  M.clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  M.linspace = (a, b, n) => Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1));
+  M.besselJ = (n, x) => { // integer order, Bessel integral (Simpson, 96 steps)
+    const N = 96, hh = Math.PI / N;
+    let s = 0;
+    for (let k = 0; k <= N; k++) {
+      const t = k * hh, w = k === 0 || k === N ? 1 : k % 2 ? 4 : 2;
+      s += w * Math.cos(n * t - x * Math.sin(t));
+    }
+    return (s * hh) / 3 / Math.PI;
+  };
+  M.airy = (v) => { if (Math.abs(v) < 1e-6) return 1; const j = (2 * M.besselJ(1, v)) / v; return j * j; };
+  M.sinc = (x) => (Math.abs(x) < 1e-9 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+  M.gauss = (x, s) => Math.exp(-(x * x) / (2 * s * s));
+  M.fmt = (v, d = 3) => {
+    if (!Number.isFinite(v)) return "—";
+    if (v === 0) return "0";
+    const a = Math.abs(v);
+    if (a >= 1e5 || a < 1e-3) return v.toExponential(d - 1);
+    return String(Number(v.toPrecision(d)));
+  };
+  M.ticks = (lo, hi, n = 5) => {
+    const span = hi - lo || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => span / s <= n + 0.5) || 10 * p;
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+    return out;
+  };
+
+  /* ---------- tiny DOM helpers ---------- */
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const color = (c) => (c && c.startsWith("#") ? c : cssVar("--" + (c || "blue")) || "#729eff");
+  const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const repaints = new Set();
+  MI.h = h;
+
+  /* ---------- state (app bridge → this browser → memory) ---------- */
+  const state = { data: { done: {}, quiz: {}, theme: "auto", w: {} }, mode: "memory" };
+  const pending = new Map();
+  let seq = 0, saveTimer = 0;
+  const inApp = window.parent && window.parent !== window;
+  const LS_KEY = "mi-lecture:" + (document.title || location.pathname);
+  function ask(kind, payload) {
+    return new Promise((resolve, reject) => {
+      const id = "lx" + ++seq;
+      pending.set(id, { resolve, reject });
+      try { window.parent.postMessage({ miPlanner: kind, id, state: payload }, "*"); } catch (e) { pending.delete(id); reject(e); return; }
+      setTimeout(() => { if (pending.delete(id)) reject(new Error("응답 없음")); }, 1500);
+    });
+  }
+  addEventListener("message", (ev) => {
+    const d = ev.data;
+    if (!d || d.miPlanner !== "reply" || ev.source !== window.parent) return;
+    const p = pending.get(d.id);
+    if (!p) return;
+    pending.delete(d.id);
+    d.error ? p.reject(new Error(d.error)) : p.resolve(d.state || {});
+  });
+  async function loadState() {
+    if (inApp) {
+      try { Object.assign(state.data, await ask("state-get")); state.mode = "app"; return; } catch { /* not inside MI_Planner */ }
+    }
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) Object.assign(state.data, JSON.parse(raw));
+      state.mode = "local";
+    } catch { state.mode = "memory"; }
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    setSave("busy");
+    saveTimer = setTimeout(async () => {
+      try {
+        if (state.mode === "app") await ask("state-set", state.data);
+        else if (state.mode === "local") localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+        setSave(state.mode);
+      } catch { setSave("fail"); }
+    }, 350);
+  }
+  MI.state = { get: () => state.data, save };
+  let saveEl = null;
+  function setSave(s) {
+    if (!saveEl) return;
+    saveEl.dataset.s = s;
+    const text = { app: "저장됨", local: "이 브라우저에 저장", memory: "미리보기 · 저장 안 됨", busy: "저장 중…", fail: "저장 실패" }[s];
+    saveEl.replaceChildren(h("span", "", text));
+    saveEl.title = { app: "MI Planner 페이지 상태(_state.json)에 저장", local: "앱 밖에서 열려 이 브라우저에만 저장", memory: "닫으면 진행 상황이 사라집니다" }[s] || "";
+    if (s === "fail") {
+      const b = h("button", "", "다시 시도");
+      b.type = "button";
+      b.addEventListener("click", save);
+      saveEl.append(b);
+    }
+  }
+
+  /* ---------- theme ---------- */
+  function applyTheme(t) {
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+    requestAnimationFrame(() => repaints.forEach((f) => f()));
+  }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => repaints.forEach((f) => f()));
+
+  /* ---------- widget kit ---------- */
+  function chipGroup(options, value, onPick, label) {
+    const g = h("div", "lx-chips");
+    g.setAttribute("role", "group");
+    if (label) g.setAttribute("aria-label", label);
+    const btns = options.map(([v, text]) => {
+      const b = h("button", "lx-chip", text);
+      b.type = "button";
+      b.dataset.v = String(v);
+      b.addEventListener("click", () => { paint(v); onPick(v); });
+      return b;
+    });
+    const paint = (v) => btns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(v))));
+    g.append(...btns);
+    paint(value);
+    return { el: g, paint };
+  }
+
+  function makeUI(fig) {
+    const body = h("div", "lx-w-body"), ctl = h("div", "lx-w-ctl"), stage = h("div", "lx-w-stage"), reads = h("div", "lx-w-reads");
+    body.append(ctl, stage);
+    const renders = [];
+    const run = () => renders.forEach((f) => { try { f(); } catch (e) { fail(fig, e); } });
+    let mounted = false;
+    const mount = () => { if (!mounted) { mounted = true; fig.append(body); } };
+    const ui = {
+      el: fig,
+      render(fn) { renders.push(fn); mount(); try { fn(); } catch (e) { fail(fig, e); } },
+      update: run,
+      slider({ label, min, max, step, value, unit = "", fmt, append = true }) {
+        const wrap = h("label", "lx-ctl"), top = h("span", "lx-ctl-top"), out = h("output");
+        const input = h("input");
+        Object.assign(input, { type: "range", min, max, step: step ?? (max - min) / 100, value });
+        const show = () => { const v = Number(input.value); out.textContent = (fmt ? fmt(v) : M.fmt(v)) + (unit ? " " + unit : ""); };
+        input.addEventListener("input", () => { show(); run(); });
+        top.append(h("span", "", label), out);
+        wrap.append(top, input);
+        show();
+        if (append) { ctl.append(wrap); mount(); }
+        return { el: wrap, get value() { return Number(input.value); }, set(v) { input.value = v; show(); } };
+      },
+      chips({ label, options, value, append = true }) {
+        const wrap = h("div", "lx-ctl");
+        let cur = value ?? options[0][0];
+        const g = chipGroup(options, cur, (v) => { cur = v; run(); }, label);
+        if (label) wrap.append(h("span", "", label));
+        wrap.append(g.el);
+        if (append) { ctl.append(wrap); mount(); }
+        return { el: wrap, get value() { return cur; }, set(v) { cur = v; g.paint(v); } };
+      },
+      readout(label, append = true) {
+        const wrap = h("div", "lx-read"), b = h("b", "", "—");
+        wrap.append(h("span", "", label), b);
+        if (append) { if (reads.parentNode !== stage) stage.append(reads); reads.append(wrap); mount(); }
+        return { el: wrap, set(text, tone) { b.textContent = text; if (tone) wrap.dataset.tone = tone; else delete wrap.dataset.tone; } };
+      },
+      plot(opts = {}) { const p = makePlot(opts); stage.insertBefore(p.el, reads.parentNode === stage ? reads : null); mount(); return p; },
+      field(opts = {}) { const f = makeField(opts); stage.insertBefore(f.el, reads.parentNode === stage ? reads : null); mount(); return f; },
+      note(text) { const p = h("p", "", text); p.style.cssText = "margin:0;font-size:12.5px;color:var(--muted)"; ctl.append(p); mount(); return p; },
+      stage, controls: ctl,
+    };
+    return ui;
+  }
+
+  function makePlot(o) {
+    const wrap = h("div", "lx-plot"), cv = h("canvas"), legend = h("div", "lx-legend");
+    wrap.append(cv, legend);
+    cv.setAttribute("role", "img");
+    cv.setAttribute("aria-label", o.label || [o.ylabel, o.xlabel].filter(Boolean).join(" 대 "));
+    let last = null;
+    function paint() {
+      if (!last || !wrap.isConnected) return;
+      const { series, extra } = last;
+      const W = Math.max(240, wrap.clientWidth), H = o.height || 260, dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px";
+      const g = cv.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      const pad = { l: 50, r: 14, t: 12, b: o.xlabel ? 40 : 26 };
+      const xs = series.flatMap((s) => s.x), ys = series.flatMap((s) => s.y).filter(Number.isFinite);
+      const [x0, x1] = o.x || [Math.min(...xs), Math.max(...xs)];
+      let [y0, y1] = o.y || [Math.min(0, ...ys), Math.max(...ys) * 1.05 || 1];
+      if (y0 === y1) y1 = y0 + 1;
+      const X = (v) => pad.l + ((v - x0) / (x1 - x0)) * (W - pad.l - pad.r);
+      const Y = (v) => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+      const font = cssVar("--font") || "sans-serif";
+      g.font = `11px ${font}`;
+      g.lineWidth = 1;
+      g.strokeStyle = cssVar("--line"); g.fillStyle = cssVar("--dim");
+      g.textAlign = "center"; g.textBaseline = "top";
+      for (const t of M.ticks(x0, x1, o.xticks || 6)) { g.beginPath(); g.moveTo(X(t), pad.t); g.lineTo(X(t), H - pad.b); g.stroke(); g.fillText(M.fmt(t), X(t), H - pad.b + 6); }
+      g.textAlign = "right"; g.textBaseline = "middle";
+      for (const t of M.ticks(y0, y1, o.yticks || 4)) { g.beginPath(); g.moveTo(pad.l, Y(t)); g.lineTo(W - pad.r, Y(t)); g.stroke(); g.fillText(M.fmt(t), pad.l - 8, Y(t)); }
+      g.strokeStyle = cssVar("--line-2");
+      g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, H - pad.b); g.lineTo(W - pad.r, H - pad.b); g.stroke();
+      g.fillStyle = cssVar("--muted"); g.font = `12px ${font}`;
+      if (o.xlabel) { g.textAlign = "center"; g.textBaseline = "bottom"; g.fillText(o.xlabel, pad.l + (W - pad.l - pad.r) / 2, H - 2); }
+      if (o.ylabel) { g.save(); g.translate(12, pad.t + (H - pad.t - pad.b) / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(o.ylabel, 0, 0); g.restore(); }
+      g.save();
+      g.beginPath(); g.rect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b); g.clip();
+      for (const s of series) {
+        const c = color(s.color);
+        g.beginPath();
+        s.x.forEach((xv, i) => { const yv = s.y[i]; if (!Number.isFinite(yv)) return; i ? g.lineTo(X(xv), Y(yv)) : g.moveTo(X(xv), Y(yv)); });
+        if (s.fill) {
+          g.save(); g.lineTo(X(s.x[s.x.length - 1]), Y(Math.max(y0, 0))); g.lineTo(X(s.x[0]), Y(Math.max(y0, 0))); g.closePath();
+          g.globalAlpha = 0.14; g.fillStyle = c; g.fill(); g.restore();
+          g.beginPath(); s.x.forEach((xv, i) => (i ? g.lineTo(X(xv), Y(s.y[i])) : g.moveTo(X(xv), Y(s.y[i]))));
+        }
+        g.strokeStyle = c; g.lineWidth = s.width || 2; g.setLineDash(s.dash ? [5, 4] : []); g.lineJoin = "round"; g.stroke();
+      }
+      g.setLineDash([3, 4]); g.lineWidth = 1.2;
+      for (const m of extra.marks || []) {
+        g.strokeStyle = color(m.color || "violet"); g.beginPath(); g.moveTo(X(m.x), pad.t); g.lineTo(X(m.x), H - pad.b); g.stroke();
+        if (m.label) { g.fillStyle = color(m.color || "violet"); g.font = `11px ${font}`; g.textAlign = "left"; g.textBaseline = "top"; g.fillText(m.label, X(m.x) + 5, pad.t + 2); }
+      }
+      g.setLineDash([]);
+      for (const p of extra.points || []) { g.fillStyle = color(p.color || "red"); g.beginPath(); g.arc(X(p.x), Y(p.y), 4, 0, 2 * Math.PI); g.fill(); }
+      g.restore();
+      legend.replaceChildren(...series.filter((s) => s.label).map((s) => { const sp = h("span"); const sw = h("i"); sw.style.background = color(s.color); sp.append(sw, s.label); return sp; }));
+    }
+    new ResizeObserver(paint).observe(wrap);
+    repaints.add(paint);
+    return { el: wrap, draw(series, extra = {}) { last = { series, extra }; paint(); } };
+  }
+
+  const MAPS = {
+    heat: [[0, 0, 4], [40, 11, 84], [120, 28, 109], [187, 55, 84], [237, 105, 37], [251, 180, 26], [252, 255, 164]],
+    gray: [[0, 0, 0], [255, 255, 255]],
+    div: [[33, 102, 172], [247, 247, 247], [178, 24, 43]],
+  };
+  function makeField(o) {
+    const n = o.size || 160, cv = h("canvas", "lx-field");
+    cv.width = n; cv.height = n;
+    cv.setAttribute("role", "img");
+    cv.setAttribute("aria-label", o.label || "2차원 분포");
+    if (o.max) cv.style.maxWidth = o.max + "px";
+    const g = cv.getContext("2d");
+    return {
+      el: cv, size: n,
+      draw(fn, map = o.map || "heat") {
+        const img = g.createImageData(n, n), stops = MAPS[map] || MAPS.heat;
+        for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+          const v = M.clamp(typeof fn === "function" ? fn(i / (n - 1), j / (n - 1), i, j) : fn[j * n + i], 0, 1);
+          const t = v * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)), f = t - k, a = stops[k], b = stops[k + 1], p = (j * n + i) * 4;
+          img.data[p] = a[0] + (b[0] - a[0]) * f; img.data[p + 1] = a[1] + (b[1] - a[1]) * f; img.data[p + 2] = a[2] + (b[2] - a[2]) * f; img.data[p + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+      },
+    };
+  }
+  function fail(fig, e) {
+    if (fig.querySelector(".lx-w-err")) return;
+    fig.append(h("div", "lx-w-err", "이 위젯을 실행하지 못했어요: " + (e && e.message ? e.message : e)));
+    console.error(e);
+  }
+
+  /* ---------- quizzes ---------- */
+  function setupQuiz(q) {
+    const id = q.dataset.id, answer = q.dataset.answer, items = [...q.querySelectorAll(":scope > ol > li[data-key]")];
+    const why = q.querySelector(".lx-why"), opts = h("div", "lx-opts"), res = h("div", "lx-quiz-r");
+    const head = h("div", "lx-quiz-h", "확인 문제");
+    q.prepend(head);
+    const btns = items.map((li) => {
+      const b = h("button", "lx-opt"), k = h("span", "k", li.dataset.key.toUpperCase()), t = h("span");
+      b.type = "button"; b.dataset.key = li.dataset.key;
+      t.append(...li.childNodes);
+      b.append(k, t);
+      b.addEventListener("click", () => { if (state.data.quiz[id]) return; state.data.quiz[id] = b.dataset.key; paint(); save(); progress(); });
+      return b;
+    });
+    items[0] && items[0].parentElement.replaceWith(opts);
+    opts.append(...btns);
+    if (why) { why.hidden = true; opts.after(res); res.after(why); } else opts.after(res);
+    function paint() {
+      const pick = state.data.quiz[id];
+      q.classList.toggle("answered", !!pick);
+      btns.forEach((b) => { if (pick && b.dataset.key === answer) b.dataset.s = "right"; else if (pick && b.dataset.key === pick) b.dataset.s = "wrong"; else delete b.dataset.s; b.setAttribute("aria-disabled", String(!!pick)); });
+      if (why) why.hidden = !pick;
+      res.replaceChildren();
+      if (!pick) return;
+      res.dataset.ok = String(pick === answer);
+      res.append(h("span", "", pick === answer ? "✓ 정답" : "✕ 다시 생각해 보세요 — 정답은 " + answer.toUpperCase()));
+      const again = h("button", "lx-btn", "다시 풀기");
+      again.type = "button";
+      again.addEventListener("click", () => { delete state.data.quiz[id]; paint(); save(); progress(); btns[0].focus(); });
+      res.append(again);
+    }
+    return { id, answer, paint };
+  }
+
+  /* ---------- page chrome ---------- */
+  let quizzes = [], sections = [], ring = null, tocLinks = new Map();
+  function progress() {
+    const done = sections.filter((s) => state.data.done[s.id]).length;
+    const right = quizzes.filter((q) => state.data.quiz[q.id] === q.answer).length;
+    sections.forEach((s) => {
+      const on = !!state.data.done[s.id];
+      const b = s.querySelector(":scope > .lx-done");
+      if (b) b.setAttribute("aria-pressed", String(on));
+      const a = tocLinks.get(s.id);
+      if (a) a.classList.toggle("done", on);
+    });
+    if (!ring) return;
+    const total = sections.length || 1, frac = done / total, C = 2 * Math.PI * 10;
+    ring.fg.style.strokeDasharray = String(C);
+    ring.fg.style.strokeDashoffset = String(C * (1 - frac));
+    ring.el.classList.toggle("full", done === sections.length && sections.length > 0);
+    ring.text.textContent = `${done}/${sections.length} 절` + (quizzes.length ? ` · 문제 ${right}/${quizzes.length}` : "");
+    ring.el.title = "이해 표시한 절 / 전체 절, 맞힌 문제 / 전체 문제";
+  }
+
+  function buildBar(main) {
+    const bar = h("header", "lx-bar");
+    const tocBtn = h("button", "lx-btn lx-tocbtn", "목차");
+    tocBtn.type = "button";
+    const crumb = h("div", "lx-crumb");
+    const d = main.dataset;
+    const bits = [d.subject, d.module, d.level, d.minutes ? `약 ${d.minutes}분` : ""].filter(Boolean);
+    bits.forEach((b, i) => { if (i) crumb.append(" · "); i === 0 ? crumb.append(h("b", "", b)) : crumb.append(b); });
+    const title = h("div", "lx-bar-title", (main.querySelector("h1") || {}).textContent || document.title);
+    saveEl = h("div", "lx-save");
+    const ringEl = h("div", "lx-ring");
+    ringEl.innerHTML = '<svg viewBox="0 0 26 26" aria-hidden="true"><circle class="bg" cx="13" cy="13" r="10"/><circle class="fg" cx="13" cy="13" r="10"/></svg>';
+    const text = h("span");
+    ringEl.append(text);
+    ring = { el: ringEl, fg: ringEl.querySelector(".fg"), text };
+    const theme = chipGroup([["auto", "자동"], ["light", "밝게"], ["dark", "어둡게"]], state.data.theme || "auto",
+      (v) => { state.data.theme = v; applyTheme(v); save(); }, "테마");
+    bar.append(tocBtn, crumb, title, saveEl, ringEl, theme.el);
+    document.body.prepend(bar);
+    return { bar, tocBtn, theme };
+  }
+
+  function buildToc(shell, tocBtn) {
+    const toc = h("nav", "lx-toc");
+    toc.setAttribute("aria-label", "목차");
+    const ol = h("ol");
+    toc.append(h("h4", "", "목차"), ol);
+    sections.forEach((s) => {
+      const li = h("li"), a = h("a");
+      a.href = "#" + s.id;
+      a.append(h("span", "", (s.querySelector("h2") || {}).textContent || s.id), h("span", "ck", "✓"));
+      a.addEventListener("click", (e) => { e.preventDefault(); go(s); toc.classList.remove("open"); });
+      tocLinks.set(s.id, a);
+      li.append(a); ol.append(li);
+    });
+    const foot = h("div", "lx-toc-foot");
+    foot.innerHTML = "<kbd>J</kbd> 다음 절 · <kbd>K</kbd> 이전 절";
+    toc.append(foot);
+    shell.prepend(toc);
+    tocBtn.addEventListener("click", () => toc.classList.toggle("open"));
+    addEventListener("keydown", (e) => { if (e.key === "Escape") toc.classList.remove("open"); });
+    const io = new IntersectionObserver((ents) => {
+      ents.forEach((en) => { if (en.isIntersecting) tocLinks.forEach((a, id) => a.setAttribute("aria-current", String(id === en.target.id))); });
+    }, { rootMargin: "-25% 0px -65% 0px" });
+    sections.forEach((s) => io.observe(s));
+  }
+  function go(s) { s.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" }); }
+
+  async function boot() {
+    const main = document.querySelector("main.lx");
+    if (!main) return;
+    const shell = h("div", "lx-shell");
+    main.replaceWith(shell);
+    shell.append(main);
+    sections = [...main.querySelectorAll("section.lx-sec")];
+    sections.forEach((s, i) => { if (!s.id) s.id = "s" + (i + 1); });
+    const { bar, tocBtn, theme } = buildBar(main);
+    buildToc(shell, tocBtn);
+    main.querySelectorAll(".lx-callout").forEach((c) => {
+      if (c.querySelector(".lx-callout-t")) return;
+      const label = { mi: "MI 현업 연결", warn: "주의", key: "핵심" }[c.dataset.kind || "key"] || "핵심";
+      c.prepend(h("span", "lx-callout-t", label));
+    });
+    sections.forEach((s) => {
+      const b = h("button", "lx-done");
+      b.type = "button";
+      b.append(h("span", "box", "✓"), h("span", "", "이 절을 이해했어요"));
+      b.addEventListener("click", () => { state.data.done[s.id] = !state.data.done[s.id]; if (!state.data.done[s.id]) delete state.data.done[s.id]; save(); progress(); });
+      s.append(b);
+    });
+    quizzes = [...main.querySelectorAll(".lx-quiz[data-id][data-answer]")].map(setupQuiz);
+    main.querySelectorAll("figure.lx-widget[data-widget]").forEach((fig) => {
+      const fn = widgets.get(fig.dataset.widget);
+      if (!fn) return fail(fig, new Error(`'${fig.dataset.widget}' 위젯이 등록되지 않았습니다 (MI.widget)`));
+      try { fn(fig, makeUI(fig)); } catch (e) { fail(fig, e); }
+    });
+    addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 140), { passive: true });
+    addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+      const k = e.key.toLowerCase();
+      if (k !== "j" && k !== "k") return;
+      const y = scrollY + 120;
+      const idx = sections.findIndex((s) => s.offsetTop > y);
+      const cur = idx === -1 ? sections.length : idx;
+      const next = k === "j" ? sections[cur] : sections[Math.max(0, cur - 2)];
+      if (next) { e.preventDefault(); go(next); }
+    });
+    const foot = h("footer", "lx-foot", "MI Planner · lecture-html 스킬로 만든 오프라인 강의. 진행 상황은 이 페이지의 상태 파일에 저장됩니다.");
+    main.append(foot);
+    setSave("busy");
+    progress();
+    await loadState();
+    applyTheme(state.data.theme);
+    theme.paint(state.data.theme || "auto");
+    quizzes.forEach((q) => q.paint());
+    progress();
+    setSave(state.mode);
+  }
+  document.addEventListener("DOMContentLoaded", boot);
+})();
+</script>
+<!-- mi-lecture-runtime:end -->
+</head>
+<body>
+<main class="lx" data-subject="{{SUBJECT}}" data-module="{{MODULE}}" data-level="{{LEVEL}}" data-minutes="[확인 필요: 분]">
+  <header class="lx-hero">
+    <p class="lx-eyebrow"><span class="lx-tag hl">{{SUBJECT}}</span><span class="lx-tag">{{LEVEL}}</span></p>
+    <h1>{{TITLE}}</h1>
+    <p class="lx-lead">[확인 필요: 이 강의가 답하려는 질문 한두 문장 — 왜 이 주제가 검사·계측에서 중요한가]</p>
+  </header>
+
+  <section class="lx-goals">
+    <h2>학습 목표</h2>
+    <ul>
+      <li>[확인 필요: 동사로 끝나는 측정 가능한 목표 — 예: 유도한다 · 계산한다 · 예측한다]</li>
+      <li>[확인 필요]</li>
+      <li>[확인 필요]</li>
+    </ul>
+    <p class="lx-prereq">선수 지식: [확인 필요: 로드맵 모듈 ID와 이름]</p>
+  </section>
+
+  <section class="lx-sec" id="s1">
+    <h2>1. [확인 필요: 첫 절 제목 — 직관]</h2>
+    <p>[확인 필요: 물리적 직관부터. 그림·위젯으로 먼저 보여 준 뒤 식으로 간다.]</p>
+    <div class="lx-eq" data-n="(1)">
+      <math display="block"><mi>y</mi><mo>=</mo><mi>A</mi><mi>sin</mi><mo>(</mo><mn>2</mn><mi>π</mi><mi>f</mi><mi>x</mi><mo>)</mo></math>
+    </div>
+    <figure class="lx-widget" data-widget="demo">
+      <figcaption><b>[확인 필요: 위젯 제목]</b>슬라이더를 움직여 [무엇]이 [어떻게] 바뀌는지 보세요.</figcaption>
+    </figure>
+    <div class="lx-callout" data-kind="key"><p>[확인 필요: 이 절의 핵심 한 문장]</p></div>
+  </section>
+
+  <section class="lx-sec" id="s2">
+    <h2>2. [확인 필요: 정식화·유도]</h2>
+    <p>[확인 필요]</p>
+    <details class="lx-deriv"><summary>유도 보기</summary><p>[확인 필요: 단계별 유도]</p></details>
+    <div class="lx-callout" data-kind="mi"><p>[확인 필요: 검사·계측 현업과의 연결 — 가짜 설비 이름(EQ-A01)만]</p></div>
+    <div class="lx-quiz" data-id="q1" data-answer="a">
+      <p class="q">[확인 필요: 개념을 확인하는 문제]</p>
+      <ol>
+        <li data-key="a">[확인 필요: 정답]</li>
+        <li data-key="b">[확인 필요: 흔한 오개념]</li>
+        <li data-key="c">[확인 필요]</li>
+      </ol>
+      <div class="lx-why">[확인 필요: 왜 정답이고 오답은 왜 틀렸는지]</div>
+    </div>
+  </section>
+
+  <section class="lx-sec lx-summary" id="summary">
+    <h2>정리</h2>
+    <ul><li>[확인 필요: 핵심 3~5줄]</li></ul>
+  </section>
+
+  <section class="lx-refs">
+    <h2>참고 자료</h2>
+    <ol><li>[확인 필요: 교재 — 저자, 제목, 장 (링크 대신 서지 정보)]</li></ol>
+  </section>
+</main>
+<script>
+/* 위젯: MI.widget("이름", (fig, ui) => { ... }) — figure의 data-widget 이름과 같게 */
+MI.widget("demo", (fig, ui) => {
+  const { linspace } = MI.math;
+  const amp = ui.slider({ label: "진폭 A", min: 0, max: 2, step: 0.05, value: 1 });
+  const freq = ui.chips({ label: "주파수 f", options: [[1, "1"], [2, "2"], [4, "4"]], value: 2 });
+  const plot = ui.plot({ x: [0, 1], y: [-2.1, 2.1], xlabel: "x", ylabel: "y" });
+  const peak = ui.readout("최댓값");
+  ui.render(() => {
+    const x = linspace(0, 1, 400);
+    plot.draw([{ x, y: x.map((v) => amp.value * Math.sin(2 * Math.PI * freq.value * v)), color: "blue", label: "y(x)" }]);
+    peak.set(MI.math.fmt(amp.value));
+  });
+});
+</script>
+</body>
+</html>

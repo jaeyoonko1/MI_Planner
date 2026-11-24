@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mi-kind" content="lecture">
+<meta name="mi-module" content="OPT5">
+<title>회절 한계와 분해능</title>
+<!-- mi-lecture-runtime:start v1 — 이 블록은 고치지 않는다(lecture-html 스킬 공용 런타임) -->
+<style>
+:root{color-scheme:light;
+  --bg:#f3f5f9;--bg-2:#eaeef5;--panel:#ffffff;--panel-2:#f7f9fc;--raise:#ffffff;--hover:#eef3fb;
+  --line:rgba(24,44,84,.11);--line-2:rgba(24,44,84,.22);
+  --text:#101828;--text-2:#344054;--muted:#556179;--dim:#6b778d;
+  --blue:#2f6be0;--cyan:#0b7a8a;--violet:#6a46d8;--green:#14804c;--red:#cf2e52;--yellow:#8a5800;
+  --glow:rgba(47,107,224,.10);--shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  --font:"Segoe UI Variable Text","Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);--r:16px;--top:56px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}}
+:root[data-theme=dark]{color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}
+*{box-sizing:border-box}
+html{scroll-padding-top:calc(var(--top) + 16px)}
+body{margin:0;background:var(--bg);color:var(--text);font:15.5px/1.75 var(--font);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 420px at 85% -120px,var(--glow),transparent 70%)}
+::selection{background:color-mix(in srgb,var(--blue) 28%,transparent)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:6px}
+button{font:inherit;color:inherit}
+a{color:var(--blue)}
+code,kbd{font-family:var(--mono);font-size:.88em;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:.05em .35em}
+math{font-size:1.08em}
+/* top bar */
+.lx-bar{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:14px;padding:0 20px;
+  background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--line)}
+.lx-crumb{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em}
+.lx-crumb b{color:var(--text-2);font-weight:600}
+.lx-bar-title{flex:1;min-width:0;font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transform:translateY(4px);transition:opacity .25s var(--ease),transform .25s var(--ease)}
+.lx-bar.scrolled .lx-bar-title{opacity:1;transform:none}
+.lx-save{font-size:11.5px;color:var(--dim);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.lx-save::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.lx-save[data-s=app]::before,.lx-save[data-s=local]::before{background:var(--green)}
+.lx-save[data-s=busy]::before{background:var(--yellow)}
+.lx-save[data-s=fail]{color:var(--red)}.lx-save[data-s=fail]::before{background:var(--red)}
+.lx-save button{border:0;background:none;color:var(--blue);cursor:pointer;padding:0;font-size:11.5px;text-decoration:underline}
+.lx-ring{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);font-variant-numeric:tabular-nums}
+.lx-ring svg{width:26px;height:26px;transform:rotate(-90deg)}
+.lx-ring circle{fill:none;stroke-width:3}
+.lx-ring .bg{stroke:var(--line-2)}.lx-ring .fg{stroke:var(--blue);stroke-linecap:round;transition:stroke-dashoffset .5s var(--ease)}
+.lx-ring.full .fg{stroke:var(--green)}
+.lx-btn.lx-tocbtn{display:none}
+/* chips (D-12: 드롭다운 대신 토글 칩) */
+.lx-chips{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2)}
+.lx-chip{border:0;background:transparent;border-radius:999px;padding:3px 11px;font-size:12.5px;line-height:1.6;color:var(--muted);cursor:pointer;
+  transition:background .15s var(--ease),color .15s var(--ease)}
+.lx-chip:hover{color:var(--text);background:var(--hover)}
+.lx-chip[aria-pressed=true]{background:var(--raise);color:var(--text);box-shadow:0 0 0 1px var(--line-2),0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.lx-btn{border:1px solid var(--line-2);background:var(--panel);border-radius:10px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--text-2);
+  display:inline-flex;align-items:center;gap:6px;transition:background .15s,border-color .15s}
+.lx-btn:hover{background:var(--hover);border-color:var(--blue)}
+/* shell */
+.lx-shell{display:grid;grid-template-columns:200px minmax(0,780px);gap:56px;justify-content:center;padding:0 28px 120px}
+.lx-toc{position:sticky;top:calc(var(--top) + 28px);align-self:start;max-height:calc(100vh - var(--top) - 56px);overflow:auto;padding-top:40px}
+.lx-toc h4{margin:0 0 10px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.lx-toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
+.lx-toc a{display:flex;gap:8px;align-items:baseline;padding:5px 0 5px 14px;margin-left:-1px;border-left:2px solid transparent;color:var(--muted);
+  text-decoration:none;font-size:13px;line-height:1.45;transition:color .15s,border-color .15s}
+.lx-toc a:hover{color:var(--text)}
+.lx-toc a[aria-current=true]{color:var(--text);border-left-color:var(--blue);font-weight:600}
+.lx-toc a .ck{margin-left:auto;color:var(--green);font-size:12px;opacity:0}
+.lx-toc a.done .ck{opacity:1}
+.lx-toc-foot{margin-top:18px;font-size:11.5px;color:var(--dim);line-height:1.6}
+.lx-toc-foot kbd{font-size:10.5px}
+main.lx{min-width:0}
+/* hero */
+.lx-hero{padding:56px 0 28px}
+.lx-eyebrow{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.lx-tag{font-size:11.5px;font-weight:600;letter-spacing:.02em;padding:2px 10px;border-radius:999px;border:1px solid var(--line-2);color:var(--text-2);background:var(--panel)}
+.lx-tag.hl{color:var(--blue);border-color:color-mix(in srgb,var(--blue) 40%,transparent);background:color-mix(in srgb,var(--blue) 9%,transparent)}
+.lx-hero h1{font-size:clamp(28px,4vw,40px);line-height:1.18;letter-spacing:-.022em;margin:0 0 14px;font-weight:720}
+.lx-lead{font-size:17px;color:var(--text-2);margin:0;max-width:62ch}
+/* sections */
+.lx-goals,.lx-sec,.lx-refs{margin:28px 0}
+.lx-goals{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:20px 24px;box-shadow:var(--shadow)}
+.lx-goals h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.lx-goals ul{margin:0;padding-left:20px}.lx-goals li{margin:3px 0}
+.lx-goals li::marker{color:var(--blue)}
+.lx-prereq{margin:12px 0 0;font-size:13px;color:var(--muted)}
+.lx-sec{padding-top:12px}
+.lx-sec h2{font-size:24px;letter-spacing:-.015em;line-height:1.3;margin:28px 0 12px;font-weight:700}
+.lx-sec h3{font-size:17px;margin:26px 0 8px;font-weight:650}
+.lx-sec p,.lx-sec li{color:var(--text-2)}
+.lx-sec strong{color:var(--text)}
+.lx-eq{position:relative;margin:18px 0;padding:16px 56px 16px 20px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);overflow-x:auto;text-align:center}
+.lx-eq[data-n]::after{content:attr(data-n);position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:13px;font-family:var(--mono)}
+.lx-callout{margin:18px 0;padding:14px 18px 14px 18px;border-radius:12px;border:1px solid var(--line);border-left:3px solid var(--blue);background:var(--panel)}
+.lx-callout[data-kind=mi]{border-left-color:var(--cyan)}
+.lx-callout[data-kind=warn]{border-left-color:var(--yellow)}
+.lx-callout-t{display:block;font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--blue);margin-bottom:2px}
+.lx-callout[data-kind=mi] .lx-callout-t{color:var(--cyan)}
+.lx-callout[data-kind=warn] .lx-callout-t{color:var(--yellow)}
+.lx-callout p{margin:.2em 0}
+details.lx-deriv{margin:16px 0;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+details.lx-deriv summary{cursor:pointer;padding:10px 16px;font-size:13.5px;font-weight:600;color:var(--text-2);list-style:none;display:flex;gap:8px;align-items:center}
+details.lx-deriv summary::before{content:"›";display:inline-block;transition:transform .2s var(--ease);color:var(--blue);font-size:16px}
+details.lx-deriv[open] summary::before{transform:rotate(90deg)}
+details.lx-deriv > :not(summary){margin:0 16px 14px}
+table.lx-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+table.lx-table th,table.lx-table td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left}
+table.lx-table th{color:var(--muted);font-weight:600;font-size:12.5px}
+table.lx-table td{font-variant-numeric:tabular-nums}
+/* widgets */
+figure.lx-widget{margin:24px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);overflow:hidden}
+figure.lx-widget > figcaption{padding:14px 20px 0;font-size:13px;color:var(--muted)}
+figure.lx-widget > figcaption b{display:block;color:var(--text);font-size:15px;margin-bottom:2px}
+.lx-w-body{display:grid;grid-template-columns:minmax(200px,240px) minmax(0,1fr);gap:20px;padding:16px 20px 18px}
+.lx-w-ctl{display:flex;flex-direction:column;gap:14px}
+.lx-w-stage{min-width:0;display:flex;flex-direction:column;gap:10px}
+.lx-w-reads{display:flex;flex-wrap:wrap;gap:8px}
+.lx-ctl{display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--muted)}
+.lx-ctl-top{display:flex;justify-content:space-between;gap:8px}
+.lx-ctl output{font-family:var(--mono);color:var(--text);font-size:12px}
+.lx-ctl input[type=range]{width:100%;accent-color:var(--blue);margin:0}
+.lx-read{display:flex;flex-direction:column;padding:8px 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);min-width:120px}
+.lx-read span{font-size:11.5px;color:var(--muted)}
+.lx-read b{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.lx-read[data-tone=ok] b{color:var(--green)}.lx-read[data-tone=warn] b{color:var(--yellow)}.lx-read[data-tone=bad] b{color:var(--red)}
+.lx-plot{position:relative}.lx-plot canvas{display:block;width:100%}
+.lx-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:4px}
+.lx-legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.lx-field{display:block;width:100%;max-width:300px;aspect-ratio:1;border-radius:10px;border:1px solid var(--line);image-rendering:pixelated}
+.lx-w-err{margin:12px 20px 18px;padding:10px 14px;border-radius:10px;background:color-mix(in srgb,var(--red) 10%,transparent);color:var(--red);font-size:13px}
+/* quiz */
+.lx-quiz{margin:24px 0;padding:18px 20px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel)}
+.lx-quiz-h{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--violet);margin-bottom:6px}
+.lx-quiz .q{margin:0 0 12px;color:var(--text);font-weight:600}
+.lx-opts{display:grid;gap:8px}
+.lx-opt{display:flex;gap:12px;align-items:flex-start;text-align:left;width:100%;padding:10px 14px;border-radius:12px;border:1px solid var(--line-2);
+  background:var(--panel-2);cursor:pointer;font-size:14.5px;line-height:1.55;transition:border-color .15s,background .15s,transform .15s var(--ease)}
+.lx-opt:hover{border-color:var(--blue);background:var(--hover)}
+.lx-opt:active{transform:scale(.995)}
+.lx-opt .k{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:700;border:1px solid var(--line-2);color:var(--muted);margin-top:1px}
+.lx-opt[data-s=right]{border-color:var(--green);background:color-mix(in srgb,var(--green) 10%,var(--panel))}
+.lx-opt[data-s=right] .k{background:var(--green);border-color:var(--green);color:var(--panel)}
+.lx-opt[data-s=wrong]{border-color:var(--red);background:color-mix(in srgb,var(--red) 9%,var(--panel))}
+.lx-opt[data-s=wrong] .k{background:var(--red);border-color:var(--red);color:var(--panel)}
+.lx-quiz.answered .lx-opt:not([data-s]){opacity:.55}
+.lx-quiz-r{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:13.5px;font-weight:600}
+.lx-quiz-r[data-ok=true]{color:var(--green)}.lx-quiz-r[data-ok=false]{color:var(--red)}
+.lx-why{margin-top:8px;font-size:14px;color:var(--text-2);padding:10px 14px;border-radius:10px;background:var(--panel-2)}
+.lx-why[hidden]{display:none}
+/* section done */
+.lx-done{margin:22px 0 0;display:inline-flex;align-items:center;gap:8px;padding:7px 14px 7px 10px;border-radius:999px;border:1px solid var(--line-2);
+  background:var(--panel);font-size:13px;color:var(--muted);cursor:pointer;transition:all .2s var(--ease)}
+.lx-done .box{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;font-size:11px;color:transparent;transition:all .2s var(--ease)}
+.lx-done:hover{border-color:var(--green);color:var(--text)}
+.lx-done[aria-pressed=true]{border-color:color-mix(in srgb,var(--green) 50%,transparent);color:var(--green);background:color-mix(in srgb,var(--green) 8%,var(--panel))}
+.lx-done[aria-pressed=true] .box{background:var(--green);border-color:var(--green);color:var(--panel)}
+.lx-refs ol{padding-left:20px;color:var(--text-2);font-size:14px}
+.lx-foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--dim)}
+/* narrow */
+@media (max-width:980px){
+  .lx-shell{grid-template-columns:minmax(0,1fr);gap:0;padding:0 18px 96px}
+  .lx-toc{position:fixed;top:var(--top);left:0;bottom:0;width:min(300px,86vw);max-height:none;z-index:30;padding:20px;background:var(--panel);
+    border-right:1px solid var(--line);box-shadow:var(--shadow);transform:translateX(-102%);transition:transform .25s var(--ease)}
+  .lx-toc.open{transform:none}
+  .lx-btn.lx-tocbtn{display:inline-flex}
+  .lx-w-body{grid-template-columns:minmax(0,1fr)}
+  .lx-crumb{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media print{.lx-bar,.lx-toc,.lx-done{display:none}.lx-shell{display:block;padding:0}body{background:#fff}}
+</style>
+<script>
+/* MI lecture runtime v1 — offline, no network, works inside the MI_Planner sandbox iframe and as a plain file. */
+(() => {
+  "use strict";
+  const widgets = new Map();
+  const MI = (window.MI = { version: 1, widget(name, fn) { widgets.set(name, fn); }, math: {} });
+
+  /* ---------- math helpers ---------- */
+  const M = MI.math;
+  M.clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  M.linspace = (a, b, n) => Array.from({ length: n }, (_, i) => a + ((b - a) * i) / (n - 1));
+  M.besselJ = (n, x) => { // integer order, Bessel integral (Simpson, 96 steps)
+    const N = 96, hh = Math.PI / N;
+    let s = 0;
+    for (let k = 0; k <= N; k++) {
+      const t = k * hh, w = k === 0 || k === N ? 1 : k % 2 ? 4 : 2;
+      s += w * Math.cos(n * t - x * Math.sin(t));
+    }
+    return (s * hh) / 3 / Math.PI;
+  };
+  M.airy = (v) => { if (Math.abs(v) < 1e-6) return 1; const j = (2 * M.besselJ(1, v)) / v; return j * j; };
+  M.sinc = (x) => (Math.abs(x) < 1e-9 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+  M.gauss = (x, s) => Math.exp(-(x * x) / (2 * s * s));
+  M.fmt = (v, d = 3) => {
+    if (!Number.isFinite(v)) return "—";
+    if (v === 0) return "0";
+    const a = Math.abs(v);
+    if (a >= 1e5 || a < 1e-3) return v.toExponential(d - 1);
+    return String(Number(v.toPrecision(d)));
+  };
+  M.ticks = (lo, hi, n = 5) => {
+    const span = hi - lo || 1, raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => span / s <= n + 0.5) || 10 * p;
+    const out = [];
+    for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+    return out;
+  };
+
+  /* ---------- tiny DOM helpers ---------- */
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const color = (c) => (c && c.startsWith("#") ? c : cssVar("--" + (c || "blue")) || "#729eff");
+  const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const repaints = new Set();
+  MI.h = h;
+
+  /* ---------- state (app bridge → this browser → memory) ---------- */
+  const state = { data: { done: {}, quiz: {}, theme: "auto", w: {} }, mode: "memory" };
+  const pending = new Map();
+  let seq = 0, saveTimer = 0;
+  const inApp = window.parent && window.parent !== window;
+  const LS_KEY = "mi-lecture:" + (document.title || location.pathname);
+  function ask(kind, payload) {
+    return new Promise((resolve, reject) => {
+      const id = "lx" + ++seq;
+      pending.set(id, { resolve, reject });
+      try { window.parent.postMessage({ miPlanner: kind, id, state: payload }, "*"); } catch (e) { pending.delete(id); reject(e); return; }
+      setTimeout(() => { if (pending.delete(id)) reject(new Error("응답 없음")); }, 1500);
+    });
+  }
+  addEventListener("message", (ev) => {
+    const d = ev.data;
+    if (!d || d.miPlanner !== "reply" || ev.source !== window.parent) return;
+    const p = pending.get(d.id);
+    if (!p) return;
+    pending.delete(d.id);
+    d.error ? p.reject(new Error(d.error)) : p.resolve(d.state || {});
+  });
+  async function loadState() {
+    if (inApp) {
+      try { Object.assign(state.data, await ask("state-get")); state.mode = "app"; return; } catch { /* not inside MI_Planner */ }
+    }
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) Object.assign(state.data, JSON.parse(raw));
+      state.mode = "local";
+    } catch { state.mode = "memory"; }
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    setSave("busy");
+    saveTimer = setTimeout(async () => {
+      try {
+        if (state.mode === "app") await ask("state-set", state.data);
+        else if (state.mode === "local") localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+        setSave(state.mode);
+      } catch { setSave("fail"); }
+    }, 350);
+  }
+  MI.state = { get: () => state.data, save };
+  let saveEl = null;
+  function setSave(s) {
+    if (!saveEl) return;
+    saveEl.dataset.s = s;
+    const text = { app: "저장됨", local: "이 브라우저에 저장", memory: "미리보기 · 저장 안 됨", busy: "저장 중…", fail: "저장 실패" }[s];
+    saveEl.replaceChildren(h("span", "", text));
+    saveEl.title = { app: "MI Planner 페이지 상태(_state.json)에 저장", local: "앱 밖에서 열려 이 브라우저에만 저장", memory: "닫으면 진행 상황이 사라집니다" }[s] || "";
+    if (s === "fail") {
+      const b = h("button", "", "다시 시도");
+      b.type = "button";
+      b.addEventListener("click", save);
+      saveEl.append(b);
+    }
+  }
+
+  /* ---------- theme ---------- */
+  function applyTheme(t) {
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    else delete document.documentElement.dataset.theme;
+    requestAnimationFrame(() => repaints.forEach((f) => f()));
+  }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => repaints.forEach((f) => f()));
+
+  /* ---------- widget kit ---------- */
+  function chipGroup(options, value, onPick, label) {
+    const g = h("div", "lx-chips");
+    g.setAttribute("role", "group");
+    if (label) g.setAttribute("aria-label", label);
+    const btns = options.map(([v, text]) => {
+      const b = h("button", "lx-chip", text);
+      b.type = "button";
+      b.dataset.v = String(v);
+      b.addEventListener("click", () => { paint(v); onPick(v); });
+      return b;
+    });
+    const paint = (v) => btns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(v))));
+    g.append(...btns);
+    paint(value);
+    return { el: g, paint };
+  }
+
+  function makeUI(fig) {
+    const body = h("div", "lx-w-body"), ctl = h("div", "lx-w-ctl"), stage = h("div", "lx-w-stage"), reads = h("div", "lx-w-reads");
+    body.append(ctl, stage);
+    const renders = [];
+    const run = () => renders.forEach((f) => { try { f(); } catch (e) { fail(fig, e); } });
+    let mounted = false;
+    const mount = () => { if (!mounted) { mounted = true; fig.append(body); } };
+    const ui = {
+      el: fig,
+      render(fn) { renders.push(fn); mount(); try { fn(); } catch (e) { fail(fig, e); } },
+      update: run,
+      slider({ label, min, max, step, value, unit = "", fmt, append = true }) {
+        const wrap = h("label", "lx-ctl"), top = h("span", "lx-ctl-top"), out = h("output");
+        const input = h("input");
+        Object.assign(input, { type: "range", min, max, step: step ?? (max - min) / 100, value });
+        const show = () => { const v = Number(input.value); out.textContent = (fmt ? fmt(v) : M.fmt(v)) + (unit ? " " + unit : ""); };
+        input.addEventListener("input", () => { show(); run(); });
+        top.append(h("span", "", label), out);
+        wrap.append(top, input);
+        show();
+        if (append) { ctl.append(wrap); mount(); }
+        return { el: wrap, get value() { return Number(input.value); }, set(v) { input.value = v; show(); } };
+      },
+      chips({ label, options, value, append = true }) {
+        const wrap = h("div", "lx-ctl");
+        let cur = value ?? options[0][0];
+        const g = chipGroup(options, cur, (v) => { cur = v; run(); }, label);
+        if (label) wrap.append(h("span", "", label));
+        wrap.append(g.el);
+        if (append) { ctl.append(wrap); mount(); }
+        return { el: wrap, get value() { return cur; }, set(v) { cur = v; g.paint(v); } };
+      },
+      readout(label, append = true) {
+        const wrap = h("div", "lx-read"), b = h("b", "", "—");
+        wrap.append(h("span", "", label), b);
+        if (append) { if (reads.parentNode !== stage) stage.append(reads); reads.append(wrap); mount(); }
+        return { el: wrap, set(text, tone) { b.textContent = text; if (tone) wrap.dataset.tone = tone; else delete wrap.dataset.tone; } };
+      },
+      plot(opts = {}) { const p = makePlot(opts); stage.insertBefore(p.el, reads.parentNode === stage ? reads : null); mount(); return p; },
+      field(opts = {}) { const f = makeField(opts); stage.insertBefore(f.el, reads.parentNode === stage ? reads : null); mount(); return f; },
+      note(text) { const p = h("p", "", text); p.style.cssText = "margin:0;font-size:12.5px;color:var(--muted)"; ctl.append(p); mount(); return p; },
+      stage, controls: ctl,
+    };
+    return ui;
+  }
+
+  function makePlot(o) {
+    const wrap = h("div", "lx-plot"), cv = h("canvas"), legend = h("div", "lx-legend");
+    wrap.append(cv, legend);
+    cv.setAttribute("role", "img");
+    cv.setAttribute("aria-label", o.label || [o.ylabel, o.xlabel].filter(Boolean).join(" 대 "));
+    let last = null;
+    function paint() {
+      if (!last || !wrap.isConnected) return;
+      const { series, extra } = last;
+      const W = Math.max(240, wrap.clientWidth), H = o.height || 260, dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + "px";
+      const g = cv.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      const pad = { l: 50, r: 14, t: 12, b: o.xlabel ? 40 : 26 };
+      const xs = series.flatMap((s) => s.x), ys = series.flatMap((s) => s.y).filter(Number.isFinite);
+      const [x0, x1] = o.x || [Math.min(...xs), Math.max(...xs)];
+      let [y0, y1] = o.y || [Math.min(0, ...ys), Math.max(...ys) * 1.05 || 1];
+      if (y0 === y1) y1 = y0 + 1;
+      const X = (v) => pad.l + ((v - x0) / (x1 - x0)) * (W - pad.l - pad.r);
+      const Y = (v) => H - pad.b - ((v - y0) / (y1 - y0)) * (H - pad.t - pad.b);
+      const font = cssVar("--font") || "sans-serif";
+      g.font = `11px ${font}`;
+      g.lineWidth = 1;
+      g.strokeStyle = cssVar("--line"); g.fillStyle = cssVar("--dim");
+      g.textAlign = "center"; g.textBaseline = "top";
+      for (const t of M.ticks(x0, x1, o.xticks || 6)) { g.beginPath(); g.moveTo(X(t), pad.t); g.lineTo(X(t), H - pad.b); g.stroke(); g.fillText(M.fmt(t), X(t), H - pad.b + 6); }
+      g.textAlign = "right"; g.textBaseline = "middle";
+      for (const t of M.ticks(y0, y1, o.yticks || 4)) { g.beginPath(); g.moveTo(pad.l, Y(t)); g.lineTo(W - pad.r, Y(t)); g.stroke(); g.fillText(M.fmt(t), pad.l - 8, Y(t)); }
+      g.strokeStyle = cssVar("--line-2");
+      g.beginPath(); g.moveTo(pad.l, pad.t); g.lineTo(pad.l, H - pad.b); g.lineTo(W - pad.r, H - pad.b); g.stroke();
+      g.fillStyle = cssVar("--muted"); g.font = `12px ${font}`;
+      if (o.xlabel) { g.textAlign = "center"; g.textBaseline = "bottom"; g.fillText(o.xlabel, pad.l + (W - pad.l - pad.r) / 2, H - 2); }
+      if (o.ylabel) { g.save(); g.translate(12, pad.t + (H - pad.t - pad.b) / 2); g.rotate(-Math.PI / 2); g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(o.ylabel, 0, 0); g.restore(); }
+      g.save();
+      g.beginPath(); g.rect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b); g.clip();
+      for (const s of series) {
+        const c = color(s.color);
+        g.beginPath();
+        s.x.forEach((xv, i) => { const yv = s.y[i]; if (!Number.isFinite(yv)) return; i ? g.lineTo(X(xv), Y(yv)) : g.moveTo(X(xv), Y(yv)); });
+        if (s.fill) {
+          g.save(); g.lineTo(X(s.x[s.x.length - 1]), Y(Math.max(y0, 0))); g.lineTo(X(s.x[0]), Y(Math.max(y0, 0))); g.closePath();
+          g.globalAlpha = 0.14; g.fillStyle = c; g.fill(); g.restore();
+          g.beginPath(); s.x.forEach((xv, i) => (i ? g.lineTo(X(xv), Y(s.y[i])) : g.moveTo(X(xv), Y(s.y[i]))));
+        }
+        g.strokeStyle = c; g.lineWidth = s.width || 2; g.setLineDash(s.dash ? [5, 4] : []); g.lineJoin = "round"; g.stroke();
+      }
+      g.setLineDash([3, 4]); g.lineWidth = 1.2;
+      for (const m of extra.marks || []) {
+        g.strokeStyle = color(m.color || "violet"); g.beginPath(); g.moveTo(X(m.x), pad.t); g.lineTo(X(m.x), H - pad.b); g.stroke();
+        if (m.label) { g.fillStyle = color(m.color || "violet"); g.font = `11px ${font}`; g.textAlign = "left"; g.textBaseline = "top"; g.fillText(m.label, X(m.x) + 5, pad.t + 2); }
+      }
+      g.setLineDash([]);
+      for (const p of extra.points || []) { g.fillStyle = color(p.color || "red"); g.beginPath(); g.arc(X(p.x), Y(p.y), 4, 0, 2 * Math.PI); g.fill(); }
+      g.restore();
+      legend.replaceChildren(...series.filter((s) => s.label).map((s) => { const sp = h("span"); const sw = h("i"); sw.style.background = color(s.color); sp.append(sw, s.label); return sp; }));
+    }
+    new ResizeObserver(paint).observe(wrap);
+    repaints.add(paint);
+    return { el: wrap, draw(series, extra = {}) { last = { series, extra }; paint(); } };
+  }
+
+  const MAPS = {
+    heat: [[0, 0, 4], [40, 11, 84], [120, 28, 109], [187, 55, 84], [237, 105, 37], [251, 180, 26], [252, 255, 164]],
+    gray: [[0, 0, 0], [255, 255, 255]],
+    div: [[33, 102, 172], [247, 247, 247], [178, 24, 43]],
+  };
+  function makeField(o) {
+    const n = o.size || 160, cv = h("canvas", "lx-field");
+    cv.width = n; cv.height = n;
+    cv.setAttribute("role", "img");
+    cv.setAttribute("aria-label", o.label || "2차원 분포");
+    if (o.max) cv.style.maxWidth = o.max + "px";
+    const g = cv.getContext("2d");
+    return {
+      el: cv, size: n,
+      draw(fn, map = o.map || "heat") {
+        const img = g.createImageData(n, n), stops = MAPS[map] || MAPS.heat;
+        for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+          const v = M.clamp(typeof fn === "function" ? fn(i / (n - 1), j / (n - 1), i, j) : fn[j * n + i], 0, 1);
+          const t = v * (stops.length - 1), k = Math.min(stops.length - 2, Math.floor(t)), f = t - k, a = stops[k], b = stops[k + 1], p = (j * n + i) * 4;
+          img.data[p] = a[0] + (b[0] - a[0]) * f; img.data[p + 1] = a[1] + (b[1] - a[1]) * f; img.data[p + 2] = a[2] + (b[2] - a[2]) * f; img.data[p + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+      },
+    };
+  }
+  function fail(fig, e) {
+    if (fig.querySelector(".lx-w-err")) return;
+    fig.append(h("div", "lx-w-err", "이 위젯을 실행하지 못했어요: " + (e && e.message ? e.message : e)));
+    console.error(e);
+  }
+
+  /* ---------- quizzes ---------- */
+  function setupQuiz(q) {
+    const id = q.dataset.id, answer = q.dataset.answer, items = [...q.querySelectorAll(":scope > ol > li[data-key]")];
+    const why = q.querySelector(".lx-why"), opts = h("div", "lx-opts"), res = h("div", "lx-quiz-r");
+    const head = h("div", "lx-quiz-h", "확인 문제");
+    q.prepend(head);
+    const btns = items.map((li) => {
+      const b = h("button", "lx-opt"), k = h("span", "k", li.dataset.key.toUpperCase()), t = h("span");
+      b.type = "button"; b.dataset.key = li.dataset.key;
+      t.append(...li.childNodes);
+      b.append(k, t);
+      b.addEventListener("click", () => { if (state.data.quiz[id]) return; state.data.quiz[id] = b.dataset.key; paint(); save(); progress(); });
+      return b;
+    });
+    items[0] && items[0].parentElement.replaceWith(opts);
+    opts.append(...btns);
+    if (why) { why.hidden = true; opts.after(res); res.after(why); } else opts.after(res);
+    function paint() {
+      const pick = state.data.quiz[id];
+      q.classList.toggle("answered", !!pick);
+      btns.forEach((b) => { if (pick && b.dataset.key === answer) b.dataset.s = "right"; else if (pick && b.dataset.key === pick) b.dataset.s = "wrong"; else delete b.dataset.s; b.setAttribute("aria-disabled", String(!!pick)); });
+      if (why) why.hidden = !pick;
+      res.replaceChildren();
+      if (!pick) return;
+      res.dataset.ok = String(pick === answer);
+      res.append(h("span", "", pick === answer ? "✓ 정답" : "✕ 다시 생각해 보세요 — 정답은 " + answer.toUpperCase()));
+      const again = h("button", "lx-btn", "다시 풀기");
+      again.type = "button";
+      again.addEventListener("click", () => { delete state.data.quiz[id]; paint(); save(); progress(); btns[0].focus(); });
+      res.append(again);
+    }
+    return { id, answer, paint };
+  }
+
+  /* ---------- page chrome ---------- */
+  let quizzes = [], sections = [], ring = null, tocLinks = new Map();
+  function progress() {
+    const done = sections.filter((s) => state.data.done[s.id]).length;
+    const right = quizzes.filter((q) => state.data.quiz[q.id] === q.answer).length;
+    sections.forEach((s) => {
+      const on = !!state.data.done[s.id];
+      const b = s.querySelector(":scope > .lx-done");
+      if (b) b.setAttribute("aria-pressed", String(on));
+      const a = tocLinks.get(s.id);
+      if (a) a.classList.toggle("done", on);
+    });
+    if (!ring) return;
+    const total = sections.length || 1, frac = done / total, C = 2 * Math.PI * 10;
+    ring.fg.style.strokeDasharray = String(C);
+    ring.fg.style.strokeDashoffset = String(C * (1 - frac));
+    ring.el.classList.toggle("full", done === sections.length && sections.length > 0);
+    ring.text.textContent = `${done}/${sections.length} 절` + (quizzes.length ? ` · 문제 ${right}/${quizzes.length}` : "");
+    ring.el.title = "이해 표시한 절 / 전체 절, 맞힌 문제 / 전체 문제";
+  }
+
+  function buildBar(main) {
+    const bar = h("header", "lx-bar");
+    const tocBtn = h("button", "lx-btn lx-tocbtn", "목차");
+    tocBtn.type = "button";
+    const crumb = h("div", "lx-crumb");
+    const d = main.dataset;
+    const bits = [d.subject, d.module, d.level, d.minutes ? `약 ${d.minutes}분` : ""].filter(Boolean);
+    bits.forEach((b, i) => { if (i) crumb.append(" · "); i === 0 ? crumb.append(h("b", "", b)) : crumb.append(b); });
+    const title = h("div", "lx-bar-title", (main.querySelector("h1") || {}).textContent || document.title);
+    saveEl = h("div", "lx-save");
+    const ringEl = h("div", "lx-ring");
+    ringEl.innerHTML = '<svg viewBox="0 0 26 26" aria-hidden="true"><circle class="bg" cx="13" cy="13" r="10"/><circle class="fg" cx="13" cy="13" r="10"/></svg>';
+    const text = h("span");
+    ringEl.append(text);
+    ring = { el: ringEl, fg: ringEl.querySelector(".fg"), text };
+    const theme = chipGroup([["auto", "자동"], ["light", "밝게"], ["dark", "어둡게"]], state.data.theme || "auto",
+      (v) => { state.data.theme = v; applyTheme(v); save(); }, "테마");
+    bar.append(tocBtn, crumb, title, saveEl, ringEl, theme.el);
+    document.body.prepend(bar);
+    return { bar, tocBtn, theme };
+  }
+
+  function buildToc(shell, tocBtn) {
+    const toc = h("nav", "lx-toc");
+    toc.setAttribute("aria-label", "목차");
+    const ol = h("ol");
+    toc.append(h("h4", "", "목차"), ol);
+    sections.forEach((s) => {
+      const li = h("li"), a = h("a");
+      a.href = "#" + s.id;
+      a.append(h("span", "", (s.querySelector("h2") || {}).textContent || s.id), h("span", "ck", "✓"));
+      a.addEventListener("click", (e) => { e.preventDefault(); go(s); toc.classList.remove("open"); });
+      tocLinks.set(s.id, a);
+      li.append(a); ol.append(li);
+    });
+    const foot = h("div", "lx-toc-foot");
+    foot.innerHTML = "<kbd>J</kbd> 다음 절 · <kbd>K</kbd> 이전 절";
+    toc.append(foot);
+    shell.prepend(toc);
+    tocBtn.addEventListener("click", () => toc.classList.toggle("open"));
+    addEventListener("keydown", (e) => { if (e.key === "Escape") toc.classList.remove("open"); });
+    const io = new IntersectionObserver((ents) => {
+      ents.forEach((en) => { if (en.isIntersecting) tocLinks.forEach((a, id) => a.setAttribute("aria-current", String(id === en.target.id))); });
+    }, { rootMargin: "-25% 0px -65% 0px" });
+    sections.forEach((s) => io.observe(s));
+  }
+  function go(s) { s.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" }); }
+
+  async function boot() {
+    const main = document.querySelector("main.lx");
+    if (!main) return;
+    const shell = h("div", "lx-shell");
+    main.replaceWith(shell);
+    shell.append(main);
+    sections = [...main.querySelectorAll("section.lx-sec")];
+    sections.forEach((s, i) => { if (!s.id) s.id = "s" + (i + 1); });
+    const { bar, tocBtn, theme } = buildBar(main);
+    buildToc(shell, tocBtn);
+    main.querySelectorAll(".lx-callout").forEach((c) => {
+      if (c.querySelector(".lx-callout-t")) return;
+      const label = { mi: "MI 현업 연결", warn: "주의", key: "핵심" }[c.dataset.kind || "key"] || "핵심";
+      c.prepend(h("span", "lx-callout-t", label));
+    });
+    sections.forEach((s) => {
+      const b = h("button", "lx-done");
+      b.type = "button";
+      b.append(h("span", "box", "✓"), h("span", "", "이 절을 이해했어요"));
+      b.addEventListener("click", () => { state.data.done[s.id] = !state.data.done[s.id]; if (!state.data.done[s.id]) delete state.data.done[s.id]; save(); progress(); });
+      s.append(b);
+    });
+    quizzes = [...main.querySelectorAll(".lx-quiz[data-id][data-answer]")].map(setupQuiz);
+    main.querySelectorAll("figure.lx-widget[data-widget]").forEach((fig) => {
+      const fn = widgets.get(fig.dataset.widget);
+      if (!fn) return fail(fig, new Error(`'${fig.dataset.widget}' 위젯이 등록되지 않았습니다 (MI.widget)`));
+      try { fn(fig, makeUI(fig)); } catch (e) { fail(fig, e); }
+    });
+    addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 140), { passive: true });
+    addEventListener("keydown", (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+      const k = e.key.toLowerCase();
+      if (k !== "j" && k !== "k") return;
+      const y = scrollY + 120;
+      const idx = sections.findIndex((s) => s.offsetTop > y);
+      const cur = idx === -1 ? sections.length : idx;
+      const next = k === "j" ? sections[cur] : sections[Math.max(0, cur - 2)];
+      if (next) { e.preventDefault(); go(next); }
+    });
+    const foot = h("footer", "lx-foot", "MI Planner · lecture-html 스킬로 만든 오프라인 강의. 진행 상황은 이 페이지의 상태 파일에 저장됩니다.");
+    main.append(foot);
+    setSave("busy");
+    progress();
+    await loadState();
+    applyTheme(state.data.theme);
+    theme.paint(state.data.theme || "auto");
+    quizzes.forEach((q) => q.paint());
+    progress();
+    setSave(state.mode);
+  }
+  document.addEventListener("DOMContentLoaded", boot);
+})();
+</script>
+<!-- mi-lecture-runtime:end -->
+</head>
+<body>
+<main class="lx" data-subject="광학" data-module="OPT5" data-level="대학원" data-minutes="50">
+  <header class="lx-hero">
+    <p class="lx-eyebrow"><span class="lx-tag hl">광학</span><span class="lx-tag">OPT5 · 결상 이론</span><span class="lx-tag">대학원</span></p>
+    <h1>회절 한계와 분해능 — 검사 광학의 기본 한계</h1>
+    <p class="lx-lead">렌즈가 아무리 완벽해도 한 점은 한 점으로 맺히지 않는다. 동공(pupil)의 크기가 정하는 이 번짐이 검사 광학의 분해능과 패턴 대비를 어떻게 제한하는지, 식과 손으로 움직여 보는 그림으로 따라간다.</p>
+  </header>
+
+  <section class="lx-goals">
+    <h2>학습 목표</h2>
+    <ul>
+      <li>원형 동공의 프라운호퍼 회절로 점 퍼짐 함수(PSF) — Airy 패턴 — 를 <strong>유도</strong>한다.</li>
+      <li>레일리·스패로 기준으로 두 점의 분리 가능 거리를 <strong>계산</strong>하고 NA·파장 의존성을 설명한다.</li>
+      <li>비간섭 결상의 MTF로 주어진 피치의 패턴 대비를 <strong>예측</strong>한다.</li>
+      <li>분해 한계보다 작은 결함이 검출될 수 있는 이유를 신호 대 잡음 관점으로 <strong>설명</strong>한다.</li>
+    </ul>
+    <p class="lx-prereq">선수 지식: OPT4 스칼라 회절·푸리에 광학, LA4 푸리에 해석</p>
+  </section>
+
+  <section class="lx-sec" id="psf">
+    <h2>1. 점 퍼짐 함수: 한 점은 Airy 원반이 된다</h2>
+    <p>결상계를 선형·공간 불변 시스템으로 보면, 물체의 각 점은 상면에서 같은 모양의 번짐 — <strong>점 퍼짐 함수</strong> — 으로 바뀌고 상은 물체와 PSF의 컨볼루션이 된다. 수차가 없는 원형 동공에서 PSF는 동공 함수의 2차원 푸리에 변환의 크기 제곱이며, 그 결과가 Airy 패턴이다.</p>
+    <div class="lx-eq" data-n="(1)">
+      <math display="block"><mi>I</mi><mo>(</mo><mi>r</mi><mo>)</mo><mo>=</mo><msub><mi>I</mi><mn>0</mn></msub><msup><mrow><mo>[</mo><mfrac><mrow><mn>2</mn><msub><mi>J</mi><mn>1</mn></msub><mo>(</mo><mi>v</mi><mo>)</mo></mrow><mi>v</mi></mfrac><mo>]</mo></mrow><mn>2</mn></msup><mo>,</mo><mspace width="1.2em"/><mi>v</mi><mo>=</mo><mfrac><mrow><mn>2</mn><mi>π</mi><mspace width="0.1em"/><mi>NA</mi></mrow><mi>λ</mi></mfrac><mspace width="0.1em"/><mi>r</mi></math>
+    </div>
+    <p>여기서 <math><msub><mi>J</mi><mn>1</mn></msub></math>은 1차 베셀 함수, NA는 상측 개구수다. 첫 번째 0점은 <math><mi>v</mi><mo>≈</mo><mn>3.832</mn></math>, 즉 <math><mi>r</mi><mo>=</mo><mn>0.61</mn><mi>λ</mi><mo>/</mo><mi>NA</mi></math>에서 생긴다. 이 반지름 안에 전체 에너지의 약 84%가 들어 있다.</p>
+    <figure class="lx-widget" data-widget="psf">
+      <figcaption><b>Airy 패턴 단면과 2차원 분포</b>파장과 NA를 바꾸면 중앙 원반의 크기가 λ/NA에 비례해 변한다.</figcaption>
+    </figure>
+    <details class="lx-deriv"><summary>유도 보기 — 원형 동공의 푸리에 변환</summary>
+      <p>반지름 <math><mi>a</mi></math>인 원형 동공 <math><mi>P</mi><mo>(</mo><mi>ρ</mi><mo>)</mo><mo>=</mo><mi>circ</mi><mo>(</mo><mi>ρ</mi><mo>/</mo><mi>a</mi><mo>)</mo></math>의 2차원 푸리에 변환은 원대칭이므로 0차 한켈 변환이 된다.</p>
+      <div class="lx-eq"><math display="block"><mi>U</mi><mo>(</mo><mi>q</mi><mo>)</mo><mo>=</mo><mn>2</mn><mi>π</mi><msubsup><mo>∫</mo><mn>0</mn><mi>a</mi></msubsup><msub><mi>J</mi><mn>0</mn></msub><mo>(</mo><mn>2</mn><mi>π</mi><mi>q</mi><mi>ρ</mi><mo>)</mo><mspace width="0.1em"/><mi>ρ</mi><mspace width="0.1em"/><mi>d</mi><mi>ρ</mi><mo>=</mo><msup><mi>a</mi><mn>2</mn></msup><mfrac><mrow><msub><mi>J</mi><mn>1</mn></msub><mo>(</mo><mn>2</mn><mi>π</mi><mi>a</mi><mi>q</mi><mo>)</mo></mrow><mrow><mi>a</mi><mi>q</mi></mrow></mfrac></math></div>
+      <p><math><mo>∫</mo><msub><mi>J</mi><mn>0</mn></msub><mo>(</mo><mi>x</mi><mo>)</mo><mi>x</mi><mspace width="0.1em"/><mi>d</mi><mi>x</mi><mo>=</mo><mi>x</mi><msub><mi>J</mi><mn>1</mn></msub><mo>(</mo><mi>x</mi><mo>)</mo></math>을 썼다. 상면 좌표로 <math><mi>q</mi><mo>=</mo><mi>r</mi><mo>/</mo><mo>(</mo><mi>λ</mi><mi>z</mi><mo>)</mo></math>, <math><mi>a</mi><mo>/</mo><mi>z</mi><mo>≈</mo><mi>NA</mi></math>로 바꾸고 크기를 제곱하면 식 (1)을 얻는다.</p>
+    </details>
+  </section>
+
+  <section class="lx-sec" id="two-point">
+    <h2>2. 두 점 분해: 레일리와 스패로</h2>
+    <p>같은 세기의 비간섭 두 점이 거리 <math><mi>d</mi></math>만큼 떨어져 있으면 상은 두 Airy 패턴의 세기 합이다. 언제 "둘"로 보느냐는 관례다.</p>
+    <table class="lx-table">
+      <thead><tr><th>기준</th><th>정의</th><th>분리 거리</th><th>가운데 골</th></tr></thead>
+      <tbody>
+        <tr><td>레일리</td><td>한 점의 극대가 다른 점의 첫 0점에 놓임</td><td>0.61 λ/NA</td><td>약 26.5% 낮음</td></tr>
+        <tr><td>스패로</td><td>가운데 골이 막 사라짐(곡률 0)</td><td>0.47 λ/NA</td><td>0%</td></tr>
+      </tbody>
+    </table>
+    <figure class="lx-widget" data-widget="twopoint">
+      <figcaption><b>두 점의 세기 합</b>분리 거리를 줄이며 가운데 골이 언제 사라지는지 보세요. 점선은 각 점의 Airy 패턴이다.</figcaption>
+    </figure>
+    <div class="lx-callout" data-kind="warn"><p>레일리 기준은 <em>비간섭</em> 조명, 같은 세기를 가정한다. 간섭(코히어런트) 조명에서는 진폭이 먼저 더해지므로 위상 차에 따라 결과가 크게 달라진다 — 부분 간섭 결상(OPT5 후반, Hopkins 식)에서 다룬다.</p></div>
+    <div class="lx-quiz" data-id="q1" data-answer="b">
+      <p class="q">λ = 266 nm, NA = 0.9인 비간섭 결상계의 레일리 분해 거리는 약 얼마인가?</p>
+      <ol>
+        <li data-key="a">90 nm</li>
+        <li data-key="b">180 nm</li>
+        <li data-key="c">296 nm</li>
+        <li data-key="d">360 nm</li>
+      </ol>
+      <div class="lx-why">0.61 × 266 / 0.9 ≈ 180 nm. 90 nm는 λ/(2·NA·…)처럼 인수를 한 번 더 나눈 경우, 296 nm는 NA를 곱한 경우, 360 nm는 1.22λ/NA(Airy 원반 <em>지름</em>)다.</div>
+    </div>
+  </section>
+
+  <section class="lx-sec" id="mtf">
+    <h2>3. 주파수 영역: OTF와 MTF</h2>
+    <p>비간섭 결상에서 세기 PSF의 푸리에 변환이 광학 전달 함수(OTF)이고 그 크기가 MTF다. OTF는 동공 함수의 자기 상관과 같아서, 원형 동공이면 공간 주파수 <math><msub><mi>ν</mi><mi>c</mi></msub><mo>=</mo><mn>2</mn><mi>NA</mi><mo>/</mo><mi>λ</mi></math>에서 정확히 0이 된다.</p>
+    <div class="lx-eq" data-n="(2)">
+      <math display="block"><mi>MTF</mi><mo>(</mo><mi>s</mi><mo>)</mo><mo>=</mo><mfrac><mn>2</mn><mi>π</mi></mfrac><mrow><mo>[</mo><mi>arccos</mi><mspace width="0.1em"/><mi>s</mi><mo>−</mo><mi>s</mi><msqrt><mrow><mn>1</mn><mo>−</mo><msup><mi>s</mi><mn>2</mn></msup></mrow></msqrt><mo>]</mo></mrow><mo>,</mo><mspace width="1.2em"/><mi>s</mi><mo>=</mo><mfrac><mi>ν</mi><msub><mi>ν</mi><mi>c</mi></msub></mfrac><mo>≤</mo><mn>1</mn></math>
+    </div>
+    <p>피치 <math><mi>p</mi></math>인 라인·스페이스 패턴의 기본 주파수는 <math><mn>1</mn><mo>/</mo><mi>p</mi></math>이므로, 비간섭 조명에서 상에 대비가 남는 가장 작은 피치는 <math><msub><mi>p</mi><mi>min</mi></msub><mo>=</mo><mi>λ</mi><mo>/</mo><mo>(</mo><mn>2</mn><mi>NA</mi><mo>)</mo></math>다. 그 근처의 대비는 이미 수 % 수준이다.</p>
+    <figure class="lx-widget" data-widget="mtf">
+      <figcaption><b>MTF와 패턴 피치</b>패턴 피치를 바꾸면 그 기본 주파수에서의 대비(보라 점)가 어떻게 떨어지는지 보세요.</figcaption>
+    </figure>
+    <div class="lx-callout" data-kind="mi"><p>검사 레시피에서 파장·NA·조명 방식을 고를 때 실제로 보는 값이 이 대비다. 같은 피치라도 짧은 파장·큰 NA는 대비를 올리지만 초점 심도(<math><mo>∝</mo><mi>λ</mi><mo>/</mo><msup><mi>NA</mi><mn>2</mn></msup></math>)를 줄인다. 예: 가짜 설비 EQ-A01에서 피치 200 nm 패턴을 볼 때 266 nm·NA 0.9면 대비가 약 15% 남지만 532 nm에서는 차단 주파수(3.4 /µm)를 넘어 0이 된다.</p></div>
+    <div class="lx-quiz" data-id="q2" data-answer="c">
+      <p class="q">비간섭 조명, 원형 동공 결상계의 MTF 차단 주파수는?</p>
+      <ol>
+        <li data-key="a">NA / λ</li>
+        <li data-key="b">λ / NA</li>
+        <li data-key="c">2 NA / λ</li>
+        <li data-key="d">λ / (2 NA)</li>
+      </ol>
+      <div class="lx-why">OTF는 동공의 자기 상관이라 폭이 동공 지름의 두 배다. 동공 반지름이 주파수 NA/λ에 해당하므로 차단은 2NA/λ. 간섭 조명이면 동공 자체가 전달 함수라 차단이 NA/λ로 절반이 된다. λ/(2NA)는 주파수가 아니라 최소 <em>피치</em>다.</div>
+    </div>
+  </section>
+
+  <section class="lx-sec" id="detect">
+    <h2>4. 분해와 검출은 다르다</h2>
+    <p>분해능은 "두 물체를 둘로 구분"하는 능력이고, 결함 검출은 "기준과 다른 신호가 있는지"를 판단하는 문제다. 분해 한계보다 훨씬 작은 입자도 산란광이 배경 잡음보다 충분히 크면 검출된다. 작은 입자(<math><mi>d</mi><mo>≪</mo><mi>λ</mi></math>)의 레일리 산란 단면적은 <math><msup><mi>d</mi><mn>6</mn></msup><mo>/</mo><msup><mi>λ</mi><mn>4</mn></msup></math>에 비례하므로, 검출 감도는 파장과 입자 크기에 매우 민감하다.</p>
+    <div class="lx-callout" data-kind="key"><p>검출 한계는 PSF 폭이 아니라 <strong>신호 대 잡음비</strong>(산란 세기, 배경 패턴 잡음, 검출기 잡음, 다이 간 정합 오차)가 정한다. PSF 폭은 결함의 위치 정밀도와 이웃 패턴과의 분리에 영향을 준다.</p></div>
+    <div class="lx-quiz" data-id="q3" data-answer="a">
+      <p class="q">레일리 분해 거리가 180 nm인 검사계가 40 nm 입자를 검출할 수 있는 가장 직접적인 이유는?</p>
+      <ol>
+        <li data-key="a">검출은 산란 신호가 잡음보다 큰지로 판단하며, 입자를 분해할 필요가 없다.</li>
+        <li data-key="b">영상 처리로 분해 한계를 4배 이상 넘을 수 있다.</li>
+        <li data-key="c">입자는 간섭 조명에서 Airy 패턴이 더 작아진다.</li>
+        <li data-key="d">40 nm 입자는 파장보다 작아 산란이 커진다.</li>
+      </ol>
+      <div class="lx-why">입자는 PSF 모양의 점으로 보일 뿐 모양은 분해되지 않는다. 산란은 크기가 작아질수록 <math><msup><mi>d</mi><mn>6</mn></msup></math>로 급격히 <em>작아지므로</em> (d)는 반대다. 영상 처리는 SNR을 높일 수는 있어도 차단 주파수 밖 정보를 되살리지 못한다.</div>
+    </div>
+  </section>
+
+  <section class="lx-sec lx-summary" id="summary">
+    <h2>정리</h2>
+    <ul>
+      <li>수차 없는 원형 동공의 PSF는 Airy 패턴, 첫 0점 반지름 0.61 λ/NA.</li>
+      <li>두 점 분해: 레일리 0.61 λ/NA, 스패로 0.47 λ/NA (비간섭, 같은 세기).</li>
+      <li>비간섭 MTF는 2NA/λ에서 0 → 최소 피치 λ/(2NA), 근처 대비는 매우 낮다.</li>
+      <li>검출 한계는 분해능이 아니라 산란 신호의 SNR이 정한다.</li>
+    </ul>
+  </section>
+
+  <section class="lx-refs">
+    <h2>참고 자료</h2>
+    <ol>
+      <li>J. W. Goodman, <em>Introduction to Fourier Optics</em>, 4th ed., 4장(프라운호퍼 회절)·7장(주파수 영역 결상 해석).</li>
+      <li>M. Born, E. Wolf, <em>Principles of Optics</em>, 8.5절(원형 개구의 회절), 8.6절(분해능).</li>
+      <li>E. Hecht, <em>Optics</em>, 10.2절(원형 개구, 분해능).</li>
+    </ol>
+  </section>
+</main>
+<script>
+const LAMBDAS = [[266, "266 nm"], [365, "365 nm"], [532, "532 nm"]];
+
+MI.widget("psf", (fig, ui) => {
+  const { airy, linspace, fmt } = MI.math;
+  const lam = ui.chips({ label: "파장 λ", options: LAMBDAS, value: 266 });
+  const na = ui.slider({ label: "NA", min: 0.2, max: 0.95, step: 0.01, value: 0.6, fmt: (v) => v.toFixed(2) });
+  const plot = ui.plot({ x: [-1.5, 1.5], y: [0, 1.05], xlabel: "r (µm)", ylabel: "I / I₀", height: 240 });
+  const field = ui.field({ size: 140, max: 220, label: "Airy 패턴 2차원 세기(로그 눈금)" });
+  const rr = ui.readout("레일리 반지름 0.61λ/NA");
+  const fw = ui.readout("FWHM ≈ 0.51λ/NA");
+  ui.render(() => {
+    const L = lam.value / 1000, N = na.value, k = (2 * Math.PI * N) / L;
+    const x = linspace(-1.5, 1.5, 361);
+    const r0 = (0.61 * L) / N;
+    plot.draw([{ x, y: x.map((r) => airy(k * r)), color: "blue", fill: true, label: "Airy 단면" }],
+      { marks: [{ x: r0, label: "첫 0점", color: "violet" }, { x: -r0, color: "violet" }] });
+    field.draw((u, v) => { const r = Math.hypot(u - 0.5, v - 0.5) * 3; return 1 + Math.log10(Math.max(airy(k * r), 1e-4)) / 4; });
+    rr.set(fmt(r0 * 1000) + " nm");
+    fw.set(fmt(0.51 * lam.value / N) + " nm");
+  });
+});
+
+MI.widget("twopoint", (fig, ui) => {
+  const { airy, linspace, fmt } = MI.math;
+  const lam = ui.chips({ label: "파장 λ", options: LAMBDAS, value: 266 });
+  const na = ui.slider({ label: "NA", min: 0.2, max: 0.95, step: 0.01, value: 0.9, fmt: (v) => v.toFixed(2) });
+  const sep = ui.slider({ label: "분리 거리 (× λ/NA)", min: 0.3, max: 1.2, step: 0.01, value: 0.61, fmt: (v) => v.toFixed(2) });
+  const plot = ui.plot({ y: [0, 1.25], xlabel: "x (nm)", ylabel: "세기", height: 240 });
+  const dist = ui.readout("분리 거리");
+  const dip = ui.readout("가운데 골 깊이");
+  const verdict = ui.readout("판정");
+  ui.render(() => {
+    const L = lam.value, N = na.value, d = (sep.value * L) / N, k = (2 * Math.PI * N) / L;
+    const span = 1.6 * L / N + d / 2, x = linspace(-span, span, 401);
+    const a = x.map((v) => airy(k * (v + d / 2))), b = x.map((v) => airy(k * (v - d / 2)));
+    const sum = a.map((v, i) => v + b[i]);
+    const peak = Math.max(...sum), mid = airy((k * d) / 2) * 2, depth = 1 - mid / peak;
+    plot.draw([
+      { x, y: a, color: "cyan", dash: true, width: 1.4 },
+      { x, y: b, color: "cyan", dash: true, width: 1.4 },
+      { x, y: sum, color: "blue", width: 2.4, label: "두 점의 세기 합" },
+    ], { points: [{ x: 0, y: mid, color: "violet" }] });
+    dist.set(fmt(d) + " nm");
+    dip.set(depth > 0.002 ? fmt(depth * 100, 3) + " %" : "없음", depth >= 0.25 ? "ok" : depth > 0.002 ? "warn" : "bad");
+    verdict.set(sep.value >= 0.605 ? "레일리 이상 — 분해" : sep.value >= 0.47 ? "스패로~레일리 사이" : "스패로 미만 — 하나로 보임",
+      sep.value >= 0.605 ? "ok" : sep.value >= 0.47 ? "warn" : "bad");
+  });
+});
+
+MI.widget("mtf", (fig, ui) => {
+  const { linspace, fmt, clamp } = MI.math;
+  const lam = ui.chips({ label: "파장 λ", options: LAMBDAS, value: 266 });
+  const na = ui.slider({ label: "NA", min: 0.2, max: 0.95, step: 0.01, value: 0.9, fmt: (v) => v.toFixed(2) });
+  const pitch = ui.slider({ label: "패턴 피치 p", min: 100, max: 1000, step: 5, value: 200, unit: "nm" });
+  const plot = ui.plot({ x: [0, 8], y: [0, 1.05], xlabel: "공간 주파수 ν (1/µm)", ylabel: "MTF", height: 240 });
+  const cut = ui.readout("차단 주파수 2NA/λ");
+  const pmin = ui.readout("최소 피치 λ/(2NA)");
+  const con = ui.readout("피치 p의 대비");
+  const mtf = (s) => { s = clamp(Math.abs(s), 0, 1); return (2 / Math.PI) * (Math.acos(s) - s * Math.sqrt(1 - s * s)); };
+  ui.render(() => {
+    const L = lam.value / 1000, N = na.value, nc = (2 * N) / L, nu = linspace(0, 8, 400), f = 1000 / pitch.value;
+    const c = f >= nc ? 0 : mtf(f / nc);
+    plot.draw([{ x: nu, y: nu.map((v) => (v >= nc ? 0 : mtf(v / nc))), color: "blue", fill: true, label: "비간섭 MTF" }],
+      { marks: [{ x: nc, label: "ν_c", color: "red" }], points: [{ x: f, y: c, color: "violet" }] });
+    cut.set(fmt(nc) + " /µm");
+    pmin.set(fmt(lam.value / (2 * N)) + " nm");
+    con.set(c > 0 ? fmt(c * 100, 3) + " %" : "0 % (차단 밖)", c >= 0.2 ? "ok" : c > 0 ? "warn" : "bad");
+  });
+});
+</script>
+</body>
+</html>

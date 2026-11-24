@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mi-kind" content="roadmap">
+<title>{{TITLE}}</title>
+<!-- 데이터만 고친다: 아래 roadmap-data의 tracks·modules. 화면 코드는 lecture-html 스킬 공용. -->
+<script type="application/json" id="roadmap-data">
+{
+  "version": 1,
+  "tracks": [
+    {"id": "LA", "name": "선형대수·수학", "color": "blue", "goal": "행렬·푸리에·확률·최적화 — 모든 트랙의 언어"},
+    {"id": "OPT", "name": "광학", "color": "cyan", "goal": "파동에서 결상 이론, 편광·박막·산란 계측까지"},
+    {"id": "SSP", "name": "고체물리", "color": "violet", "goal": "결정·밴드·캐리어·포논에서 유전 함수까지"},
+    {"id": "LMI", "name": "빛-물질 상호작용", "color": "yellow", "goal": "흡수·분산·분광·나노 산란의 물리"},
+    {"id": "AI", "name": "AI", "color": "green", "goal": "통계적 학습에서 CNN·Transformer·이상 탐지까지"},
+    {"id": "IP", "name": "영상처리", "color": "orange", "goal": "샘플링·필터·복원·정합·결함 검출 알고리즘"},
+    {"id": "MI", "name": "MI 종합", "color": "pink", "goal": "검사 감도와 계측 불확도로 묶는 종합 과제"}
+  ],
+  "modules": [
+    {"id": "LA1", "track": "LA", "title": "벡터공간과 선형사상", "level": "기초", "hours": 10, "prereq": [], "outcomes": ["기저·차원·좌표 변환을 다룬다", "행렬을 선형사상으로 읽고 핵·상을 구한다", "내적·직교 사영을 계산한다"], "refs": ["G. Strang, Introduction to Linear Algebra, 1–4장"], "page": ""},
+    {"id": "LA2", "track": "LA", "title": "고유값·대각화·SVD", "level": "중급", "hours": 12, "prereq": ["LA1"], "outcomes": ["대칭 행렬의 스펙트럼 정리를 쓴다", "SVD로 저랭크 근사를 만든다", "PCA를 SVD로 유도한다"], "refs": ["G. Strang, 6–7장", "L. N. Trefethen, D. Bau, Numerical Linear Algebra, 1–5강"], "page": ""},
+    {"id": "LA3", "track": "LA", "title": "최소제곱·조건수·정규화", "level": "중급", "hours": 10, "prereq": ["LA2"], "outcomes": ["정규방정식과 QR로 최소제곱을 푼다", "조건수로 오차 증폭을 추정한다", "Tikhonov 정규화로 역문제를 안정화한다"], "refs": ["Trefethen & Bau, 11–12·18–19강"], "page": ""},
+    {"id": "LA4", "track": "LA", "title": "푸리에 해석", "level": "중급", "hours": 12, "prereq": ["LA1"], "outcomes": ["푸리에 급수·변환과 컨볼루션 정리를 쓴다", "DFT·FFT와 샘플링 정리를 설명한다", "2차원 푸리에 변환의 성질을 영상에 적용한다"], "refs": ["R. N. Bracewell, The Fourier Transform and Its Applications, 2–10장"], "page": ""},
+    {"id": "LA5", "track": "LA", "title": "확률·통계 추정", "level": "중급", "hours": 12, "prereq": ["LA1"], "outcomes": ["MLE·MAP 추정을 유도한다", "측정 불확도 전파를 계산한다", "신뢰구간·가설검정을 해석한다"], "refs": ["C. M. Bishop, Pattern Recognition and Machine Learning, 1–2장", "JCGM 100:2008 (GUM)"], "page": ""},
+    {"id": "LA6", "track": "LA", "title": "최적화", "level": "대학원", "hours": 12, "prereq": ["LA3", "LA5"], "outcomes": ["볼록성과 KKT 조건을 판정한다", "경사하강·뉴턴·Levenberg–Marquardt를 비교한다", "확률적 경사하강의 수렴을 설명한다"], "refs": ["S. Boyd, L. Vandenberghe, Convex Optimization, 1–5·9장", "J. Nocedal, S. Wright, Numerical Optimization, 10장"], "page": ""},
+    {"id": "OPT1", "track": "OPT", "title": "맥스웰 방정식과 평면파", "level": "기초", "hours": 10, "prereq": ["LA4"], "outcomes": ["파동방정식과 평면파를 유도한다", "경계조건에서 프레넬 식을 얻는다", "복소 굴절률로 흡수를 기술한다"], "refs": ["E. Hecht, Optics, 2–4장", "B. Saleh, M. Teich, Fundamentals of Photonics, 5장"], "page": ""},
+    {"id": "OPT2", "track": "OPT", "title": "기하광학과 수차", "level": "중급", "hours": 10, "prereq": ["OPT1"], "outcomes": ["근축 광선 행렬로 결상계를 설계한다", "자이델 수차를 분류한다", "제르니케 다항식으로 파면을 전개한다"], "refs": ["E. Hecht, 5–6장", "M. Born, E. Wolf, Principles of Optics, 5·9장"], "page": ""},
+    {"id": "OPT3", "track": "OPT", "title": "간섭과 코히어런스", "level": "중급", "hours": 10, "prereq": ["OPT1"], "outcomes": ["시간·공간 코히어런스를 정량화한다", "백색광 간섭의 원리를 설명한다", "반 시테르트–제르니케 정리를 적용한다"], "refs": ["E. Hecht, 9·12장", "J. W. Goodman, Statistical Optics, 5장"], "page": ""},
+    {"id": "OPT4", "track": "OPT", "title": "스칼라 회절과 푸리에 광학", "level": "대학원", "hours": 14, "prereq": ["OPT1", "LA4"], "outcomes": ["프레넬·프라운호퍼 회절을 계산한다", "렌즈의 푸리에 변환 성질을 유도한다", "각스펙트럼 전파를 구현한다"], "refs": ["J. W. Goodman, Introduction to Fourier Optics, 3–5장"], "page": ""},
+    {"id": "OPT5", "track": "OPT", "title": "결상 이론: PSF·OTF·부분 간섭", "level": "대학원", "hours": 16, "prereq": ["OPT2", "OPT3", "OPT4"], "outcomes": ["Airy PSF와 분해능 기준을 유도한다", "비간섭 MTF와 간섭 CTF를 비교한다", "Hopkins 식과 TCC로 부분 간섭 결상을 계산한다"], "refs": ["J. W. Goodman, Introduction to Fourier Optics, 6–7장", "M. Born, E. Wolf, 8·10장"], "page": ""},
+    {"id": "OPT6", "track": "OPT", "title": "편광: Jones·Mueller", "level": "중급", "hours": 8, "prereq": ["OPT1", "LA2"], "outcomes": ["Jones 벡터·행렬로 편광 소자를 계산한다", "Stokes·Mueller로 부분 편광을 다룬다", "편광 조명의 결함 대비 효과를 설명한다"], "refs": ["E. Hecht, 8장", "D. Goldstein, Polarized Light, 4–6장"], "page": ""},
+    {"id": "OPT7", "track": "OPT", "title": "박막 광학과 엘립소메트리", "level": "대학원", "hours": 12, "prereq": ["OPT6", "SSP5"], "outcomes": ["전달 행렬법으로 다층막 반사율을 계산한다", "Ψ·Δ를 모델 피팅해 두께·광학 상수를 구한다", "분산 모델(Cauchy·Tauc–Lorentz)을 고른다"], "refs": ["H. Fujiwara, Spectroscopic Ellipsometry, 2–5장"], "page": ""},
+    {"id": "OPT8", "track": "OPT", "title": "산란 계측: RCWA·OCD", "level": "대학원", "hours": 14, "prereq": ["OPT7", "OPT4", "LA6"], "outcomes": ["격자 회절을 RCWA로 계산한다", "라이브러리·회귀 방식 프로파일 피팅을 비교한다", "파라미터 상관과 불확도를 평가한다"], "refs": ["M. G. Moharam et al., J. Opt. Soc. Am. A 12(5), 1995 (RCWA 정식화)"], "page": ""},
+    {"id": "SSP1", "track": "SSP", "title": "결정 구조와 역격자", "level": "기초", "hours": 8, "prereq": ["LA1"], "outcomes": ["브라베 격자와 역격자를 구한다", "브릴루앙 영역을 그린다", "X선 회절 조건을 유도한다"], "refs": ["C. Kittel, Introduction to Solid State Physics, 1–2장", "N. Ashcroft, N. Mermin, Solid State Physics, 4–6장"], "page": ""},
+    {"id": "SSP2", "track": "SSP", "title": "밴드 이론", "level": "중급", "hours": 12, "prereq": ["SSP1"], "outcomes": ["블로흐 정리를 증명한다", "거의 자유 전자·강결합 모델로 밴드를 구한다", "유효질량을 정의하고 계산한다"], "refs": ["C. Kittel, 7–9장", "N. Ashcroft, N. Mermin, 8–10장"], "page": ""},
+    {"id": "SSP3", "track": "SSP", "title": "반도체 캐리어", "level": "중급", "hours": 10, "prereq": ["SSP2"], "outcomes": ["상태밀도와 페르미 준위를 계산한다", "도핑에 따른 캐리어 농도를 구한다", "이동도와 재결합 과정을 설명한다"], "refs": ["S. M. Sze, K. K. Ng, Physics of Semiconductor Devices, 1장"], "page": ""},
+    {"id": "SSP4", "track": "SSP", "title": "격자 진동: 포논", "level": "중급", "hours": 8, "prereq": ["SSP1"], "outcomes": ["포논 분산 관계를 유도한다", "음향·광학 포논을 구분한다", "라만 활성 모드를 판정한다"], "refs": ["C. Kittel, 4–5장"], "page": ""},
+    {"id": "SSP5", "track": "SSP", "title": "유전 함수와 광학 상수", "level": "대학원", "hours": 12, "prereq": ["SSP2", "LMI1"], "outcomes": ["Drude·Lorentz 모델로 유전 함수를 만든다", "크라머스–크로니히 관계를 적용한다", "밴드 간 전이 임계점을 해석한다"], "refs": ["P. Yu, M. Cardona, Fundamentals of Semiconductors, 6장", "M. Fox, Optical Properties of Solids, 1–3장"], "page": ""},
+    {"id": "LMI1", "track": "LMI", "title": "고전 Lorentz 진동자 모델", "level": "중급", "hours": 8, "prereq": ["OPT1"], "outcomes": ["복소 굴절률을 진동자 모델로 유도한다", "정상·이상 분산을 설명한다", "국소장 보정(Clausius–Mossotti)을 적용한다"], "refs": ["M. Fox, Optical Properties of Solids, 2장", "J. D. Jackson, Classical Electrodynamics, 7.5절"], "page": ""},
+    {"id": "LMI2", "track": "LMI", "title": "양자 전이와 페르미 황금률", "level": "대학원", "hours": 12, "prereq": ["LMI1", "SSP2"], "outcomes": ["시간 의존 섭동으로 전이율을 유도한다", "쌍극자 선택 규칙을 적용한다", "흡수 계수를 결합 상태밀도로 계산한다"], "refs": ["J. J. Sakurai, Modern Quantum Mechanics, 5장", "M. Fox, 3장"], "page": ""},
+    {"id": "LMI3", "track": "LMI", "title": "흡수·발광·라만 분광", "level": "대학원", "hours": 10, "prereq": ["LMI2", "SSP4"], "outcomes": ["직접·간접 전이를 구분한다", "광발광(PL) 스펙트럼을 해석한다", "라만 이동으로 응력을 추정한다"], "refs": ["P. Yu, M. Cardona, 6–7장"], "page": ""},
+    {"id": "LMI4", "track": "LMI", "title": "나노 구조 산란과 근접장", "level": "대학원", "hours": 10, "prereq": ["LMI1", "OPT4"], "outcomes": ["레일리·미 산란 단면적을 계산한다", "표면 플라즈몬 조건을 유도한다", "입자 크기·파장에 따른 검출 감도를 추정한다"], "refs": ["C. Bohren, D. Huffman, Absorption and Scattering of Light by Small Particles, 4–5장"], "page": ""},
+    {"id": "AI1", "track": "AI", "title": "통계적 학습 기초", "level": "중급", "hours": 10, "prereq": ["LA5"], "outcomes": ["편향–분산 분해를 설명한다", "교차 검증으로 모델을 고른다", "선형·로지스틱 회귀를 구현한다"], "refs": ["T. Hastie et al., The Elements of Statistical Learning, 2–4·7장"], "page": ""},
+    {"id": "AI2", "track": "AI", "title": "신경망과 역전파", "level": "중급", "hours": 10, "prereq": ["AI1", "LA6"], "outcomes": ["다층 퍼셉트론과 역전파를 유도한다", "자동 미분을 설명한다", "초기화·정규화·드롭아웃을 비교한다"], "refs": ["I. Goodfellow et al., Deep Learning, 6–8장"], "page": ""},
+    {"id": "AI3", "track": "AI", "title": "합성곱 신경망", "level": "대학원", "hours": 12, "prereq": ["AI2", "IP2"], "outcomes": ["합성곱·풀링의 수용 영역을 계산한다", "잔차 연결(ResNet)의 효과를 설명한다", "전이학습으로 작은 데이터에 적용한다"], "refs": ["I. Goodfellow et al., 9장"], "page": ""},
+    {"id": "AI4", "track": "AI", "title": "결함 분류와 이상 탐지", "level": "대학원", "hours": 12, "prereq": ["AI3"], "outcomes": ["불균형 데이터 지표(재현율·정밀도·PR 곡선)를 쓴다", "오토인코더·one-class 방식을 비교한다", "라벨 잡음과 데이터 누수를 점검한다"], "refs": ["V. Chandola et al., Anomaly Detection: A Survey, ACM Computing Surveys, 2009"], "page": ""},
+    {"id": "AI5", "track": "AI", "title": "Transformer와 자기지도 학습", "level": "대학원", "hours": 12, "prereq": ["AI3"], "outcomes": ["어텐션을 행렬 연산으로 유도한다", "ViT의 패치 임베딩을 설명한다", "대조 학습으로 표현을 사전학습한다"], "refs": ["A. Vaswani et al., Attention Is All You Need, 2017", "A. Dosovitskiy et al., An Image is Worth 16x16 Words, 2021"], "page": ""},
+    {"id": "IP1", "track": "IP", "title": "샘플링과 앨리어싱", "level": "기초", "hours": 6, "prereq": ["LA4"], "outcomes": ["나이퀴스트 조건을 픽셀 크기에 적용한다", "광학 차단 주파수와 픽셀 샘플링을 맞춘다", "보간 방식을 비교한다"], "refs": ["R. Gonzalez, R. Woods, Digital Image Processing, 4장"], "page": ""},
+    {"id": "IP2", "track": "IP", "title": "선형 필터와 컨볼루션", "level": "중급", "hours": 8, "prereq": ["IP1"], "outcomes": ["평활·미분 필터를 설계한다", "분리 가능 커널로 계산량을 줄인다", "경계 처리 방식을 고른다"], "refs": ["R. Gonzalez, R. Woods, 3장"], "page": ""},
+    {"id": "IP3", "track": "IP", "title": "주파수 영역 처리", "level": "중급", "hours": 8, "prereq": ["IP2"], "outcomes": ["2D DFT로 영상 스펙트럼을 해석한다", "주파수 필터를 설계한다", "주기 패턴을 제거한다"], "refs": ["R. Gonzalez, R. Woods, 4장"], "page": ""},
+    {"id": "IP4", "track": "IP", "title": "노이즈 모델과 영상 복원", "level": "대학원", "hours": 10, "prereq": ["IP3", "LA3", "OPT5"], "outcomes": ["샷·읽기 잡음 모델을 세운다", "위너 필터를 유도한다", "정규화 디컨볼루션으로 PSF를 보정한다"], "refs": ["R. Gonzalez, R. Woods, 5장"], "page": ""},
+    {"id": "IP5", "track": "IP", "title": "정합과 서브픽셀 위치 추정", "level": "대학원", "hours": 10, "prereq": ["IP3", "LA3"], "outcomes": ["상호상관·위상상관으로 정합한다", "서브픽셀 보간으로 위치를 추정한다", "정합 불확도를 평가한다"], "refs": ["B. Zitová, J. Flusser, Image registration methods: a survey, 2003"], "page": ""},
+    {"id": "IP6", "track": "IP", "title": "형태학과 분할", "level": "중급", "hours": 8, "prereq": ["IP2"], "outcomes": ["침식·팽창·열기·닫기를 쓴다", "Otsu 임계값으로 분할한다", "연결 성분으로 객체를 센다"], "refs": ["R. Gonzalez, R. Woods, 9–10장"], "page": ""},
+    {"id": "IP7", "track": "IP", "title": "결함 검출 알고리즘", "level": "대학원", "hours": 12, "prereq": ["IP4", "IP5", "IP6"], "outcomes": ["다이 대 다이·셀 대 셀 비교를 구현한다", "노이즈 맵 기반 적응 임계값을 설계한다", "오검출·미검출 균형을 관리한다"], "refs": ["R. Gonzalez, R. Woods, 10장"], "page": ""},
+    {"id": "MI1", "track": "MI", "title": "명시야·암시야 검사 결상", "level": "대학원", "hours": 12, "prereq": ["OPT5", "LMI4", "IP7"], "outcomes": ["조명·수광 NA 배치에 따른 신호를 비교한다", "패턴 잡음과 결함 신호를 분리한다", "가짜 데이터로 검출 감도를 시뮬레이션한다"], "refs": ["J. W. Goodman, Introduction to Fourier Optics, 7장", "C. Bohren, D. Huffman, 5장"], "page": ""},
+    {"id": "MI2", "track": "MI", "title": "계측 불확도: 오버레이·CD", "level": "대학원", "hours": 10, "prereq": ["IP5", "LA5", "OPT8"], "outcomes": ["정밀도·정확도·TMU를 구분한다", "게이지 R&R(MSA)을 설계·해석한다", "툴 유도 오차(TIS)를 보정한다"], "refs": ["JCGM 100:2008 (GUM)", "AIAG, Measurement Systems Analysis, 4th ed."], "page": ""},
+    {"id": "MI3", "track": "MI", "title": "종합 과제: 검사 감도 예측", "level": "대학원", "hours": 16, "prereq": ["MI1", "MI2", "AI4"], "outcomes": ["광학 모델·영상 처리·분류기를 묶어 검출 한계를 예측한다", "가짜 데이터(EQ-A01, LOT-TEST-001)로 검증한다", "결과를 paper-patent 스킬로 사내 논문 초안으로 정리한다"], "refs": ["이 로드맵의 OPT5·IP7·AI4 강의 노트"], "page": ""}
+  ]
+}
+</script>
+<style>
+:root{color-scheme:light;
+  --bg:#f3f5f9;--bg-2:#eaeef5;--panel:#ffffff;--panel-2:#f7f9fc;--raise:#ffffff;--hover:#eef3fb;
+  --line:rgba(24,44,84,.11);--line-2:rgba(24,44,84,.22);
+  --text:#101828;--text-2:#344054;--muted:#556179;--dim:#6b778d;
+  --blue:#2f6be0;--cyan:#0b7a8a;--violet:#6a46d8;--green:#14804c;--red:#cf2e52;--yellow:#8a5800;--orange:#b4500f;--pink:#b0307a;
+  --glow:rgba(47,107,224,.10);--shadow:0 1px 2px rgba(16,24,40,.05),0 8px 24px rgba(16,24,40,.06);
+  --font:"Segoe UI Variable Text","Segoe UI","Malgun Gothic",system-ui,sans-serif;
+  --mono:"Cascadia Code","Cascadia Mono",Consolas,monospace;
+  --ease:cubic-bezier(.2,.8,.2,1);--top:56px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;--orange:#ffab70;--pink:#ff8fd0;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}}
+:root[data-theme=dark]{color-scheme:dark;
+  --bg:#02040a;--bg-2:#070c18;--panel:#0d1421;--panel-2:#101a2b;--raise:#152137;--hover:#16233a;
+  --line:rgba(145,174,255,.13);--line-2:rgba(132,166,255,.32);
+  --text:#edf4ff;--text-2:#c3d0e6;--muted:#9aa9c3;--dim:#75849e;
+  --blue:#729eff;--cyan:#5ee6f4;--violet:#ac91ff;--green:#64e4ae;--red:#ff8ba1;--yellow:#ffd27b;--orange:#ffab70;--pink:#ff8fd0;
+  --glow:rgba(114,158,255,.13);--shadow:0 1px 0 rgba(255,255,255,.03) inset,0 12px 32px rgba(0,0,0,.35)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.6 var(--font);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 420px at 85% -120px,var(--glow),transparent 70%)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:8px}
+button,input,textarea{font:inherit;color:inherit}
+.mono{font-family:var(--mono)}
+/* top bar */
+.rm-bar{position:sticky;top:0;z-index:20;height:var(--top);display:flex;align-items:center;gap:14px;padding:0 24px;
+  background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--line)}
+.rm-bar h1{font-size:15px;margin:0;font-weight:680;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rm-save{font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.rm-save::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.rm-save[data-s=app]::before,.rm-save[data-s=local]::before{background:var(--green)}
+.rm-save[data-s=busy]::before{background:var(--yellow)}
+.rm-save[data-s=fail]{color:var(--red)}.rm-save[data-s=fail]::before{background:var(--red)}
+.rm-save button{border:0;background:none;color:var(--blue);cursor:pointer;padding:0;font-size:11.5px;text-decoration:underline}
+.chips{display:inline-flex;flex-wrap:wrap;gap:4px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel-2)}
+.chip{border:0;background:transparent;border-radius:999px;padding:3px 11px;font-size:12.5px;line-height:1.6;color:var(--muted);cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:background .15s var(--ease),color .15s var(--ease)}
+.chip:hover{color:var(--text);background:var(--hover)}
+.chip[aria-pressed=true]{background:var(--raise);color:var(--text);box-shadow:0 0 0 1px var(--line-2),0 1px 3px rgba(0,0,0,.12);font-weight:600}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.chip small{font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+/* page */
+.rm-wrap{max-width:1360px;margin:0 auto;padding:36px 28px 96px}
+.rm-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px;align-items:end;margin-bottom:28px}
+.rm-hero h2{font-size:clamp(26px,3.4vw,36px);letter-spacing:-.022em;line-height:1.15;margin:0 0 10px;font-weight:720}
+.rm-hero p{margin:0;color:var(--text-2);max-width:66ch;font-size:15.5px}
+.rm-stats{display:flex;gap:10px}
+.rm-stat{min-width:116px;padding:12px 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+.rm-stat span{display:block;font-size:11.5px;color:var(--muted)}
+.rm-stat b{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.rm-stat b small{font-size:13px;color:var(--dim);font-weight:500}
+.rm-meter{height:4px;border-radius:4px;background:var(--line);margin-top:8px;overflow:hidden}
+.rm-meter i{display:block;height:100%;background:var(--green);border-radius:4px;transition:width .5s var(--ease)}
+.rm-tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:28px}
+.rm-track{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);
+  cursor:pointer;transition:border-color .15s,transform .15s var(--ease),box-shadow .15s}
+.rm-track:hover{border-color:color-mix(in srgb,var(--c) 55%,transparent);transform:translateY(-1px);box-shadow:var(--shadow)}
+.rm-track[aria-pressed=true]{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset}
+.rm-track .t{display:flex;align-items:center;gap:8px;font-weight:650;font-size:13.5px}
+.rm-track .t i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.rm-track .g{font-size:12px;color:var(--muted);line-height:1.45;min-height:2.9em}
+.rm-track .rm-meter i{background:var(--c)}
+.rm-track .n{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums}
+.rm-next{margin:0 0 28px}
+.rm-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rm-h::after{content:"";flex:1;height:1px;background:var(--line)}
+.rm-next-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.rm-empty{color:var(--dim);font-size:13px;padding:12px 0}
+.rm-tools{position:sticky;top:var(--top);z-index:10;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 0;margin-bottom:8px;
+  background:linear-gradient(var(--bg) 70%,transparent)}
+.rm-search{flex:1;min-width:180px;max-width:320px;display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;border:1px solid var(--line-2);background:var(--panel)}
+.rm-search input{border:0;outline:0;background:transparent;width:100%;font-size:13px}
+.rm-search kbd{font-family:var(--mono);font-size:10.5px;color:var(--dim);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+/* graph */
+.rm-graph{position:relative;overflow-x:auto;padding:8px 2px 20px}
+.rm-cols{position:relative;display:flex;gap:56px;align-items:flex-start;width:max-content;min-width:100%}
+.rm-col{display:flex;flex-direction:column;gap:10px;width:228px;flex:none}
+.rm-col-h{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--dim);text-transform:uppercase;padding:0 2px 2px}
+svg.rm-edges{position:absolute;inset:0;pointer-events:none;overflow:visible}
+svg.rm-edges path{fill:none;stroke:var(--line-2);stroke-width:1.4;transition:stroke .2s,opacity .2s}
+svg.rm-edges path.hot{stroke:var(--c,var(--blue));stroke-width:2}
+svg.rm-edges path.dim{opacity:.25}
+.rm-card{position:relative;display:flex;flex-direction:column;gap:6px;text-align:left;width:100%;padding:11px 13px 10px 15px;border-radius:13px;
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;overflow:hidden;
+  transition:border-color .15s,box-shadow .2s var(--ease),opacity .2s,transform .15s var(--ease)}
+.rm-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.rm-card:hover{border-color:color-mix(in srgb,var(--c) 50%,transparent);box-shadow:var(--shadow);transform:translateY(-1px)}
+.rm-card.sel{border-color:var(--c);box-shadow:0 0 0 1px var(--c) inset,var(--shadow)}
+.rm-card.dim{opacity:.32}
+.rm-card[data-st=done]{background:color-mix(in srgb,var(--green) 6%,var(--panel))}
+.rm-card .top{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.rm-card .id{font-family:var(--mono);font-weight:600;color:var(--c)}
+.rm-card .lv{margin-left:auto;padding:0 7px;border-radius:999px;border:1px solid var(--line-2);font-size:10.5px}
+.rm-card .ti{font-size:13.5px;font-weight:620;line-height:1.38;color:var(--text)}
+.rm-card .ft{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim)}
+.rm-card .pre{font-family:var(--mono);font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px}
+.st i{width:11px;height:11px;border-radius:50%;border:1.5px solid var(--line-2);flex:none}
+.st[data-st=doing] i{border-color:var(--blue);background:linear-gradient(90deg,var(--blue) 50%,transparent 50%)}
+.st[data-st=doing]{color:var(--blue)}
+.st[data-st=done] i{border-color:var(--green);background:var(--green)}
+.st[data-st=done]{color:var(--green)}
+.lec{margin-left:auto;font-size:10.5px;padding:0 7px;border-radius:999px;background:color-mix(in srgb,var(--cyan) 14%,transparent);color:var(--cyan);font-weight:600}
+/* list */
+.rm-list{display:flex;flex-direction:column;gap:24px}
+.rm-group h3{display:flex;align-items:center;gap:10px;margin:0 0 8px;font-size:14px}
+.rm-group h3 i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.rm-group h3 small{color:var(--dim);font-weight:500;font-size:12px}
+.rm-rows{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden}
+.rm-row{display:grid;grid-template-columns:62px minmax(0,1fr) 64px 56px 180px;gap:12px;align-items:center;padding:8px 14px;border-top:1px solid var(--line);min-height:44px}
+.rm-row:first-child{border-top:0}
+.rm-row:hover{background:var(--hover)}
+.rm-row .id{font-family:var(--mono);font-size:12px;color:var(--c);font-weight:600}
+.rm-row button.ti{border:0;background:none;padding:0;text-align:left;cursor:pointer;font-size:13.5px;font-weight:560;color:var(--text)}
+.rm-row button.ti:hover{color:var(--blue)}
+.rm-row .meta{font-size:12px;color:var(--muted)}
+/* drawer */
+.rm-scrim{position:fixed;inset:0;background:rgba(2,4,10,.28);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.rm-scrim.open{opacity:1;pointer-events:auto}
+.rm-drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,94vw);z-index:41;background:var(--panel);border-left:1px solid var(--line);
+  box-shadow:-24px 0 48px rgba(0,0,0,.18);transform:translateX(104%);transition:transform .28s var(--ease);display:flex;flex-direction:column}
+.rm-drawer.open{transform:none}
+.rm-dh{padding:20px 22px 14px;border-bottom:1px solid var(--line);position:relative}
+.rm-dh .id{font-family:var(--mono);font-size:12px;color:var(--c);font-weight:700}
+.rm-dh h3{margin:4px 0 8px;font-size:20px;line-height:1.3;letter-spacing:-.01em}
+.rm-dh .meta{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--muted)}
+.rm-dh .meta span{padding:1px 9px;border-radius:999px;border:1px solid var(--line-2)}
+.rm-x{position:absolute;right:14px;top:14px;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;font-size:16px;line-height:1;color:var(--muted)}
+.rm-x:hover{color:var(--text);border-color:var(--line-2)}
+.rm-db{padding:18px 22px 28px;overflow:auto;display:flex;flex-direction:column;gap:20px}
+.rm-db h4{margin:0 0 8px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rm-db ul{margin:0;padding-left:18px;color:var(--text-2)}
+.rm-db li{margin:3px 0}
+.rm-links{display:flex;flex-wrap:wrap;gap:6px}
+.rm-link{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);background:var(--panel-2);border-radius:999px;padding:2px 10px 2px 8px;font-size:12px;cursor:pointer}
+.rm-link:hover{border-color:var(--c,var(--blue))}
+.rm-link .id{font-family:var(--mono);color:var(--c);font-weight:600}
+.rm-path{display:flex;gap:8px;align-items:center}
+.rm-path code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:9px;background:var(--panel-2);border:1px solid var(--line);user-select:all}
+.btn{border:1px solid var(--line-2);background:var(--panel);border-radius:10px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--text-2);white-space:nowrap}
+.btn:hover{border-color:var(--blue);background:var(--hover)}
+.rm-hint{font-size:12px;color:var(--dim)}
+.rm-warn{font-size:12.5px;color:var(--yellow)}
+.rm-db textarea{width:100%;min-height:84px;resize:vertical;border-radius:10px;border:1px solid var(--line-2);background:var(--panel-2);padding:8px 10px;font-size:13px;line-height:1.5}
+.rm-db textarea:focus{outline:2px solid var(--blue);outline-offset:0}
+@media (max-width:900px){.rm-hero{grid-template-columns:1fr}.rm-stats{flex-wrap:wrap}.rm-row{grid-template-columns:54px minmax(0,1fr) 150px}.rm-row .meta{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.rm-bar,.rm-tools,.rm-drawer,.rm-scrim{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<header class="rm-bar"><h1>{{TITLE}}</h1><div class="rm-save" id="save"></div><div id="theme"></div></header>
+<div class="rm-wrap">
+  <section class="rm-hero">
+    <div>
+      <h2>{{TITLE}}</h2>
+      <p>검사·계측 엔지니어를 위한 대학원 수준 학습 경로. 선형대수에서 출발해 광학·고체물리·빛-물질 상호작용·AI·영상처리를 거쳐 검사 감도와 계측 불확도로 모인다. 카드를 눌러 목표·선수·교재를 보고 진행 상태를 표시하세요.</p>
+    </div>
+    <div class="rm-stats" id="stats"></div>
+  </section>
+  <section class="rm-tracks" id="tracks" aria-label="트랙"></section>
+  <section class="rm-next"><h3 class="rm-h">다음에 할 것</h3><div class="rm-next-list" id="next"></div></section>
+  <div class="rm-tools">
+    <div id="view"></div>
+    <div id="sfilter"></div>
+    <label class="rm-search"><input id="q" type="search" placeholder="모듈·주제 찾기" aria-label="모듈 찾기"><kbd>/</kbd></label>
+  </div>
+  <section id="board"></section>
+</div>
+<div class="rm-scrim" id="scrim"></div>
+<aside class="rm-drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="dtitle" tabindex="-1"></aside>
+<!-- mi-lecture-runtime:start v1 roadmap — 화면 코드, 고치지 않는다 -->
+<script>
+/* MI study roadmap v1 — offline. Data: #roadmap-data. State via MI_Planner page state (postMessage). */
+(() => {
+  "use strict";
+  const DATA = JSON.parse(document.getElementById("roadmap-data").textContent);
+  const TRACKS = DATA.tracks, MODS = DATA.modules;
+  const byId = new Map(MODS.map((m) => [m.id, m]));
+  const trackOf = new Map(TRACKS.map((t) => [t.id, t]));
+  const kids = new Map(MODS.map((m) => [m.id, []]));
+  MODS.forEach((m) => (m.prereq || []).forEach((p) => kids.has(p) && kids.get(p).push(m.id)));
+  const depthMemo = new Map();
+  const depth = (id, seen = new Set()) => {
+    if (depthMemo.has(id)) return depthMemo.get(id);
+    if (seen.has(id)) return 0;
+    seen.add(id);
+    const m = byId.get(id), d = (m.prereq || []).filter((p) => byId.has(p)).reduce((a, p) => Math.max(a, depth(p, seen) + 1), 0);
+    depthMemo.set(id, d);
+    return d;
+  };
+  MODS.forEach((m) => depth(m.id));
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const cvar = (c) => `var(--${c || "blue"})`;
+  const ST = { todo: "예정", doing: "진행 중", done: "완료" };
+
+  /* ----- state ----- */
+  const S = { status: {}, memo: {}, theme: "auto", view: "path", track: "all", sfilter: "all" };
+  let mode = "memory", seq = 0, timer = 0;
+  const pending = new Map(), inApp = window.parent && window.parent !== window, LS = "mi-roadmap:" + document.title;
+  const ask = (kind, state) => new Promise((res, rej) => {
+    const id = "rm" + ++seq; pending.set(id, { res, rej });
+    try { parent.postMessage({ miPlanner: kind, id, state }, "*"); } catch (e) { pending.delete(id); rej(e); return; }
+    setTimeout(() => pending.delete(id) && rej(new Error("응답 없음")), 1500);
+  });
+  addEventListener("message", (ev) => {
+    const d = ev.data; if (!d || d.miPlanner !== "reply" || ev.source !== parent) return;
+    const p = pending.get(d.id); if (!p) return; pending.delete(d.id); d.error ? p.rej(new Error(d.error)) : p.res(d.state || {});
+  });
+  async function load() {
+    if (inApp) { try { Object.assign(S, await ask("state-get")); mode = "app"; return; } catch { /* plain file */ } }
+    try { const raw = localStorage.getItem(LS); if (raw) Object.assign(S, JSON.parse(raw)); mode = "local"; } catch { mode = "memory"; }
+  }
+  const saveEl = document.getElementById("save");
+  function setSave(s) {
+    saveEl.dataset.s = s;
+    saveEl.replaceChildren(h("span", "", { app: "저장됨", local: "이 브라우저에 저장", memory: "미리보기 · 저장 안 됨", busy: "저장 중…", fail: "저장 실패" }[s]));
+    if (s === "fail") { const b = h("button", "", "다시 시도"); b.type = "button"; b.onclick = save; saveEl.append(b); }
+  }
+  function save() {
+    clearTimeout(timer); setSave("busy");
+    timer = setTimeout(async () => {
+      try {
+        if (mode === "app") await ask("state-set", S);
+        else if (mode === "local") localStorage.setItem(LS, JSON.stringify(S));
+        setSave(mode);
+      } catch { setSave("fail"); }
+    }, 350);
+  }
+  const st = (id) => S.status[id] || "todo";
+  const ready = (m) => (m.prereq || []).every((p) => st(p) === "done");
+
+  /* ----- chips (D-12) ----- */
+  function chips(host, options, get, set, label) {
+    const g = h("div", "chips"); g.setAttribute("role", "group"); g.setAttribute("aria-label", label);
+    const btns = options.map(([v, text, color, count]) => {
+      const b = h("button", "chip"); b.type = "button"; b.dataset.v = v;
+      if (color) { b.style.setProperty("--c", cvar(color)); b.append(h("span", "dot")); }
+      b.append(text); if (count != null) b.append(h("small", "", String(count)));
+      b.onclick = () => { set(v); paint(); };
+      return b;
+    });
+    const paint = () => btns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === String(get()))));
+    g.append(...btns); host.replaceChildren(g); paint();
+    return paint;
+  }
+  function applyTheme() {
+    if (S.theme === "light" || S.theme === "dark") document.documentElement.dataset.theme = S.theme;
+    else delete document.documentElement.dataset.theme;
+  }
+
+  /* ----- pieces ----- */
+  function statusBadge(id) { const s = st(id), e = h("span", "st"); e.dataset.st = s; e.append(h("i"), ST[s]); return e; }
+  function card(m) {
+    const t = trackOf.get(m.track) || {}, b = h("button", "rm-card"); b.type = "button";
+    b.dataset.id = m.id; b.dataset.st = st(m.id); b.style.setProperty("--c", cvar(t.color));
+    const top = h("div", "top"); top.append(h("span", "id", m.id), h("span", "", t.name || ""), h("span", "lv", m.level));
+    const ft = h("div", "ft"); ft.append(statusBadge(m.id), h("span", "", `${m.hours}시간`));
+    if (m.page) ft.append(h("span", "lec", "강의"));
+    b.append(top, h("div", "ti", m.title), ft);
+    if ((m.prereq || []).length) b.append(h("div", "pre", "← " + m.prereq.join(", ")));
+    b.onclick = () => openDrawer(m.id, b);
+    b.setAttribute("aria-label", `${m.id} ${m.title}, ${ST[st(m.id)]}, ${m.level}, ${m.hours}시간`);
+    return b;
+  }
+  const q = document.getElementById("q");
+  function visible(m) {
+    if (S.track !== "all" && m.track !== S.track) return false;
+    if (S.sfilter !== "all" && (S.sfilter === "todo" ? st(m.id) === "done" : st(m.id) !== S.sfilter)) return false;
+    const s = q.value.trim().toLowerCase();
+    if (!s) return true;
+    return [m.id, m.title, ...(m.outcomes || []), ...(m.refs || [])].join(" ").toLowerCase().includes(s);
+  }
+
+  function renderStats() {
+    const done = MODS.filter((m) => st(m.id) === "done"), doing = MODS.filter((m) => st(m.id) === "doing");
+    const hours = MODS.reduce((a, m) => a + m.hours, 0), left = MODS.filter((m) => st(m.id) !== "done").reduce((a, m) => a + m.hours, 0);
+    const box = document.getElementById("stats"); box.replaceChildren();
+    const stat = (label, val, sub, frac) => {
+      const e = h("div", "rm-stat"), b = h("b", "", val); if (sub) b.append(h("small", "", " " + sub));
+      e.append(h("span", "", label), b);
+      if (frac != null) { const mm = h("div", "rm-meter"), i = h("i"); i.style.width = (frac * 100).toFixed(1) + "%"; mm.append(i); e.append(mm); }
+      box.append(e);
+    };
+    stat("완료", String(done.length), `/ ${MODS.length}`, done.length / MODS.length);
+    stat("진행 중", String(doing.length));
+    stat("남은 시간", String(left), `/ ${hours}h`);
+  }
+  function renderTracks() {
+    const box = document.getElementById("tracks"); box.replaceChildren();
+    TRACKS.forEach((t) => {
+      const ms = MODS.filter((m) => m.track === t.id), d = ms.filter((m) => st(m.id) === "done").length;
+      const b = h("button", "rm-track"); b.type = "button"; b.style.setProperty("--c", cvar(t.color));
+      b.setAttribute("aria-pressed", String(S.track === t.id));
+      const tt = h("div", "t"); tt.append(h("i"), t.name);
+      const mm = h("div", "rm-meter"), i = h("i"); i.style.width = (ms.length ? (d / ms.length) * 100 : 0) + "%"; mm.append(i);
+      b.append(tt, h("div", "g", t.goal || ""), mm, h("div", "n", `${d} / ${ms.length} 모듈 · ${ms.reduce((a, m) => a + m.hours, 0)}시간`));
+      b.onclick = () => { S.track = S.track === t.id ? "all" : t.id; save(); render(); };
+      box.append(b);
+    });
+  }
+  function renderNext() {
+    const box = document.getElementById("next"); box.replaceChildren();
+    const list = MODS.filter((m) => st(m.id) !== "done" && ready(m))
+      .sort((a, b) => (st(b.id) === "doing") - (st(a.id) === "doing") || depth(a.id) - depth(b.id) || a.id.localeCompare(b.id)).slice(0, 4);
+    if (!list.length) { box.append(h("div", "rm-empty", MODS.every((m) => st(m.id) === "done") ? "모든 모듈을 마쳤어요." : "선수 모듈을 먼저 완료하세요.")); return; }
+    list.forEach((m) => box.append(card(m)));
+  }
+
+  let selected = null;
+  function renderPath(board) {
+    const vis = MODS.filter(visible);
+    if (!vis.length) { board.append(h("div", "rm-empty", "조건에 맞는 모듈이 없어요.")); return; }
+    const levels = [...new Set(vis.map((m) => depth(m.id)))].sort((a, b) => a - b);
+    const graph = h("div", "rm-graph"), cols = h("div", "rm-cols");
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "rm-edges");
+    cols.append(svg);
+    levels.forEach((lv, i) => {
+      const col = h("div", "rm-col"); col.append(h("div", "rm-col-h", `${i + 1}단계`));
+      vis.filter((m) => depth(m.id) === lv)
+        .sort((a, b) => TRACKS.findIndex((t) => t.id === a.track) - TRACKS.findIndex((t) => t.id === b.track) || a.id.localeCompare(b.id))
+        .forEach((m) => col.append(card(m)));
+      cols.append(col);
+    });
+    graph.append(cols); board.append(graph);
+    const draw = () => {
+      svg.replaceChildren();
+      const box = cols.getBoundingClientRect();
+      svg.setAttribute("width", cols.scrollWidth); svg.setAttribute("height", cols.scrollHeight);
+      const pos = new Map([...cols.querySelectorAll(".rm-card")].map((c) => [c.dataset.id, c.getBoundingClientRect()]));
+      const rel = selected ? related(selected) : null;
+      vis.forEach((m) => (m.prereq || []).forEach((p) => {
+        const a = pos.get(p), b = pos.get(m.id); if (!a || !b) return;
+        const x1 = a.right - box.left, y1 = a.top + a.height / 2 - box.top, x2 = b.left - box.left, y2 = b.top + b.height / 2 - box.top, dx = Math.max(24, (x2 - x1) / 2);
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`);
+        if (rel) {
+          const hot = rel.has(p) && rel.has(m.id);
+          path.setAttribute("class", hot ? "hot" : "dim");
+          if (hot) path.style.setProperty("--c", cvar((trackOf.get(m.track) || {}).color));
+        }
+        svg.append(path);
+      }));
+      cols.querySelectorAll(".rm-card").forEach((c) => { c.classList.toggle("sel", c.dataset.id === selected); c.classList.toggle("dim", !!rel && !rel.has(c.dataset.id)); });
+    };
+    requestAnimationFrame(draw);
+    new ResizeObserver(draw).observe(cols);
+    redrawEdges = draw;
+  }
+  let redrawEdges = () => {};
+  function related(id) {
+    const out = new Set([id]);
+    const up = (x) => (byId.get(x).prereq || []).forEach((p) => { if (byId.has(p) && !out.has(p)) { out.add(p); up(p); } });
+    const down = (x) => (kids.get(x) || []).forEach((k) => { if (!out.has(k)) { out.add(k); down(k); } });
+    up(id); down(id);
+    return out;
+  }
+  function renderList(board) {
+    const wrap = h("div", "rm-list");
+    TRACKS.forEach((t) => {
+      const ms = MODS.filter((m) => m.track === t.id && visible(m)); if (!ms.length) return;
+      const g = h("section", "rm-group"); g.style.setProperty("--c", cvar(t.color));
+      const hh = h("h3"); hh.append(h("i"), t.name, h("small", "", `${ms.length} 모듈`));
+      const rows = h("div", "rm-rows");
+      ms.sort((a, b) => depth(a.id) - depth(b.id) || a.id.localeCompare(b.id)).forEach((m) => {
+        const r = h("div", "rm-row"), ti = h("button", "ti", m.title); ti.type = "button"; ti.dataset.id = m.id; ti.onclick = () => openDrawer(m.id, ti);
+        const sc = h("div");
+        chips(sc, [["todo", "예정"], ["doing", "진행"], ["done", "완료"]], () => st(m.id), (v) => setStatus(m.id, v), `${m.id} 상태`);
+        r.append(h("span", "id", m.id), ti, h("span", "meta", m.level), h("span", "meta", `${m.hours}h`), sc);
+        rows.append(r);
+      });
+      g.append(hh, rows); wrap.append(g);
+    });
+    if (!wrap.children.length) wrap.append(h("div", "rm-empty", "조건에 맞는 모듈이 없어요."));
+    board.append(wrap);
+  }
+  function render() {
+    renderStats(); renderTracks(); renderNext();
+    const board = document.getElementById("board"); board.replaceChildren();
+    redrawEdges = () => {};
+    (S.view === "list" ? renderList : renderPath)(board);
+    paintView(); paintFilter();
+  }
+  function setStatus(id, v) {
+    if (v === "todo") delete S.status[id]; else S.status[id] = v;
+    save(); render(); if (drawer.classList.contains("open")) fillDrawer(id);
+  }
+
+  /* ----- drawer ----- */
+  const drawer = document.getElementById("drawer"), scrim = document.getElementById("scrim");
+  let returnFocus = null;
+  function copy(text, note) {
+    const done = (msg) => { note.textContent = msg; };
+    const fallback = () => {
+      const ta = h("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0"; document.body.append(ta); ta.select();
+      let ok = false; try { ok = document.execCommand("copy"); } catch { ok = false; }
+      ta.remove(); done(ok ? "복사했어요" : "경로를 선택한 뒤 Ctrl+C로 복사하세요");
+    };
+    try { navigator.clipboard.writeText(text).then(() => done("복사했어요"), fallback); } catch { fallback(); }
+  }
+  function fillDrawer(id) {
+    const m = byId.get(id), t = trackOf.get(m.track) || {};
+    drawer.style.setProperty("--c", cvar(t.color)); drawer.replaceChildren();
+    const head = h("div", "rm-dh"), x = h("button", "rm-x", "×"); x.type = "button"; x.setAttribute("aria-label", "닫기"); x.onclick = closeDrawer;
+    const title = h("h3", "", m.title); title.id = "dtitle";
+    const meta = h("div", "meta"); [t.name, m.level, `${m.hours}시간`].forEach((s) => meta.append(h("span", "", s)));
+    head.append(h("div", "id", m.id), title, meta, x);
+    const body = h("div", "rm-db");
+    const sec = (label, ...nodes) => { const s = h("section"); s.append(h("h4", "", label), ...nodes); body.append(s); };
+    const sc = h("div"); chips(sc, [["todo", "예정"], ["doing", "진행 중"], ["done", "완료"]], () => st(id), (v) => setStatus(id, v), "진행 상태");
+    const stNodes = [sc];
+    if (!ready(m) && st(id) !== "done") stNodes.push(h("p", "rm-warn", "아직 끝나지 않은 선수 모듈: " + m.prereq.filter((p) => st(p) !== "done").join(", ")));
+    sec("진행 상태", ...stNodes);
+    if ((m.outcomes || []).length) { const ul = h("ul"); m.outcomes.forEach((o) => ul.append(h("li", "", o))); sec("학습 목표", ul); }
+    const linkList = (ids) => {
+      const box = h("div", "rm-links");
+      ids.forEach((pid) => { const pm = byId.get(pid); if (!pm) return; const b = h("button", "rm-link"); b.type = "button";
+        b.style.setProperty("--c", cvar((trackOf.get(pm.track) || {}).color)); b.append(statusBadge(pid), h("span", "id", pid), pm.title);
+        b.onclick = () => { selectCard(pid); fillDrawer(pid); }; box.append(b); });
+      return box;
+    };
+    if ((m.prereq || []).length) sec("선수 모듈", linkList(m.prereq));
+    if ((kids.get(id) || []).length) sec("이어지는 모듈", linkList(kids.get(id)));
+    if ((m.refs || []).length) { const ul = h("ul"); m.refs.forEach((r) => ul.append(h("li", "", r))); sec("교재·자료", ul); }
+    if (m.page) {
+      const row = h("div", "rm-path"), code = h("code", "", m.page), btn = h("button", "btn", "경로 복사"), note = h("p", "rm-hint", "앱 사이드바에서 이 경로의 페이지를 여세요.");
+      btn.type = "button"; btn.onclick = () => copy(m.page, note); row.append(code, btn); sec("강의 페이지", row, note);
+    } else {
+      sec("강의 페이지", h("p", "rm-hint", `아직 없음 — 사내 LLM에 "${m.id} ${m.title} 강의 만들어줘"(lecture-html 스킬)로 요청하세요.`));
+    }
+    const ta = h("textarea"); ta.value = S.memo[id] || ""; ta.placeholder = "막힌 곳, 다시 볼 식, 업무에 쓸 아이디어…"; ta.setAttribute("aria-label", "메모");
+    ta.oninput = () => { if (ta.value.trim()) S.memo[id] = ta.value; else delete S.memo[id]; save(); };
+    sec("메모", ta);
+    drawer.append(head, body);
+  }
+  function selectCard(id) { selected = id; redrawEdges(); }
+  function openDrawer(id, from) {
+    returnFocus = from || document.activeElement; selectCard(id); fillDrawer(id);
+    drawer.classList.add("open"); scrim.classList.add("open"); drawer.focus({ preventScroll: true });
+  }
+  function closeDrawer() {
+    drawer.classList.remove("open"); scrim.classList.remove("open"); selected = null; redrawEdges();
+    const id = returnFocus && returnFocus.dataset && returnFocus.dataset.id;
+    const again = id && document.querySelector(`#board [data-id="${id}"]`);
+    (again || returnFocus || q).focus({ preventScroll: true });
+  }
+  scrim.onclick = closeDrawer;
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && drawer.classList.contains("open")) { e.preventDefault(); closeDrawer(); return; }
+    if (e.key === "/" && !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) { e.preventDefault(); q.focus(); }
+  });
+  q.addEventListener("input", () => render());
+
+  let paintView = () => {}, paintFilter = () => {};
+  async function boot() {
+    setSave("busy");
+    const paintTheme = chips(document.getElementById("theme"), [["auto", "자동"], ["light", "밝게"], ["dark", "어둡게"]], () => S.theme, (v) => { S.theme = v; applyTheme(); save(); requestAnimationFrame(() => redrawEdges()); }, "테마");
+    paintView = chips(document.getElementById("view"), [["path", "경로"], ["list", "목록"]], () => S.view, (v) => { S.view = v; save(); render(); }, "보기");
+    paintFilter = chips(document.getElementById("sfilter"), [["all", "전체"], ["todo", "남은 것"], ["doing", "진행 중"], ["done", "완료"]], () => S.sfilter, (v) => { S.sfilter = v; save(); render(); }, "상태");
+    render();
+    await load();
+    applyTheme(); paintTheme(); render(); setSave(mode);
+  }
+  boot();
+})();
+</script>
+<!-- mi-lecture-runtime:end -->
+</body>
+</html>

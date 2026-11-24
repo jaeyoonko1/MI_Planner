@@ -2,6 +2,18 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Codex · V-011 요구 등록
+- 한 일: 사용자의 Jira식 애자일 업무 구조 요구를 단일 VOC V-011(개선, 우선순위 1 추정, L, 대기)로 등록. 모든 계층의 구조 내 이슈 생성·수정·삭제, 상위 소속/헤더 동기화, 분류 삭제 불가 조사, 임시 헤더 명칭 및 수용 기준을 기록. 구현 완료 처리는 하지 않음.
+- 바뀐 파일: docs/VOC.md, project_flow.html, docs/WORKLOG.md
+- 검증: 문서와 FLOW의 V-011 단일 항목·대기/미완료 일치 및 diff 확인. 요구 등록만 수행하여 pytest 재실행 안 함. 직전 현황 점검의 전체 테스트는 455 passed / 2 failed(tzdata 누락에 따른 test_flow_site 실패).
+- 다음에 할 것 / 막힌 것: V-011 구현 착수 시 DESIGN/SPEC·기존 계층 모델을 확인하고 이관·삭제 정책과 헤더 명칭을 구체화. 이번 변경은 요구 등록 범위.
+
+## 2026-11-24 · Claude Code(Opus) · P7-07
+- 한 일: `lecture-html` 스킬. SKILL.md — 입력(모듈 ID·수준·참고 자료, 링크는 열지 않음), **뼈대 표(목표·절·위젯·확인 문제) 먼저 확인** → 템플릿으로 새 페이지 → 본문(직관→식→해석→현업 연결, MathML 수식, 위젯 API, 오개념을 겨냥한 문제, 수치는 위젯 계산과 일치) → check → 로드맵 sync → 보고. 공용 런타임(`templates/lecture.html`의 `mi-lecture-runtime` 블록, 외부 요청 0): 상단 바(진행 링·저장 상태·테마 칩 자동/밝게/어둡게), 목차 스크롤 추적(J/K), 절 "이해했어요" 토글, 확인 문제(정답·해설·다시 풀기), 위젯 도구(`ui.slider/chips/plot/field/readout`, 캔버스 HiDPI·테마 색), 수학(`besselJ/airy/…`), 상태는 앱 iframe이면 postMessage → `_state.json`, 파일로 열면 localStorage(try), 아니면 메모리. 예시 강의 `examples/optics_resolution.html`(OPT5 회절 한계와 분해능: Airy PSF·두 점 분해·MTF 위젯 3, 문제 3). 스터디 로드맵 `templates/roadmap.html`(7트랙 38모듈 408시간: 선형대수·광학·고체물리·빛-물질·AI·영상처리·MI 종합, 데이터는 `roadmap-data` JSON 블록만): 트랙 카드·진행 통계·다음에 할 것·경로 그래프(선수 관계 SVG 곡선, 선택 시 선후 모듈 강조)/목록 보기, 상태·검색 칩, 상세 서랍(상태 토글 칩·목표·선수/이어지는 모듈·교재·강의 경로 복사·메모). 도우미 `scripts/lecture_html.py`: `new --kind lecture|roadmap`(기본 미리보기, `--apply`는 `Vault.create`로 새 html 페이지만, `--from`, `--make-parent`, check 오류가 있으면 거부), `check`(외부 요청·파일 참조·`<script src>`·alert/confirm/prompt·fetch·등록 안 된 위젯·정답 없는 문제·`<select>`(D-12)·브라우저 저장소 직접 사용·로드맵 id/선수/순환), `sync`(강의 `_page.json`의 `module`로 로드맵 `page` 연결, 적용 시 `vault/.backup/lecture-html/` 백업 후 데이터 블록만 수정), `modules`.
+- 바뀐 파일: skills/(lecture-html/SKILL.md, lecture-html/scripts/lecture_html.py, lecture-html/templates/(lecture, roadmap).html, lecture-html/examples/optics_resolution.html, README.md), tests/test_skill_lecture_html.py, docs/(SPEC, WORKLOG), project_flow.html
+- 테스트: pytest 454 passed(test_flow_site 제외), 신규 tests/test_skill_lecture_html.py 8건(node --check 포함), `python scripts/check_skills.py` OK. 격리 vault로 앱 내 브라우저: 앱 iframe 안에서 강의 표시·"저장됨"(상태 브리지)·MathML·위젯, 파일 단독으로 칩·문제·이해 토글·localStorage 저장, 수치 검증(레일리 골 26.5%, MTF 15.4%), 라이트·다크, 로드맵 그래프·강조·서랍.
+- 다음에 할 것 / 막힌 것: iframe은 앱의 수동 테마 설정을 모름(OS 테마를 따름 — 페이지 안 테마 칩으로 보완, 앱이 postMessage로 테마를 알려 주면 해결: 별도 작업). 샌드박스라 로드맵에서 강의 페이지로 바로 이동 불가(경로 복사만). 사내 LLM의 실제 작성 품질·회사 PC 브라우저는 VERIFY P7-07. 다음은 P7-05/P7-08(사내LLM) 또는 남은 Opus 작업.
+
 ## 2026-11-24 · Claude Code(Opus) · P7-06
 - 한 일: `paper-patent` 스킬. SKILL.md — 종류(paper/patent/asset) 판단, 처음 묻는 것(종류·핵심 주장 한 문장·제목·위치), 자료 모으기 → **논리 뼈대(주장→근거 표) 먼저 확인** → 뼈대 페이지 → 본문(이론·시뮬레이션·실험·데이터·시각화·논리 축별 기준, 숫자 문장 출처 규칙, 청구항 작성 규칙) → 검사 → 보고. 도우미 `scripts/paper_patent.py`(표준 라이브러리 + `app.vault`): `refs`(vault 페이지·md/txt/html/csv/tsv/json·폴더를 R1..Rn으로, UTF-8/CP949, 링크는 열지 않고 `links`로, PDF·Office는 `skipped`로 본문 복사 안내, csv는 열·행 수), `outline --kind --title [--refs] [--parent 성과] [--apply]`(기본 미리보기, `--apply`는 `Vault.create`로 새 노트 페이지만 — 이름이 겹치면 `(2)`, `_page.json`에 `skill`·`doc_kind`), `check`(빠진 장, 정의 안 된/안 쓴 `[R#]`, 남은 `[확인 필요]`, 출처 없는 수치 문장, 외부 링크, 청구항 번호·인용 순서·`상기 X` 선행 도입). 예시 `skills/paper-patent/examples/refs/`(가짜 데이터).
 - 바뀐 파일: skills/(paper-patent/SKILL.md, paper-patent/scripts/paper_patent.py, paper-patent/examples/refs/*, README.md), tests/test_skill_paper_patent.py, docs/(SPEC, WORKLOG), project_flow.html

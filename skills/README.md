@@ -38,5 +38,5 @@ description: 한두 문장. 무엇을 하고, 언제 쓰는지(사용자가 할 
 | `fill-table` | 완료 (P7-04) — raw data로 노트 표·현황판 값 채우기(미리보기 → `--apply`, `scripts/fill_table.py`) |
 | `pptx-company` | P7-05 |
 | `paper-patent` | 완료 (P7-06) — 참고 자료 → 논문·특허·기술자산화 초안 페이지(`scripts/paper_patent.py` refs·outline·check) |
-| `lecture-html` | P7-07 |
+| `lecture-html` | 완료 (P7-07) — 오프라인 interactive 강의·스터디 로드맵 html 페이지(`scripts/lecture_html.py` new·check·sync·modules, 템플릿 `templates/`, 예시 `examples/optics_resolution.html`) |
 | `recipe-parser-maker` | P7-08 |
