@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P4-07
+- 한 일: 평가 템플릿 편집 창(`#/evaluations`의 `템플릿 편집`)과 현황판 엑셀 내보내기. 편집은 P2B-07과 같은 초안·적용/취소 방식: 단계 추가·이름·순서(↑↓, Alt+↑↓)·삭제(사용 중이면 영향 확인), 단계별 경고 기본 시간(비우면 끔), 색 팔레트(색 이름·번호 병기), 값 항목 추가·이름·입력 방식 토글 칩·순서·삭제, 마스터 지정, 복사해서 새 템플릿, 템플릿 지우기(마스터 제외). 현황판 요약에 `새 마스터로 저장`(평가의 단계·값 항목을 템플릿으로 복사)과 `엑셀 내보내기`.
+- 서버: `GET /api/eval-templates/{id}/usage`, `DELETE /api/eval-templates/{id}`, `POST /api/evaluations/{id}/save-as-template`, `GET /api/evaluations/{id}/export.xlsx`. 엑셀은 표준 라이브러리(`app/xlsx.py`, `app/eval_export.py`)로 요약·칸 목록·설비별 단계 3시트를 쓴다(새 의존성 없음, D-31). 마이그레이션 없음.
+- 바뀐 파일: app/(xlsx, eval_export, repositories/eval_templates, routers/eval_templates, routers/evaluations).py, web/js/(eval-templates, eval-template-model, eval-board, evaluations, api).js, web/css/evaluations.css, web/index.html(download 아이콘), web/test/run_eval_template.mjs, tests/(test_eval_export, test_lineeditor_js).py, docs/(SPEC, DECISIONS), project_flow.html.
+- 테스트: pytest 197 passed(xlsx를 zipfile+ElementTree로 다시 읽어 모든 파트 XML 파싱·시트·헤더·값·제외 칸 확인, 사용 현황·지우기·마스터 저장, Node 편집 모델). Edge 앱 내 브라우저(가짜 데이터)에서 다크/라이트, 경고 시간 적용, 사용 중 단계 삭제 확인 창, 이름 비움 검증·적용 막힘, Esc 취소 시 서버 불변, 새 마스터 저장, 내보내기 링크 응답(200·첨부·한글 파일명) 확인.
+- 다음에 할 것 / 막힌 것: 실제 Excel에서 열기는 미확인(VERIFY). 단계를 지워도 기존 평가는 그대로이고 평가 안의 단계 편집(추가·삭제)은 없음. 템플릿 단계 전체를 이미 만든 평가에 반영하는 기능 없음. 값 항목 키는 이름을 바꿔도 유지. 편집 창에서 드래그 순서 변경은 없음(↑↓·Alt+↑↓만). 마스터 지정 해제는 다른 템플릿을 마스터로 지정해서만 가능(서버 규칙).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P4-06
 - 한 일: 단계별 대기 시간과 경고. `app/eval_wait.py`(순수 규칙: 대기=지금−최신 진입 이력, 달력 시간, 오프셋 없는 시각은 Asia/Seoul, 임계 초과 1단계·2배 초과 2단계)와 `web/js/eval-wait-model.js`(같은 규칙 + 표기·요약·이력 머문 시간). 보드 API에 `now`·칸별 `wait_h`·`warn`, `PUT /api/evaluations/{id}/warn-hours`(평가가 복사한 단계에 저장, 칸에는 저장 안 함 D-09). 마이그레이션 없음.
 - UI: `대기 경고` 토글 칩 + `경고 기준` 편집 패널, 설비별 칸 배지·Lot별 개수 배지·단계별 정렬, 요약 블록, 칸 패널 대기 배지와 이력별 머문 시간. 경고는 색 외에 아이콘(시계/삼각)·점선/실선·시간 글자·aria 문장으로 구분.

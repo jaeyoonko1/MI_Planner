@@ -268,3 +268,54 @@ td[data-id]:hover { background: color-mix(in srgb, var(--stage, var(--blue)) 24%
   .w1 .eb-w, .w2 .eb-w { border-color: CanvasText; color: CanvasText; }
 }
 .eb-wstages { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 22px; }
+
+/* ── template editor + export (P4-07). Tokens only; color is never the sole cue (number + name + color name). ── */
+.eb-sum-head .grow { flex: 1; }
+.eb-export, .eb-master { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.tpl-sheet .sheet-b { padding-bottom: 18px; }
+.tpltools { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.tpltools .btn { display: inline-flex; align-items: center; gap: 6px; }
+.tpl-sheet .tpltools .btn.danger:not(:disabled) { color: var(--red); }
+.tplrow2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tplname { height: 34px; padding: 0 11px; min-width: 0; flex: 1; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; }
+.tplname.wide { flex: 1 1 240px; }
+.tplname:focus-visible, .tplwarn:focus-visible, .tpladd input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.tplname[aria-invalid="true"] { border-color: var(--red); }
+.tplhead { display: flex; gap: 8px; padding: 0 8px 4px; font-size: 11px; color: var(--dim); }
+.tplhead span:first-child { width: 72px; }
+.tplhead span:last-child { width: 128px; text-align: right; }
+.tpllist { list-style: none; margin: 0; padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-2); display: grid; gap: 2px; }
+.tplcell { display: grid; }
+.tplrow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 10px; border: 1px solid transparent; }
+.tplrow.on { background: var(--sel-bg); border-color: var(--sel-bd); }
+.tplrow:focus-within { background: var(--hover); }
+.tplnum { width: 18px; text-align: center; font: 11px var(--mono); color: var(--dim); flex: none; }
+.tplsw { width: 44px; height: 30px; flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 6px; font: 600 11px var(--mono); color: var(--text-2); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; cursor: pointer; }
+.tplsw .tpldot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); box-shadow: 0 0 0 1px var(--line-2); }
+.tplsw:hover { border-color: var(--blue); }
+.tplsw:focus-visible, .tplrow .ib:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.tplwarn { width: 62px; height: 34px; padding: 0 8px; text-align: right; font: 12.5px var(--mono); color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; flex: none; }
+.tplunit { font-size: 11.5px; color: var(--dim); width: 30px; flex: none; }
+.tplrow .ib.sm { width: 28px; height: 28px; flex: none; }
+.tplrow .tpldel:hover:not(:disabled) { color: var(--red); }
+.tplrow.fld { flex-wrap: wrap; }
+.tpltypes { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.tpltypes .chip { min-height: 26px; padding: 2px 10px; font-size: 11.5px; }
+.tplpal { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 8px 10px 34px; align-items: center; }
+.tplpal .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; font-size: 11.5px; }
+.tplpal .dot { width: 10px; height: 10px; border-radius: 3px; box-shadow: 0 0 0 1px var(--line-2); }
+.tplpal .hint { flex-basis: 100%; margin: 0; }
+.tplerr:empty, .tplnameerr:empty { display: none; }
+.tplerr { padding: 0 8px 4px 34px; margin: 0; }
+.tpladd { display: flex; gap: 8px; margin-top: 10px; }
+.tpladd input { flex: 1; min-width: 0; height: 34px; padding: 0 11px; font: inherit; font-size: 13px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; }
+.tplstat { margin: 0; font-size: 12px; color: var(--muted); }
+.tplstat.bad { color: var(--warn-fg); }
+.tplstat.bad::before { content: "⚠ "; }
+.tpl-sheet .chip:disabled { opacity: .5; cursor: default; }
+@media (max-width: 720px) { .tplhead { display: none; } .tplpal { padding-left: 8px; } }
+.sheet.tpl-sheet { width: min(760px, calc(100vw - 32px)); }
+.tpl-save .sheet-b { display: grid; gap: 8px; padding-top: 10px; }
+.tpl-save .sheet-b h3 { margin: 6px 0 0; font-size: 12px; font-weight: 650; letter-spacing: .02em; color: var(--text-2); }
+.tpl-save .sheet-b p { margin: 0; }
+.tpl-save .tplname { width: 100%; flex: none; }

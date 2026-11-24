@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { renderBoard } from "./eval-board.js";
+import { openTemplateEditor } from "./eval-templates.js";
 import { parseEquipment, parseLots } from "./evaluation-input.js";
 import { button, openSheet } from "./sheet.js";
 import { chipRow, el, emptyState, errorState, skeleton, svg } from "./ui.js";
@@ -254,7 +255,9 @@ export async function renderEvaluations(host, { onAdd, pageHref }) {
   title.append(eyebrow, el("h1", "h1", "평가 현황판"));
   const add = button("평가 만들기", "pri", onAdd);
   add.prepend(svg("plus"));
-  hero.append(title, add);
+  const templates = button("템플릿 편집", "", () => openTemplateEditor());
+  templates.prepend(svg("hier"));
+  hero.append(title, templates, add);
   const content = el("div", "eval-list");
   content.append(skeleton(3));
   page.append(hero, content);

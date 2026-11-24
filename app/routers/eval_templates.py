@@ -74,3 +74,14 @@ def update_template(
     template_id: int, body: TemplatePatch, conn: sqlite3.Connection = Depends(get_conn)
 ) -> dict:
     return repo.update_template(conn, template_id, body.model_dump(exclude_unset=True))
+
+
+@router.get("/{template_id}/usage")
+def template_usage(template_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return repo.stage_usage(conn, template_id)
+
+
+@router.delete("/{template_id}")
+def delete_template(template_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    repo.delete_template(conn, template_id)
+    return {"deleted": template_id}

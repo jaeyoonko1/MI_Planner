@@ -5,6 +5,7 @@ import {
   stageCounts, visibleRows,
 } from "./eval-board-model.js";
 import { createPanel } from "./eval-panel.js";
+import { openSaveAsTemplate } from "./eval-templates.js";
 import {
   allIds, applyChanged, columnIds, locate, lotIds, mergeSelection, pruneSelection, rectIds, rowIds,
 } from "./eval-select-model.js";
@@ -95,7 +96,17 @@ function summary(board, onRefresh, warnOn = true) {
   refresh.type = "button";
   refresh.prepend(svg("refresh"));
   refresh.addEventListener("click", onRefresh);
-  head.append(big, text, refresh);
+  const exportLink = el("a", "btn sm quiet eb-export", "엑셀 내보내기");
+  exportLink.href = `/api/evaluations/${evaluation.id}/export.xlsx`;
+  exportLink.setAttribute("download", "");
+  exportLink.title = "칸 목록·설비별 단계·요약을 .xlsx 파일로 저장해요";
+  exportLink.prepend(svg("download"));
+  const saveMaster = el("button", "btn sm quiet eb-master", "새 마스터로 저장");
+  saveMaster.type = "button";
+  saveMaster.title = "이 평가의 단계·값 항목을 템플릿으로 복사해요";
+  saveMaster.prepend(svg("copy"));
+  saveMaster.addEventListener("click", () => openSaveAsTemplate(evaluation));
+  head.append(big, text, el("span", "grow"), exportLink, saveMaster, refresh);
   const bar = el("div", "eb-bar");
   bar.setAttribute("role", "img");
   bar.setAttribute("aria-label", "단계별 분포: " + [...board.stages, { key: UNASSIGNED, label: "미배정" }]

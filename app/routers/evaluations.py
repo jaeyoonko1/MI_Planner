@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import sqlite3
 from typing import Annotated, Any
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field, StrictFloat, StrictInt, StringConstraints, model_validator
 
+from app import eval_export
+from app.repositories import eval_templates as template_repo
 from app.repositories import evaluations as repo
 from app.routers.tasks import get_conn
 
@@ -75,6 +78,27 @@ class WarnHoursBody(BaseModel):
 @router.put("/{evaluation_id}/warn-hours")
 def put_warn_hours(evaluation_id: int, body: WarnHoursBody, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     return repo.set_warn_hours(conn, evaluation_id, body.warn_hours)
+
+
+@router.get("/{evaluation_id}/export.xlsx")
+def export_xlsx(evaluation_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> Response:
+    board = repo.get_board(conn, evaluation_id)
+    data = eval_export.build_xlsx(board, board["now"])
+    unsafe = set('\\/:*?"<>|')
+    stem = "".join("_" if ch in unsafe or ord(ch) < 32 else ch for ch in board["evaluation"]["name"]).strip(". ")
+    filename = quote((stem[:80] or "평가") + ".xlsx")
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f"attachment; filename=evaluation.xlsx; filename*=UTF-8''{filename}"})
+
+
+class SaveTemplateBody(BaseModel):
+    name: Name
+    is_master: bool = True
+
+
+@router.post("/{evaluation_id}/save-as-template", status_code=201)
+def save_as_template(evaluation_id: int, body: SaveTemplateBody, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    return template_repo.from_evaluation(conn, evaluation_id, body.name, body.is_master)
 
 
 @router.get("/{evaluation_id}")

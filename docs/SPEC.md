@@ -333,6 +333,11 @@ vault/
   - 화면: 토글 칩 `대기 경고`(기본 켬, 브라우저 설정 `mi.board.prefs.warn`)과 `경고 기준` 칩(단계별 시간 입력 패널, 마지막 단계는 제외). 경고 칸은 색에만 의존하지 않는다: 경고 = 시계 아이콘 + 대기 시간 + 점선 테두리 배지·위쪽 가는 선, 심각 = 경고 삼각 아이콘 + 대기 시간 + 실선 굵은 테두리 배지·위쪽 굵은 선, 칸 `aria-label`에 "대기 3일 (경고: 기준 24시간 초과)" 문장 포함. 설비별 보기는 칸 안 배지, Lot별 보기는 칸의 경고·심각 개수 배지, 단계별 보기는 단계 안에서 오래 기다린 칸부터 정렬하고 대기 시간을 표시한다.
   - 요약: 가장 오래 기다리는 칸(항상 표시)과 경고·심각 칸 수·단계별 최장 대기(경고 켬일 때). 칸 패널: 단일 칸에 대기 배지(켬이면 경고 문구 포함)와 이력 항목별 "머문 시간", 다중 선택에는 가장 오래 기다린 칸과 경고 수.
   - 자동 갱신 없음: 화면을 연 채로 시간이 지나도 `새로고침`이나 단계 변경 전까지 대기 시간은 그대로다.
+- **템플릿 편집·엑셀 내보내기 구현 (P4-07)**
+  - `GET /api/eval-templates/{id}/usage` → `{template_id, evaluation_count, stages:{단계키:{evaluations, cells}}}`: 평가는 템플릿의 복사본이라 연결 행이 없고, 단계 키가 같은 평가 수와 지금 그 단계에 있는 칸(제외 제외) 수를 센다. `DELETE /api/eval-templates/{id}`는 마스터가 아닐 때만 지우며(마스터 409, 없으면 404) 이미 만든 평가는 그대로다.
+  - `POST /api/evaluations/{id}/save-as-template` `{name, is_master?=true}` → 201 템플릿. 그 평가가 가진 단계(경고 기준 포함)·값 항목을 새 템플릿으로 복사한다. 마스터로 저장하면 기존 마스터는 일반 템플릿이 된다.
+  - 화면: 평가 현황판 목록의 `템플릿 편집`(`web/js/eval-templates.js`, 모델 `eval-template-model.js`). P2B-07과 같은 초안 방식: 편집은 초안에서만, `적용`(한 번의 PATCH)·`취소`/Esc/바깥 클릭은 서버를 건드리지 않고 버림. 초안이 있으면 다른 템플릿으로 전환·복사가 막힌다. 단계 추가·이름 바꾸기·↑↓/Alt+↑↓로 순서·삭제(사용 중이면 영향 확인 창)·단계별 경고 기본 시간(비우면 끔)·색 고르기(색 이름 병기, 번호와 이름이 항상 같이 보임), 값 항목 추가·이름·입력 방식 토글 칩(숫자/글자/OK·NG/체크)·순서·삭제. 단계 키는 이름을 바꿔도 유지되고 새 단계는 `stage_N`, 새 값 항목은 `field_N`. 이름·경고 시간 오류가 있으면 적용 불가. 드롭다운 없음(D-12). 평가 현황판 요약의 `새 마스터로 저장`은 위 save-as-template을 부르는 창이다.
+  - `GET /api/evaluations/{id}/export.xlsx`: 현황판 한 평가를 .xlsx로 내려준다(`Content-Disposition` 첨부, 한글 파일명은 `filename*`). 시트 3개: `요약`(이름·상태·내보낸/대기 기준 시각·개수·단계별 칸 수·경고 기준·경고/심각 칸), `칸 목록`(설비·설비사·Lot·웨이퍼·단계·제외·단계 진입 시각·대기(시간)·대기 상태 + 값 항목 열 + 메모, 머리글 고정·자동 필터, 제외 칸도 나열), `설비별 단계`(Lot·웨이퍼 행 × 설비 열, 칸에 단계명 또는 `제외`). 대기·경고는 보드 조회와 같은 계산(D-09)이고 숫자는 숫자 셀, OK/NG·체크는 `OK`/`NG`·`예`/`아니오`. 표준 라이브러리만 쓰는 `app/xlsx.py`(zipfile+XML, 새 의존성 없음)와 `app/eval_export.py`.
 
 ### 4.4 Lot 상태 (MOS) (P4)
 - **붙여넣기 어댑터**: MOS 화면에서 복사한 표를 붙여넣으면 Lot 번호·step·Hold·위치를 읽어 `lot_status`에 시각과 함께 저장. 열 매핑은 처음 한 번 지정.
@@ -546,7 +551,8 @@ GET    /api/journal/{yyyy-mm}/auto   # 자동 표시 데이터
 GET/POST /api/tasks              PATCH/DELETE /api/tasks/{id}
 POST   /api/tasks/from-line      # 일지 줄 승격
 # 평가
-GET/POST /api/eval-templates     PATCH /api/eval-templates/{id}
+GET/POST /api/eval-templates     PATCH/DELETE /api/eval-templates/{id}   GET /api/eval-templates/{id}/usage
+POST   /api/evaluations/{id}/save-as-template   GET /api/evaluations/{id}/export.xlsx
 GET/POST /api/evaluations        GET /api/evaluations/{id}/board
 POST   /api/evaluations/{id}/cells/stage   # {cell_ids[], stage_key}
 PATCH  /api/eval-cells/{id}               # values, note
