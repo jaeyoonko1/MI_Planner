@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { hub } from "./hub.js";
 import { mountEditor } from "./note.js";
 import { mountNoteColumns } from "./note-columns.js";
+import { classRows, toggleMulti } from "./inspector-fields.js";
 import { openPageSheet } from "./pagedialog.js";
 import { toast } from "./toast.js";
 import { chipRow, dateChoices, el, fmtMD, svg } from "./ui.js";
@@ -68,21 +69,22 @@ export async function openInspector(id) {
     if (fresh.memo_merged) {
       toast("메모와 페이지 본문이 달라 하나로 합쳤어요 · 이전 메모는 '통합 전 이슈 메모' 아래에 그대로 있어요", { ms: 9000 });
     }
-    if (!fields) fields = await api.todoFields().catch(() => []);
+    fields = await loadFields();
   } catch (e) {
     toast(`상세를 열지 못했어요 · ${e.message}`, { error: true });
     openId = null;
     return;
   }
   paint(true);
-  unsub = hub.on((info) => { if (info.kind === "task" || info.kind === "day") refresh(); });
+  unsub = hub.on((info) => { if (info.kind === "task" || info.kind === "day" || info.kind === "fields") refresh(info.kind === "fields"); });
   p.classList.add("open");
   p.removeAttribute("aria-hidden");
 }
 
 // Re-read the task after someone else changed it; never clobber a field that is being typed in.
-async function refresh() {
+async function refresh(reloadFields = false) {
   if (openId == null) return;
+  if (reloadFields) fields = await loadFields();
   try { hub.putTask(await api.getTodo(openId)); } catch { /* deleted: close below */ return closeInspector(); }
   if (panel.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
   if (memo?.ctl.contains(document.activeElement)) { memo.ctl.syncFrom(hub.task(openId)?.note || ""); return; }
@@ -95,6 +97,44 @@ async function write(data) {
   } catch (e) {
     toast(`저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: () => write(data) } });
   }
+}
+
+// Always read from the server: classifications are edited in 분류 관리 / 계층 편집 while an issue can stay open.
+// A failed read keeps the last good list instead of caching an empty one.
+async function loadFields() {
+  try { return await api.todoFields(); } catch (e) {
+    if (!fields) toast(`분류를 불러오지 못했어요 · ${e.message}`, { error: true });
+    return fields || [];
+  }
+}
+
+function classRow(r) {
+  const write1 = (v) => write({ props: { [r.key]: v } });
+  if (r.empty) {
+    const go = el("a", "chip-link", "선택지 추가");
+    go.href = "#/structure/classes";
+    go.addEventListener("click", () => closeInspector());
+    return row(r.label, "tag", el("span", "chip-note warn", "선택지가 없어요"), go);
+  }
+  const wrap = el("div", "chips");
+  wrap.setAttribute("role", "group");
+  wrap.setAttribute("aria-label", r.label);
+  const chip = (label, pressed, onClick, c) => {
+    const b = el("button", "chip", label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(pressed));
+    if (c?.depth) { b.classList.add("sub"); b.style.setProperty("--depth", c.depth); }
+    if (c?.orphan) { b.classList.add("orphan"); b.title = "선택지 목록에서 사라진 값이에요 · 눌러 해제"; }
+    b.addEventListener("click", onClick);
+    return b;
+  };
+  if (r.type === "choice") {
+    wrap.append(chip("없음", r.current == null, () => write1(null)));
+    for (const c of r.chips) wrap.append(chip(c.label, c.value === r.current, () => write1(c.orphan ? null : c.value), c));
+  } else {
+    for (const c of r.chips) wrap.append(chip(c.label, r.current.includes(c.value), () => write1(toggleMulti(r.current, c.value).filter((v) => v !== undefined)), c));
+  }
+  return row(r.label, "tag", wrap);
 }
 
 function row(label, iconId, ...content) {
@@ -192,28 +232,7 @@ function paint(focusTitle) {
       chipRow([[null, "없음"], ...who.map((w) => [w, w])], t.requester ?? null, (v) => write({ requester: v })), reqInput),
   );
   props.append(pageRow(t));
-  for (const f of fields || []) {
-    if (f.builtin || f.archived || !["choice", "multi"].includes(f.type)) continue;
-    const cur = t.props?.[f.key];
-    const items = f.options.map((o) => [o.value, o.label]);
-    if (f.type === "choice") {
-      props.append(row(f.label, "tag", chipRow([[null, "없음"], ...items], cur ?? null, (v) => write({ props: { [f.key]: v } }))));
-    } else {
-      const set = new Set(cur || []);
-      const wrap = el("div", "chips");
-      for (const [v, l] of items) {
-        const b = el("button", "chip", l);
-        b.type = "button";
-        b.setAttribute("aria-pressed", String(set.has(v)));
-        b.addEventListener("click", () => {
-          set.has(v) ? set.delete(v) : set.add(v);
-          write({ props: { [f.key]: [...set] } });
-        });
-        wrap.append(b);
-      }
-      props.append(row(f.label, "tag", wrap));
-    }
-  }
+  for (const r of classRows(fields, t.props)) props.append(classRow(r));
 
   const memoWrap = el("div", "memo-wrap");
   const memoHead = el("div", "memo-h");

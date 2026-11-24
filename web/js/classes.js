@@ -1,6 +1,7 @@
 // Classification manager (P2B-07). This is the only place a definition or option is deleted.
 // "구조 보기에서 제외" (view only) and "삭제" are separate, and every deletion shows its impact first.
 import { api } from "./api.js";
+import { hub } from "./hub.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
 import { el, emptyState, svg } from "./ui.js";
@@ -49,6 +50,7 @@ export async function renderClasses(host, { reload }) {
 
   async function after(msg, opts) {
     if (msg) toast(msg, opts);
+    hub.emit({ kind: "fields" });
     await reload();
   }
 

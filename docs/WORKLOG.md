@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-006
+- 한 일: 이슈 상세에서 에픽·유형(분류) 값이 안 보이고 선택지가 '없음'만 뜨던 버그. 원인: `inspector.js`가 분류 목록을 모듈 변수에 한 번만 읽어 캐시(`if (!fields)`; 첫 읽기 실패 시 `[]`까지 영구 캐시) — 이후 분류 관리·계층 편집으로 만든 '제품' 같은 분류·선택지가 반영되지 않았고, 현재 값이 선택지에서 빠진(보관·삭제) 경우도 값이 사라져 보였음. 수정: 열 때마다 서버에서 다시 읽고(실패 시 마지막 좋은 목록 유지), 분류 관리·계층 적용 시 `hub.emit({kind:"fields"})`로 열린 상세를 즉시 갱신. 순수 모델 `web/js/inspector-fields.js`(활성 choice/multi 분류 전부, 하위 선택지 들여쓰기, 보관 선택지 숨김 단 현재 값이면 표시, 사라진 값은 점선 칩, 선택지 0개는 '선택지가 없어요 + 선택지 추가' 링크, '없음'은 해제 칩으로만).
+- 바뀐 파일: web/js/(inspector, inspector-fields, classes, leveldialog).js, web/css/screens.css, web/test/run_inspector_fields.mjs, tests/test_inspector_fields.py, docs/(VOC, WORKLOG), project_flow.html
+- 테스트: pytest 359 passed(신규 3). 격리 DB 가짜 데이터로 앱 내 브라우저에서 확인: 에픽 현재 값 표시, 선택지 없는 분류 안내, 선택지 추가 후 즉시 칩 갱신·선택·저장. 라이트 테마는 VERIFY.
+- 다음에 할 것 / 막힌 것: 주간·월간·할일·구조 화면은 모두 같은 `openInspector`를 쓰므로 같이 고쳐짐.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P6-03
 - 한 일: 범용 파서 + 매핑 + 수집 연결(D-38, 새 패키지·마이그레이션 없음). `parsers/generic.py`: `xml`(DOCTYPE·ENTITY 전체 거부, 깊이·요소 수 한도, 루트 생략 경로·속성 `@`·반복 `[n]`·네임스페이스 제거, 옵션 `key_attr`)·`ini`(줄 번호 보존, 직접 읽기)·`txt`(kv/table/fixed 모드), 인코딩 UTF-16·UTF-8(BOM)·CP949·Latin-1, 바이너리 거부. `parsers/mapping.py`: `file_rule`·`apply`(ignore → 매핑 항목 먼저 매핑 순서 → 나머지, `show_unmapped`, 숫자 경고)·`available`·`find_for`(설비사·모델 자동 선택)·`options` 검증. `app/rcp_parse.py`: `parse_one`(절대 예외 없음, 한국어 오류)·`parse_files`(blob 읽기·경로 이탈/해시 검사)·`reparse_snapshot`/`reparse_source`(제자리 갱신, 새 버전 없음)·`parse_state`(낡음). 수집: 새 버전일 때만 파싱, 실패 파일은 `파싱 실패`로 목록에 남고 실행은 계속·`missing` 영향 없음. API `GET /api/recipe-mappings`, `POST …/reparse`(스냅샷·소스), 스냅샷 `parse`. 화면: 레시피 표 `파싱` 배지, 레시피 상세 창(`web/js/rcp-detail.js`: 매핑 한 줄·낡음 띠·파일별 결과·파일 칩·찾기·`이름 붙은 항목만` 토글 칩·그룹 표·`다시 파싱`), 소스 `다시 파싱` 버튼, 소스 편집 `설비사 매핑` 칩. 가짜 매핑 3개 + `scripts/make_sample_recipes.py`.
 - 바뀐 파일: parsers/(generic, mapping, base, fake, __init__).py, parsers/mappings/example_{xml,ini,txt}_vendor.json, app/(rcp_parse, rcp_collect, repositories/recipes, routers/recipes).py, web/js/(rcp, rcp-detail, rcp-model, api).js, web/css/rcp.css, web/test/run_rcp.mjs, scripts/make_sample_recipes.py, tests/(test_rcp_parse, test_recipes).py, docs/(SPEC, DECISIONS, WORKLOG), project_flow.html

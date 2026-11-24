@@ -1,6 +1,7 @@
 // Hierarchy edit dialog (P2B-07). Everything happens on a draft; only "적용" talks to the server
 // (one atomic PUT), "취소"/Esc/backdrop throw the draft away. Hiding a level never touches issue values.
 import { api } from "./api.js";
+import { hub } from "./hub.js";
 import { colorName, COLORS, issueIcon, levelIcon, SHAPES, shapeName } from "./levels.js";
 import { button, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
@@ -302,6 +303,7 @@ export function openLevelEditor(view, opts = {}) {
       });
       sheet.close();
       toast("계층을 적용했어요");
+      hub.emit({ kind: "fields" });
       opts.onApplied?.(saved);
     } catch (e) {
       busy = false;
