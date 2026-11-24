@@ -1055,5 +1055,11 @@ export function bindNoteTables(editor, changed) {
     if (!event.target.closest?.("[data-k='table']")) hidePasteChip();
   });
 
-  return { refresh, insert, pasteBlock };
+  // for other paste handlers (V-007 documents) that put blocks into the editor and want the same undo behaviour
+  function forget(entry) {
+    const index = undoStack.indexOf(entry);
+    if (index >= 0) undoStack.splice(index, 1);
+  }
+
+  return { refresh, insert, pasteBlock, remember, forget };
 }

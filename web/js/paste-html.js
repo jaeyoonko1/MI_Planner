@@ -11,7 +11,7 @@
 //     returns the first non-null result. A parser gets `(doc, ctx)` and returns `{ type, ... }` or null.
 // Blocks today: `{ type: "table", ... }` (see `tableBlockFromGrid`).
 
-import { COLORS, HLS } from "./mdconv.js";
+import { BASE_PX, COLORS, HLS, SIZES, markdownUrl } from "./mdconv.js";
 import { cellSource, parseClipboardTable } from "./note-table-model.js";
 
 // ---------------------------------------------------------------- limits --
@@ -35,7 +35,7 @@ const SCOPE = { td: "table", th: "table", tr: "table", thead: "table", tbody: "t
 const NAMED = {
   nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", copy: "©", reg: "®", deg: "°",
   plusmn: "±", times: "×", middot: "·", hellip: "…", ndash: "–", mdash: "—",
-  lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", bull: "•", micro: "µ",
+  ensp: "\u2002", emsp: "\u2003", thinsp: "\u2009", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", bull: "•", micro: "µ",
   le: "≤", ge: "≥", ne: "≠", rarr: "→", larr: "←", uarr: "↑", darr: "↓",
   alpha: "α", beta: "β", mu: "μ", sigma: "σ", Delta: "Δ", delta: "δ", Omega: "Ω",
 };
@@ -206,6 +206,11 @@ function hueOf([r, g, b]) {
   return (h * 60 + 360) % 360;
 }
 const chroma = (rgb) => Math.max(...rgb) - Math.min(...rgb);
+const nearestHue = (rgb, presets) => presets.reduce((best, hex) => {
+  const diff = Math.abs(hueOf(parseColor(hex)) - hueOf(rgb));
+  const d = Math.min(diff, 360 - diff);
+  return d < best.d ? { hex, d } : best;
+}, { hex: presets[0], d: Infinity }).hex;
 
 /** Text color -> nearest note preset; the default text color and near-black/near-white map to "no color". */
 export function textPreset(value) {
@@ -213,7 +218,7 @@ export function textPreset(value) {
   if (!rgb) return "";
   if (chroma(rgb) < 28 && Math.max(...rgb) < 90) return ""; // black / dark gray = the normal text color
   if (chroma(rgb) < 28 && Math.min(...rgb) > 235) return ""; // white text is invisible on our light highlights; drop
-  const hex = nearest(rgb, COLORS);
+  const hex = chroma(rgb) >= 40 ? nearestHue(rgb, COLORS.slice(1, 6)) : nearest(rgb, COLORS); // a dark navy is blue, not green
   return hex === COLORS[0] ? "" : hex;
 }
 
@@ -230,9 +235,9 @@ export function highlightPreset(value) {
 }
 
 // ---------------------------------------------------------------- inline runs --
-const baseStyle = () => ({ b: false, i: false, u: false, s: false, color: "", bg: "" });
+export const baseStyle = () => ({ b: false, i: false, u: false, s: false, color: "", bg: "" });
 
-function applyStyle(ctx, node, rules) {
+export function applyStyle(ctx, node, rules) {
   const next = { ...ctx };
   const tag = node.tag;
   if (tag === "b" || tag === "strong") next.b = true;
@@ -240,6 +245,7 @@ function applyStyle(ctx, node, rules) {
   if (tag === "u" || tag === "ins") next.u = true;
   if (tag === "s" || tag === "strike" || tag === "del") next.s = true;
   if (tag === "font" && node.attrs.color) next.color = textPreset(node.attrs.color);
+  if (tag === "a") next.href = safeHref(node.attrs.href);
   if (tag === "mark") next.bg = highlightPreset(styleOf(node, rules).background) || HLS[0];
   const css = styleOf(node, rules);
   const weight = css["font-weight"];
@@ -252,9 +258,51 @@ function applyStyle(ctx, node, rules) {
     next.s = /line-through/.test(deco);
   }
   if (css.color) next.color = textPreset(css.color);
-  const fill = css["background-color"] || css.background;
+  if (ctx.px !== undefined) applySize(next, ctx, node, css); // documents only: tables keep the V-001 behaviour
+  const fill = css["background-color"] || css.background || css["mso-highlight"];
   if (fill && !/^(none|transparent)$/i.test(fill.trim())) next.bg = highlightPreset(fill.split(/\s+/)[0]) || (tag === "td" || tag === "th" ? "" : next.bg);
+  if (next.href) { next.u = false; next.color = ""; } // the default link look is not a style the user chose
   return next;
+}
+
+// ---- font size (V-007): px is the inherited computed size, `size` the note preset (0 = the normal text size)
+const SIZE_KEYWORDS = { "xx-small": 9, "x-small": 10, small: 13, medium: 16, large: 18, "x-large": 24, "xx-large": 32, "xxx-large": 48 };
+const FONT_TAG_PX = [0, 10, 13, 16, 18, 24, 32, 48];
+
+export function cssPx(value, parentPx) {
+  const v = String(value || "").trim().toLowerCase();
+  if (SIZE_KEYWORDS[v]) return SIZE_KEYWORDS[v];
+  if (v === "larger") return parentPx * 1.2;
+  if (v === "smaller") return parentPx / 1.2;
+  const m = /^([\d.]+)\s*(pt|px|em|rem|%|in|cm|mm|pc)?$/.exec(v);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!(n > 0)) return null;
+  const px = { pt: n * 4 / 3, px: n, em: n * parentPx, rem: n * 16, "%": n * parentPx / 100, in: n * 96, cm: n * 37.8, mm: n * 3.78, pc: n * 16 }[m[2] || "px"];
+  return px > 1 && px < 400 ? px : null;
+}
+
+/** Computed px -> nearest note size preset, scaled so the document's own body size reads as the normal size. */
+export function sizePreset(px, ref) {
+  const scaled = px * BASE_PX / ref;
+  const best = SIZES.reduce((a, size) => (Math.abs(size - scaled) < Math.abs(a - scaled) ? size : a), SIZES[0]);
+  return best === BASE_PX ? 0 : best;
+}
+
+function applySize(next, ctx, node, css) {
+  let px = ctx.px;
+  if (node.tag === "font" && /^[1-7]$/.test(node.attrs.size || "")) px = FONT_TAG_PX[+node.attrs.size];
+  if (css["font-size"]) px = cssPx(css["font-size"], ctx.px) || px;
+  next.px = px;
+  next.size = px === ctx.px ? ctx.size : sizePreset(px, ctx.ref || 16);
+}
+
+const SAFE_HREF = /^(https?:|mailto:|onenote:|ftp:|file:\/\/|\\)/i;
+/** Only link schemes that cannot run code; everything else (javascript:, data:, vbscript:) is dropped. */
+export function safeHref(value) {
+  const v = String(value || "").trim();
+  if (!v || /[\u0000-\u001f]/.test(v)) return "";
+  return SAFE_HREF.test(v) ? v : "";
 }
 
 const BLOCK_TAGS = /^(p|div|li|ul|ol|tr|h[1-6]|blockquote|pre|center)$/;
@@ -282,36 +330,52 @@ export function collectRuns(node, ctx, rules, out = [], state = { pre: false }) 
       continue;
     }
     if (child.tag === "br") { out.push({ br: true }); continue; }
-    if (["style", "script", "head", "xml", "o:p", "img", "col"].includes(child.tag)) continue;
+    if (child.tag === "img" && state.image) { // documents (V-007): the callback returns `{ image }`, `{ tag }` or null
+      const run = state.image(child);
+      if (run) out.push(run);
+      continue;
+    }
+    if (["style", "script", "head", "xml", "o:p", "img", "col", "input", "meta", "link", "title", "object", "iframe", "svg", "canvas", "template", "noscript"].includes(child.tag)) continue;
     const css = styleOf(child, rules);
     if (/^none$/i.test(css.display || "") || /mso-hide:\s*all/i.test(child.attrs.style || "")) continue;
+    if (/mso-list:\s*ignore/i.test(child.attrs.style || "")) continue; // Word's own bullet / number text
+    if (child.tag === "span" && /mso-tab-count/i.test(child.attrs.style || "")) { // a typed tab: collapsed to one space
+      out.push({ text: " ", ...ctx });
+      continue;
+    }
     const pre = state.pre || /^pre/.test(css["white-space"] || "") || child.tag === "pre";
     const nextCtx = applyStyle(ctx, child, rules);
     if (BLOCK_TAGS.test(child.tag) && out.length && !out[out.length - 1].br) out.push({ br: true });
-    collectRuns(child, nextCtx, rules, out, { pre });
+    collectRuns(child, nextCtx, rules, out, { pre, image: state.image });
     if (BLOCK_TAGS.test(child.tag) && out.length && !out[out.length - 1].br) out.push({ br: true });
   }
   return out;
 }
 
-const sameStyle = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.color === b.color && a.bg === b.bg;
+const sameStyle = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s === b.s && a.color === b.color && a.bg === b.bg
+  && a.size === b.size && a.href === b.href;
+const isMark = (run) => run.image || run.tag; // document runs that are not text: kept apart, never trimmed or merged
 
 /** Trim line edges, drop empty lines at the ends, merge neighbours with the same style. Returns an array of lines. */
 export function runsToLines(runs) {
   const lines = [[]];
   for (const run of runs) {
     if (run.br) { lines.push([]); continue; }
-    const text = run.text.replace(/ /g, " ");
     const line = lines[lines.length - 1];
+    if (isMark(run)) { line.push({ ...run }); continue; }
+    let text = run.text.replace(/ /g, " ");
     const prev = line[line.length - 1];
-    if (prev && sameStyle(prev, run)) prev.text += text;
+    if (prev && !isMark(prev) && prev.text.endsWith(" ")) text = text.replace(/^ +/, ""); // a browser collapses "a " + " b"
+    if (!text) continue;
+    if (prev && !isMark(prev) && sameStyle(prev, run)) prev.text += text;
     else line.push({ ...run, text });
   }
+  const textOf = (run) => (isMark(run) ? "x" : run.text);
   for (const line of lines) {
-    if (line.length) line[0].text = line[0].text.replace(/^ +/, "");
-    if (line.length) line[line.length - 1].text = line[line.length - 1].text.replace(/ +$/, "");
-    while (line.length && !line[line.length - 1].text) line.pop();
-    while (line.length && !line[0].text) line.shift();
+    if (line.length && !isMark(line[0])) line[0].text = line[0].text.replace(/^ +/, "");
+    if (line.length && !isMark(line[line.length - 1])) line[line.length - 1].text = line[line.length - 1].text.replace(/ +$/, "");
+    while (line.length && !textOf(line[line.length - 1])) line.pop();
+    while (line.length && !textOf(line[0])) line.shift();
   }
   while (lines.length && !lines[lines.length - 1].length) lines.pop();
   while (lines.length && !lines[0].length) lines.shift();
@@ -337,14 +401,55 @@ function wrapRun(run) {
   if (run.s) out = `~~${out}~~`;
   if (run.u) out = `<u>${out}</u>`;
   if (run.bg) out = HLS[0] === run.bg ? `<mark>${out}</mark>` : `<mark style="background:${run.bg}">${out}</mark>`;
-  if (run.color) out = `<span style="color:${run.color}">${out}</span>`;
+  const css = [];
+  if (run.color) css.push(`color:${run.color}`);
+  if (run.size) css.push(`font-size:${run.size}px`);
+  if (css.length) out = `<span style="${css.join(";")}">${out}</span>`;
   return lead + out + trail;
 }
 
-const hasStyle = (run) => run.b || run.i || run.u || run.s || run.color || run.bg;
-/** Lines of runs -> markdown text (lines joined by "\n"). With `format: false` only the text is kept. */
-export function runsToMarkdown(lines, format = true) {
-  return lines.map((line) => line.map((run) => (format && hasStyle(run) ? wrapRun(run) : escapeInline(run.text))).join("")).join("\n");
+const hasStyle = (run) => run.b || run.i || run.u || run.s || run.color || run.bg || run.size;
+const runMarkdown = (run, format) => (format && hasStyle(run) ? wrapRun(run) : escapeInline(run.text));
+
+function linkMarkdown(runs, format) {
+  const href = runs[0].href;
+  const raw = runs.map((run) => run.text).join("");
+  if (!raw.trim()) return "";
+  const [, lead, , trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(raw);
+  const text = runs.map((run) => runMarkdown(run, format)).join("").trim();
+  if (raw.trim() === href.trim()) return lead + escapeInline(href.trim()) + trail; // the link text is the address
+  return lead + `[${text.replace(/[\[\]]/g, (ch) => (ch === "[" ? "(" : ")"))}](${markdownUrl(href)})` + trail;
+}
+
+function imageMarkdown(image, refs) {
+  const rel = refs?.get(image.src);
+  if (!rel) return "";
+  const alt = String(image.alt || "").replace(/[\]\[\r\n]+/g, " ").trim().slice(0, 80);
+  return `![${/automatically generated|자동 생성|^(image|picture|그림|이미지)$/i.test(alt) ? "" : alt}](${rel})`;
+}
+
+function lineMarkdown(line, format, refs) {
+  let out = "";
+  for (let i = 0; i < line.length;) {
+    const run = line[i];
+    if (run.image) { out += imageMarkdown(run.image, refs); i++; continue; }
+    if (run.tag) { i++; continue; }
+    if (format && run.href) {
+      let j = i;
+      while (j < line.length && !isMark(line[j]) && line[j].href === run.href) j++;
+      out += linkMarkdown(line.slice(i, j), format);
+      i = j;
+      continue;
+    }
+    out += runMarkdown(run, format);
+    i++;
+  }
+  return out;
+}
+
+/** Lines of runs -> markdown text (lines joined by "\n"). With `format: false` only the text is kept. `refs`: image src -> stored file. */
+export function runsToMarkdown(lines, format = true, refs = null) {
+  return lines.map((line) => lineMarkdown(line, format, refs)).join("\n");
 }
 
 // ---------------------------------------------------------------- table --
@@ -474,9 +579,25 @@ export function registerBlockParser(name, parse) {
   blockParsers.push({ name, parse });
 }
 
+/** True when something other than tables (text, pictures) is in the clipboard HTML: then it is a document (V-007), not a sheet. */
+export function hasContentOutsideTables(root) {
+  const SKIP = new Set(["style", "script", "head", "xml", "title", "table", "o:p"]);
+  const visit = (node) => {
+    for (const child of node.children || []) {
+      if (child.text !== undefined) { if (/[^\s ​﻿]/.test(child.text)) return true; continue; }
+      if (SKIP.has(child.tag)) continue;
+      if (child.tag === "img" || visit(child)) return true;
+    }
+    return false;
+  };
+  return visit(root);
+}
+
 registerBlockParser("table", (doc) => {
   const table = [...walk(doc.root)].find((node) => node.tag === "table");
-  return table ? tableFromNode(table, doc.rules) : null;
+  if (!table || hasContentOutsideTables(doc.root)) return null;
+  // one single cell is a copied value (Excel) or a layout wrapper (Outlook), not a table: the document parser takes it
+  return [...walk(table)].filter((node) => CELL.has(node.tag)).length > 1 ? tableFromNode(table, doc.rules) : null;
 });
 
 /** Parse clipboard HTML once, then ask every registered block parser. */

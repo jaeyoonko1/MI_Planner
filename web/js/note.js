@@ -7,14 +7,16 @@ import { api } from "./api.js";
 import { getFolds, setFolds } from "./foldstore.js";
 import { keyAction } from "./lineeditor-core.js";
 import { bindNoteTables } from "./note-table.js";
-import { clipboardToTable } from "./paste-html.js";
+import { planPaste } from "./paste-doc.js";
+import { createNotePaste } from "./note-paste.js";
 import { editorKeys } from "./lineeditor.js";
 import { runNoteLineAction } from "./note-lines.js";
 import { mountNoteColumns } from "./note-columns.js";
 import { bindWikiEditor } from "./wikilinks.js";
 import { hub } from "./hub.js";
+import { toast } from "./toast.js";
 import { mountPptPanel } from "./ppt.js";
-import { htmlToMd, loadInto } from "./mdconv.js";
+import { LINK_HREF, htmlToMd, loadInto } from "./mdconv.js";
 import { mountFormatBar } from "./note-format.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
 
@@ -265,24 +267,36 @@ export function mountEditor(cfg) {
   }
   const imagesOf = (dt) => [...(dt?.files || [])].filter((f) => f.type.startsWith("image/"));
 
+  // V-007: OneNote / Word / Outlook / web HTML becomes paragraphs, lists, headings, to-dos, tables and stored pictures
+  const notePaste = createNotePaste({ ed, fileUrl: cfg.fileUrl, upload: cfg.upload, noteTables, setStatus, schedule, applyFolds });
+  let composing = false; // IME guard: a paste during composition stays plain text
+  ed.addEventListener("compositionstart", () => { composing = true; });
+  ed.addEventListener("compositionend", () => { composing = false; });
+
   ed.addEventListener("paste", async (e) => {
     e.preventDefault();
-    const text = e.clipboardData.getData("text/plain"); // plain text only keeps the file clean
-    // V-001: a table (Excel / Sheets / web) or tab separated text becomes a note table. Excel also puts a picture of the
-    // range on the clipboard; text always wins over that picture, which is only the fallback when nothing else is there.
-    const hit = clipboardToTable({ html: e.clipboardData.getData("text/html"), text });
-    if (hit) {
-      noteTables.pasteBlock(hit.block, hit.via);
+    const clip = e.clipboardData;
+    const text = clip.getData("text/plain");
+    const html = clip.getData("text/html");
+    const bitmaps = text.trim() ? [] : imagesOf(clip); // read now: the clipboard is gone after the first await
+    // Priority: sheet table (V-001) > document (V-007) > plain text > picture. Office and Excel also put a picture of what
+    // was copied on the clipboard; text always wins over it, the picture is only the fallback when nothing else is there.
+    const plan = composing ? null : planPaste({ html, text });
+    if (plan?.kind === "table") {
+      noteTables.pasteBlock(plan.block, plan.via);
       return;
     }
-    const imgs = text.trim() ? [] : imagesOf(e.clipboardData);
-    if (imgs.length) {
-      for (const f of imgs) await insertImage(f);
+    const doc = plan?.kind === "doc" ? await notePaste.pasteDoc(plan.block) : null;
+    if (doc?.done) return;
+    if (bitmaps.length) {
+      for (const f of bitmaps) await insertImage(f);
       return;
     }
     if (text) {
       run("insertText", text);
       schedule();
+    } else if (doc?.notes.length) {
+      toast(doc.notes[0], { error: true }); // nothing could be taken over: say why
     }
   });
   ed.addEventListener("dragover", (e) => imagesOf(e.dataTransfer).length && e.preventDefault());
@@ -438,6 +452,12 @@ export function mountEditor(cfg) {
   const onHeadingChevron = (e) => e.target.matches(foldableHeading) && e.offsetX < 16;
   ed.addEventListener("click", (e) => {
     const t = e.target;
+    const link = t.closest?.("a[data-md]");
+    if (link && (e.ctrlKey || e.metaKey) && LINK_HREF.test(link.getAttribute("href") || "")) { // links are text: Ctrl+click opens
+      e.preventDefault();
+      window.open(link.href, "_blank", "noopener,noreferrer");
+      return;
+    }
     if (t.matches("li[data-m]") && e.offsetX >= -24 && e.offsetX < 0) {
       t.dataset.m = t.dataset.m === "x" ? " " : "x";
       schedule();

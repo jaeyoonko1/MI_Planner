@@ -6,7 +6,8 @@
 //   inline : **bold** *italic* ~~strike~~ `code`, and ONLY these HTML tags:
 //            <u>, <mark style="background:#rrggbb">, <span style="color:#rrggbb;font-size:NNpx">
 // Anything else is dropped on save (serializer) or shown as plain text (reader).
-// Known limits: links are kept as plain text.
+// Links (V-007): [text](https://…) is shown as a link (Ctrl+click opens it) and written back the same way; only http(s),
+// mailto, onenote and ftp addresses count, anything else stays plain text.
 //
 // P3-02R (D-20 constraints): the file is cut into blocks (mdblocks.js). Every top-level element remembers the exact
 // text it was made from (data-src) and what it serialized to when it was loaded (data-sig). On save an element whose
@@ -24,6 +25,16 @@ export const SIZES = [11, 13, 15, 18, 22, 28]; // px presets (6 steps)
 export const BASE_PX = 15;
 export const COLORS = ["#1f2430", "#d93025", "#e8710a", "#188038", "#1a73e8", "#7b1fa2", "#6b7280"];
 export const HLS = ["#fff176", "#a5f3a5", "#a5d8ff", "#ffc9de", "#ffd8a8"];
+
+export const LINK_HREF = /^(?:https?:|mailto:|onenote:|ftp:)[^\s<>"]*$/i;
+const LINK_MD = /\[([^\[\]\n]+)\]\(((?:https?:|mailto:|onenote:|ftp:)[^\s()<>"]*)\)/gi;
+
+/** Link target written into `[text](url)`: nothing that could end the link or be read as markup. */
+export function markdownUrl(href) {
+  return String(href).trim()
+    .replace(/[\s()<>*`|"\\]/g, (ch) => "%" + ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"))
+    .replace(/~~/g, "%7E%7E");
+}
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const WIKI_TOKEN = /\[\[[^\x00\[\]\\\r\n]+\]\]/g;
@@ -47,6 +58,7 @@ export function inlineToHtml(text, fileUrl) {
   });
   s = s.replace(/`([^`]+)`/g, (_, c) => put(`<code>${esc(c)}</code>`));
   s = s.replace(WIKI_TOKEN, (token) => put(esc(token)));
+  s = s.replace(LINK_MD, (_, label, url) => put(`<a href="${escAttr(url)}" data-md="1" title="Ctrl+클릭으로 열기">`) + label + put("</a>"));
   s = s.replace(/<(\/?)u>/gi, (_, c) => put(`<${c}u>`));
   // the journal writes a bare <mark> (default yellow); older notes wrote <mark style="background:#rrggbb">.
   // data-s remembers the styled spelling of the default colour so it is written back the way it was read.
@@ -214,6 +226,12 @@ function inl(node) {
     }
     let inner = inl(n);
     if (!inner) continue;
+    if (t === "a") {
+      const href = n.getAttribute("href") || "";
+      if (LINK_HREF.test(href)) inner = `[${inner.replace(/[\[\]]/g, (ch) => (ch === "[" ? "(" : ")"))}](${markdownUrl(href)})`;
+      s += inner;
+      continue;
+    }
     const st = n.style || {};
     const fw = st.fontWeight;
     if (t === "b" || t === "strong" || fw === "bold" || +fw >= 600) inner = `**${inner}**`;
