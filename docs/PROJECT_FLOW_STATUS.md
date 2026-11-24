@@ -2,23 +2,23 @@
 
 > 🔒 **이 문서는 비공개 GitHub 저장소 안에서만 볼 수 있습니다.** GitHub Pages에 공개하지 않습니다.
 
-**최종 갱신:** 2026. 11. 24. 20:22 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [e798e3c](https://github.com/jaeyoonko1/MI_Planner/commit/e798e3c9e17010d975c984c3c2d9868daec30ac5)
+**최종 갱신:** 2026. 11. 24. 20:45 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [d88335b](https://github.com/jaeyoonko1/MI_Planner/commit/d88335b347477fcc86049481d69edc2b50a45133)
 
 **최신 작업:** Merge remote-tracking branch 'origin/master'
 
 ## 전체 진행률
 
-### 77% · 61/79개 작업 완료
+### 78% · 62/79개 작업 완료
 
-🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦⬜⬜⬜⬜⬜
+🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦🟦⬜⬜⬜⬜
 
 ## 다음 작업
 
 - **P2-07** 회사 PC 시험 설치 + 1주일 실사용 · 직접
 - **P3-09** 원노트 이관 가능성 시험 (회사 PC) · 사내LLM
 - **P6-05** 레시피 수정·업로드 (선택) · Opus
-- **P7-01** 에이전트용 CLI (app/cli.py) · Sonnet
 - **P7-02** skills/ 구조 + skill-maker 스킬 · Opus
+- **P7-03** 'AI에게 요청' 복사 버튼 · Sonnet
 
 ## 단계별 현황
 
@@ -33,7 +33,7 @@
 | **P4 · 평가 현황판 (3순위)** | 8/8 | 100% |
 | **P5 · MI 정보** | 4/4 | 100% |
 | **P6 · RCP 관리** | 4/5 | 80% |
-| **P7 · LLM 연동** | 0/10 | 0% |
+| **P7 · LLM 연동** | 1/10 | 10% |
 | **P8 · 이식 · 운영** | 0/5 | 0% |
 
 ## 전체 작업 목록
@@ -165,11 +165,11 @@
 
 </details>
 
-<details><summary><strong>P7 · LLM 연동</strong> — 0/10 완료</summary>
+<details><summary><strong>P7 · LLM 연동</strong> — 1/10 완료</summary>
 
 | 상태 | 작업 ID | 제목 | 담당 |
 |:--:|:--|:--|:--|
-| ⬜ | P7-01 | 에이전트용 CLI (app/cli.py) | Sonnet |
+| ✅ | P7-01 | 에이전트용 CLI (app/cli.py) | Sonnet |
 | ⬜ | P7-02 | skills/ 구조 + skill-maker 스킬 | Opus |
 | ⬜ | P7-03 | 'AI에게 요청' 복사 버튼 | Sonnet |
 | ⬜ | P7-04 | status-brief · fill-table 스킬 | Opus |
