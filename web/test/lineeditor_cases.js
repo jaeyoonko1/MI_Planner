@@ -1,5 +1,6 @@
 // Shared by lineeditor.html (browser) and run_lineeditor.mjs (node). Each case returns true on pass.
 import * as C from "../js/lineeditor-core.js";
+import * as F from "../js/lineeditor-format.js";
 
 const st = (v, s = 0, e = s) => ({ v, s, e });
 const at = (v) => { const i = v.indexOf("|"); return st(v.replace("|", ""), i); };
@@ -22,10 +23,10 @@ export const cases = {
   "done toggle": () => C.toggleDone(at("- [ ] a|")).v === "- [x] a" && C.toggleDone(at("- [x] a|")).v === "- [ ] a",
   "star toggle": () => C.setMark(at("a|"), "*").v === "- [*] a" && C.setMark(at("- [*] a|"), "*").v === "- a",
   "highlight selection wrap/unwrap": () => {
-    const w = C.highlight(sel("ab[cd]ef"));
-    return w.v === "ab<mark>cd</mark>ef" && C.highlight(st(w.v, w.s, w.e)).v === "abcdef";
+    const w = F.run("highlight", sel("ab[cd]ef"));
+    return w.v === "ab<mark>cd</mark>ef" && F.run("highlight", st(w.v, w.s, w.e)).v === "abcdef";
   },
-  "highlight whole line when no selection": () => C.highlight(at("- [ ] task|")).v === "- [ ] <mark>task</mark>" && C.highlight(at("<mark>x</mark>|")).v === "x",
+  "highlight whole line when no selection": () => F.run("highlight", at("- [ ] task|")).v === "- [ ] <mark>task</mark>" && F.run("highlight", at("<mark>x</mark>|")).v === "x",
   "move block down with children": () => C.moveBlock(at("- a|\n  - a1\n- b"), 1).v === "- b\n- a\n  - a1",
   "move block up": () => C.moveBlock(at("- a\n  - a1\n- b|"), -1).v === "- b\n- a\n  - a1",
   "move blocked at edges / parent": () => C.moveBlock(at("- a|\n- b"), -1) === null && C.moveBlock(at("- a\n  - x|"), -1) === null && C.moveBlock(at("- a\n  - x|"), 1) === null,
@@ -47,7 +48,7 @@ export const cases = {
   "keyAction: reserved-key alternatives": () =>
     C.keyAction({ key: "1", code: "Digit1", altKey: true }, true) === "cycle" && C.keyAction({ key: "1", code: "Digit1", ctrlKey: true, altKey: true }, true) === "cycle" &&
     C.keyAction({ key: "H", code: "KeyH", altKey: true, shiftKey: true }, true) === "highlight" && C.keyAction({ key: "ArrowUp", altKey: true }, true) === "up",
-  "html rendering escapes everything but <mark>": () => C.textToHtml("<script>x</script> <mark>y</mark>") === "&lt;script&gt;x&lt;/script&gt; <mark>y</mark>",
+  "html rendering escapes everything but the preset markup": () => F.textToHtml("<script>x</script> <mark>y</mark>") === "&lt;script&gt;x&lt;/script&gt; <mark>y</mark>",
 };
 
 export function runAll() {

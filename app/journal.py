@@ -11,6 +11,7 @@ import calendar
 import re
 from datetime import date
 
+from app.inline_format import strip_inline
 from app.vault import Vault, VaultError
 
 JOURNAL_ROOT = "일지"
@@ -94,7 +95,6 @@ def get_month(vault: Vault, month: str) -> dict:
 
 _CHECKBOX = re.compile(r"^(\s*[-*]\s+\[)([ xX*!])(\]\s?)(.*)$")
 LINK_MARK = "→ 할일 #"
-_MARK_TAGS = re.compile(r"</?mark>")
 _ID_LINK = re.compile(r"→ 할일 #(\d+)\s*$")
 
 
@@ -117,7 +117,7 @@ def promote_line(vault: Vault, day: str, line_index: int, create_task, find_exis
     if not 0 <= line_index < len(lines):
         raise VaultError("해당 줄을 찾을 수 없습니다. 화면을 새로고침하세요.", 404)
     m = _CHECKBOX.match(lines[line_index])
-    title = _MARK_TAGS.sub("", m.group(4)).strip() if m else ""
+    title = strip_inline(m.group(4)).strip() if m else ""
     if not m or not title:
         raise VaultError("체크박스 줄(- [ ] 내용)만 할일로 만들 수 있습니다.")
     if LINK_MARK in m.group(4):

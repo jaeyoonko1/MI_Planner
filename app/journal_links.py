@@ -17,13 +17,13 @@ import sqlite3
 from typing import Any
 
 from app import journal
+from app.inline_format import strip_inline
 from app.repositories import tasks as repo
 from app.vault import Vault
 
 LINK_MARK = "→ 할일 #"
 _LINE = re.compile(r"^(?P<ind>\s*)(?P<b>[-*])\s+\[(?P<m>[ xX*!])\]\s?(?P<rest>.*)$")
 _TAIL = re.compile(r"\s*→ 할일 #(?P<id>\d+)\s*$")
-_MARK_TAGS = re.compile(r"</?mark>")
 _SYMBOL_TO_MARK = {" ": None, "*": "star", "!": "urgent"}
 _MARK_TO_SYMBOL = {None: " ", "star": "*", "urgent": "!"}
 
@@ -43,7 +43,12 @@ def parse_line(raw: str) -> dict[str, Any] | None:
 
 
 def clean_title(text: str) -> str:
-    return _MARK_TAGS.sub("", text).strip()
+    return strip_inline(text).strip()
+
+
+def _shown_title(line_title: str | None, task_title: str) -> str:
+    """Keep a line's inline formatting (V-003) when its plain text still is the task title."""
+    return line_title if line_title and clean_title(line_title) == task_title else task_title
 
 
 def symbol(status: str, mark: str | None) -> str:
@@ -184,7 +189,7 @@ def after_task_change(vault: Vault, before: dict | None, after: dict | None) -> 
     day, idx = primary
     lines = list(docs.lines(day))
     p = parse_line(lines[idx]) or {"ind": "", "bullet": "-"}
-    fresh = build_line(p["ind"], sym, after["title"], tid, p["bullet"])
+    fresh = build_line(p["ind"], sym, _shown_title(p.get("title"), after["title"]), tid, p["bullet"])
     if day == planned:
         lines[idx] = fresh
         docs.put(day, lines)

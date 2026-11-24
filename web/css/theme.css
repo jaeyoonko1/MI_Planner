@@ -20,7 +20,7 @@
   --lv-violet: #b8a2ff; --lv-mint: #5de1dc; --lv-blue: #8cb5ff; --lv-peach: #ffbf84; --lv-pink: #f5a9ce; --lv-yellow: #e5d580;
   /* line editor tokens (lineeditor.css) */
   --le-star: #f5b73d; --le-urgent: #ef5a78; --le-done: #34c98a;
-  --le-hl: rgba(255, 210, 123, .3); --le-hl-text: inherit;
+  --le-hl: rgba(255, 210, 123, .3); --le-hl-text: inherit; --le-guide: rgba(150, 168, 205, .16);
   --le-hover: rgba(114, 158, 255, .07); --le-ring: rgba(114, 158, 255, .32);
   /* legacy aliases used by the older screens */
   --accent: var(--blue); --accent-weak: var(--sel-bg);
@@ -53,7 +53,7 @@
   --scroll-thumb: #c3cbd9;
   --lv-violet: #6a46d8; --lv-mint: #0b8a86; --lv-blue: #2f6be0; --lv-peach: #b8620a; --lv-pink: #c2397a; --lv-yellow: #8a6d00;
   --le-star: #d27a00; --le-urgent: #d92d20; --le-done: #1a9d5b;
-  --le-hl: #ffe9a8; --le-hover: rgba(47, 107, 224, .06); --le-ring: rgba(47, 107, 224, .24);
+  --le-guide: rgba(60, 80, 120, .14); --le-hl: #ffe9a8; --le-hover: rgba(47, 107, 224, .06); --le-ring: rgba(47, 107, 224, .24);
 }
 
 /* ── base ── */

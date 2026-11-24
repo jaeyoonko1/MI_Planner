@@ -1,6 +1,6 @@
 // Pure text operations for the shared line editor (P2B-02, D-21). No DOM here so they can be unit tested.
 // A state is { v: string, s: number, e: number } = text + selection start/end offsets.
-// Stored line format: `<indent>- [ ] text` (marks: ' ' todo, x done, * star, ! urgent); highlight = <mark>…</mark>.
+// Stored line format: `<indent>- [ ] text` (marks: ' ' todo, x done, * star, ! urgent); inline formatting (V-003) lives in lineeditor-format.js.
 
 export const STEP = 2;
 export const MARK_ORDER = ["", " ", "x", "*", "!"]; // none -> todo -> done -> star -> urgent -> none
@@ -92,30 +92,6 @@ export function toggleDone(st) {
 export function toggleDoneRaw(raw) {
   const p = parseLine(raw);
   return buildLine({ ...p, mark: p.mark === "x" ? " " : "x", bullet: true });
-}
-
-const WRAP_RE = /^<mark>([\s\S]*)<\/mark>$/;
-
-export function highlight(st) {
-  const { v, s, e } = st;
-  if (s !== e && !v.slice(s, e).includes("\n")) {
-    const sel = v.slice(s, e);
-    const w = sel.match(WRAP_RE);
-    if (w) return { v: v.slice(0, s) + w[1] + v.slice(e), s, e: s + w[1].length };
-    if (v.slice(Math.max(0, s - 6), s) === "<mark>" && v.slice(e, e + 7) === "</mark>") {
-      return { v: v.slice(0, s - 6) + sel + v.slice(e + 7), s: s - 6, e: e - 6 };
-    }
-    return { v: v.slice(0, s) + "<mark>" + sel + "</mark>" + v.slice(e), s: s + 6, e: e + 6 };
-  }
-  // No selection or several lines: highlight the whole text of each affected line.
-  const [a, b] = lineRange(v, s, e);
-  const lines = v.slice(a, b).split("\n").map(parseLine).filter((p) => p.text.trim());
-  const all = lines.length > 0 && lines.every((p) => WRAP_RE.test(p.text));
-  return mapLines(st, (p) => {
-    if (!p.text.trim()) return undefined;
-    const w = p.text.match(WRAP_RE);
-    return { ...p, text: all ? (w ? w[1] : p.text) : w ? p.text : `<mark>${p.text}</mark>` };
-  });
 }
 
 // Blocks: a line plus the following lines that are indented deeper than it.
@@ -210,6 +186,9 @@ export const KEY_HELP = [
   ["완료 전환", "Ctrl+Enter", false],
   ["별표 켜기/끄기", "Ctrl+Alt+S · Alt+Shift+S", false],
   ["형광펜 (선택 영역 또는 줄 전체)", "Ctrl+Alt+H · Alt+Shift+H", false],
+  ["굵게 · 기울임 · 밑줄 · 취소선 (선택 없으면 줄 전체)", "Ctrl+B · Ctrl+I · Ctrl+U · Ctrl+-", false],
+  ["글자 크기 키우기 · 줄이기", "Ctrl+Shift+. · Ctrl+Shift+,", false],
+  ["서식 지우기", "Ctrl+Space · Ctrl+Shift+N", false],
   ["블록 위·아래 이동 (하위 줄 포함)", "Alt+↑ · Alt+↓", false],
   ["새 줄 (불렛·들여쓰기 이어받기)", "Enter", true],
   ["표시 → 불렛 → 들여쓰기 차례로 해제", "줄 시작에서 Backspace", true],
@@ -242,7 +221,6 @@ export function run(action, st) {
     case "cycle": return cycleMark(st);
     case "done": return toggleDone(st);
     case "star": return setMark(st, "*");
-    case "highlight": return highlight(st);
     case "up": return moveBlock(st, -1);
     case "down": return moveBlock(st, 1);
     case "enter": return enter(st);
@@ -250,7 +228,3 @@ export function run(action, st) {
     default: return null;
   }
 }
-
-// ---- view rendering (escape everything, then allow only <mark>) -----------------
-export const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-export const textToHtml = (t) => esc(t).replace(/&lt;mark&gt;([\s\S]*?)&lt;\/mark&gt;/g, "<mark>$1</mark>");

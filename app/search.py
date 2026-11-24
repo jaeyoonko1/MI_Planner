@@ -6,6 +6,7 @@ import unicodedata
 from html.parser import HTMLParser
 from typing import Iterator
 
+from app.inline_format import strip_inline
 from app.repositories import tasks
 from app.vault import Vault, VaultError
 
@@ -50,9 +51,13 @@ class _HtmlText(HTMLParser):
             self.parts.append(data)
 
 
+_FORMAT_HINT = re.compile(r"[*~<\\]")
+
+
 def _plain(text: str, kind: str) -> str:
-    if kind != "html":
-        return text
+    if kind != "html":  # inline formatting (V-003) must not split a word the user searches for
+        lines = text.split("\n")
+        return "\n".join(strip_inline(ln) if _FORMAT_HINT.search(ln) else ln for ln in lines)
     parser = _HtmlText()
     parser.feed(text)
     parser.close()

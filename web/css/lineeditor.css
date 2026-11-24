@@ -1,18 +1,17 @@
 /* Shared line editor (P2B-02). All colors are tokens so the theme work (D-23) can override them. */
-:root { --le-step: 18px; }
+:root { --le-step: 18px; --le-mk: 20px; --le-gut: 16px; }
 
-.le { position: relative; }
+.le { position: relative; --le-scale: 1; }
 
 /* toolbar */
-.le-bar { display: flex; align-items: center; gap: 2px; padding: 4px; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
-.le-btn { min-width: 30px; height: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
+.le-bar { display: flex; align-items: center; gap: 1px; padding: 4px; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
+.le-btn { min-width: 28px; height: 30px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; transition: background .12s, color .12s; }
 .le-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .le-btn:hover { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
 .le-btn:focus-visible, .le-switch:focus-visible, .le-fold:focus-visible, .le-mark:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 .le-btn[data-name="star"]:hover { color: var(--le-star); }
-.le-hl { background: var(--le-hl); color: var(--text); border-radius: 4px; padding: 0 5px; font-weight: 700; font-size: 13px; line-height: 18px; }
 .le-cyc { font-size: 15px; line-height: 1; }
-.le-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.le-sep { width: 1px; height: 18px; background: var(--line); margin: 0 3px; }
 .le-grow { flex: 1; }
 .le-switch { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 8px; border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit; font-size: 12px; color: var(--muted); }
 .le-switch:hover { background: var(--panel); }
@@ -27,16 +26,21 @@
 .le-view:hover { background: var(--le-hover); }
 .le-view:focus-visible { box-shadow: 0 0 0 2px var(--le-ring); }
 .le-ph { color: var(--muted); opacity: .8; }
-.le-line { display: flex; align-items: flex-start; gap: 6px; padding-left: calc(var(--d, 0) * var(--le-step)); min-height: 1.65em; line-height: 1.65; }
+.le-line { position: relative; display: flex; align-items: flex-start; gap: 2px; padding-left: calc(var(--d, 0) * var(--le-step)); min-height: 1.65em; line-height: 1.65; }
 .le-line.blank { min-height: .8em; }
-.le-gut { flex: none; width: 16px; height: 1.65em; display: inline-flex; align-items: center; justify-content: center; }
+/* indent guides: one hairline per level under each ancestor's marker; levels differ by indent only, never by glyph */
+.le-line.nested::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--le-gut) + 2px + var(--le-mk) / 2 - .5px); width: calc(var(--d) * var(--le-step)); pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--le-guide) 0 1px, transparent 1px var(--le-step)); }
+.le-gut { flex: none; width: var(--le-gut); height: 1.65em; display: inline-flex; align-items: center; justify-content: center; }
 .le-fold { width: 16px; height: 16px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .12s, transform .15s; display: inline-flex; align-items: center; justify-content: center; }
 .le-fold svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .le-fold.closed { transform: rotate(-90deg); opacity: 1; }
 .le-line:hover .le-fold, .le-fold:focus-visible { opacity: 1; }
 .le-fold:hover { background: var(--line); }
-.le-dot { flex: none; width: 5px; height: 5px; margin: .72em 5px 0; border-radius: 50%; background: var(--muted); }
-.le-mark { flex: none; width: 17px; height: 17px; margin: .3em 2px 0; padding: 0; border-radius: 5px; border: 1.6px solid var(--check-bd); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 700 11px/1 inherit; transition: transform .1s, background .12s; }
+/* one fixed marker column for dot, checkbox, star and urgent: every level and every kind lines up, text always starts at the same x */
+.le-mk { flex: none; width: var(--le-mk); height: 1.65em; display: inline-flex; align-items: center; justify-content: center; }
+.le-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dim); opacity: .85; }
+.le-mark { flex: none; width: 17px; height: 17px; padding: 0; border-radius: 5px; border: 1.6px solid var(--check-bd); background: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font: 700 11px/1 inherit; transition: transform .1s, background .12s; }
 .le-mark:hover { transform: scale(1.12); }
 .le-mark svg { width: 12px; height: 12px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .le-mark.mdone { background: var(--le-done); border-color: var(--le-done); }
@@ -45,10 +49,57 @@
 .le-mark.murgent { background: var(--le-urgent); border-color: var(--le-urgent); color: #fff; border-radius: 50%; }
 .le-text { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
 .le-text.done { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--dim); }
-.le-text mark { background: linear-gradient(transparent 12%, var(--le-hl) 12%, var(--le-hl) 92%, transparent 92%); color: var(--le-hl-text); border-radius: 3px; padding: 0 2px; }
+.le-text mark[style] { color: #1f2430; }
+.le-text u { text-underline-offset: 2px; }
+.le-text mark { background: linear-gradient(transparent 12%, var(--hl, var(--le-hl)) 12%, var(--hl, var(--le-hl)) 92%, transparent 92%); color: var(--le-hl-text); border-radius: 3px; padding: 0 2px; }
 .le-pill { flex: none; align-self: center; font-size: 11px; padding: 0 8px; border-radius: 999px; background: var(--line); color: var(--muted); }
 .le-line .jpromote { align-self: center; }
 .le-line:hover .jpromote { visibility: visible; }
+
+/* inline formatting chips (V-003): the note toolbar's presets as toggle chips, density aware (D-12: no dropdowns) */
+.le-fmt { --lf: 28px; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 1px 2px; transition: opacity .14s; }
+[data-density="compact"] .le-fmt { --lf: 24px; }
+[data-density="cozy"] .le-fmt { --lf: 32px; }
+.le-fmt.idle .lf, .le-fmt.idle .lf-szl { opacity: .45; }
+.lf-grp { display: inline-flex; align-items: center; gap: 1px; }
+.lf-sep { width: 1px; height: 16px; margin: 0 4px; background: var(--line); flex: none; }
+.lf { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: var(--lf); height: var(--lf); padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; transition: background .12s, color .12s, box-shadow .12s, transform .08s, opacity .12s; }
+.lf svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lf:hover { background: var(--hover); color: var(--text); }
+.lf:active { transform: scale(.94); }
+.lf:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.lf[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); box-shadow: inset 0 0 0 1px var(--sel-bd); }
+.lf[aria-disabled="true"] { cursor: default; pointer-events: none; }
+.lf-g { font-weight: 700; line-height: 1; }
+.lf.i .lf-g { font-style: italic; font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
+.lf.u .lf-g { text-decoration: underline; text-underline-offset: 2px; }
+.lf.s .lf-g { text-decoration: line-through; }
+.lf.sz .lf-g { font-weight: 600; }
+.lf.sz.sm .lf-g { font-size: 11px; }
+.lf.sz.lg .lf-g { font-size: 16px; }
+.lf-szl { min-width: 22px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--dim); }
+.lf.sw { min-width: 0; width: calc(var(--lf) - 6px); padding: 0; }
+.lf.sw::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: var(--c, var(--text)); box-shadow: inset 0 0 0 1px rgba(128, 138, 160, .45); transition: box-shadow .12s, transform .12s; }
+.lf.sw:hover::before { transform: scale(1.12); }
+.lf.sw[aria-pressed="true"] { background: none; box-shadow: none; }
+.lf.sw[aria-pressed="true"]::before { box-shadow: inset 0 0 0 1px rgba(128, 138, 160, .45), 0 0 0 2px var(--panel), 0 0 0 3.5px var(--blue); }
+.lf.sw.none::before { background: linear-gradient(135deg, var(--panel) 44%, var(--red) 44%, var(--red) 56%, var(--panel) 56%); }
+.lf.sw.auto::before { background: var(--text); }
+/* inside the toolbar the chips are direct items of the bar; the "more" row wraps below everything else */
+.le-fmt.inbar { display: contents; }
+.le-fmt.inbar.compact { margin: 0; padding: 0; border: 0; background: none; box-shadow: none; animation: none; }
+.le-fmt.inbar .lf-toggle { margin-left: 0; }
+.le-bar .lf-rest { order: 9; margin-top: 4px; padding-top: 6px; }
+/* compact strip under a cell's textarea: B I U S, the yellow marker and a "more" chip */
+.le-fmt.compact { display: flex; margin-top: 4px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); animation: lf-in .14s ease-out; }
+.le-fmt.compact .lf-toggle { margin-left: auto; }
+.lf-toggle svg { transition: transform .18s; }
+.le-fmt.compact .lf-toggle[aria-expanded="true"] { color: var(--text); background: var(--hover); }
+.lf-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.lf-rest { display: none; flex-basis: 100%; align-items: center; flex-wrap: wrap; gap: 1px 2px; padding: 3px 0 1px; margin-top: 2px; border-top: 1px solid var(--line); }
+.le-fmt.compact.open .lf-rest { display: flex; }
+.lf-rest .le-switch { margin-left: auto; }
+@keyframes lf-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 
 /* edit mode */
 .le-ta { display: block; width: 100%; min-height: 76px; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--panel); color: var(--text); font: inherit; line-height: 1.65; resize: none; overflow: hidden; outline: none; box-shadow: 0 0 0 3px var(--le-ring); tab-size: 2; }
@@ -60,9 +111,10 @@
 
 /* monthly cells: tighter */
 .jcell-view .le-view { padding: 2px 3px; border-radius: 6px; min-height: 56px; font-size: 13px; }
-.jcell-view .le-line { gap: 3px; --le-step: 12px; line-height: 1.5; }
-.jcell-view .le-gut { width: 12px; }
-.jcell-view .le-mark { width: 14px; height: 14px; margin-top: .22em; }
+.jcell-view .le { --le-scale: .87; --le-gut: 12px; --le-mk: 16px; }
+.jcell-view .le-line { gap: 1px; --le-step: 12px; line-height: 1.5; }
+.jcell-view .le-mk, .jcell-view .le-gut { height: 1.5em; }
+.jcell-view .le-mark { width: 14px; height: 14px; }
 .jcell-view .le-ta { min-height: 80px; padding: 4px 6px; border-radius: 6px; font-size: 13px; box-shadow: 0 0 0 2px var(--le-ring); }
 .jcell.editable:hover { border-color: var(--line-2); }
 
@@ -78,6 +130,7 @@
 .le-sheet-body { flex: 1; overflow: auto; padding: 14px 18px 24px; }
 .le-sheet-body .le-ta { min-height: 55vh; font-size: 15px; }
 .le-sheet-body .le-view { font-size: 15px; }
+.le-sheet-body .le { --le-scale: 1; }
 @keyframes le-in { from { transform: translateX(36px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes le-fade { from { opacity: 0; } to { opacity: 1; } }
 
@@ -98,5 +151,12 @@
 
 @media (prefers-reduced-motion: reduce) {
   .le-sheet, .le-sheet::backdrop { animation: none; }
-  .le-mark, .le-fold, .le-knob::after { transition: none; }
+  .le-mark, .le-fold, .le-knob::after, .lf, .lf.sw::before { transition: none; }
+  .le-fmt.compact { animation: none; }
 }
+
+/* a monthly cell is narrow: smaller chips keep B I U S, the marker and "more" on one row */
+.jcell-view .le-fmt { --lf: 22px; }
+.jcell-view .lf { padding: 0 4px; }
+.jcell-view .lf-sep { margin: 0 2px; }
+.jcell-view .le-fmt.compact { padding: 2px 3px; }

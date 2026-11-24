@@ -163,3 +163,23 @@ def test_structure_undo_cases():
         capture_output=True, text=True, encoding="utf-8", timeout=60,
     )
     assert res.returncode == 0, res.stdout + res.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_lineeditor_format_cases():
+    """V-003: inline formatting of the line editor - presets, round trip, toggles, shortcuts (web/test/run_lineeditor_format.mjs)."""
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_lineeditor_format.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_lineeditor_paste_cases():
+    """V-003: clipboard HTML -> rows in the note markup for the line editor (web/test/run_lineeditor_paste.mjs)."""
+    res = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_lineeditor_paste.mjs")],
+        capture_output=True, text=True, encoding="utf-8", timeout=60,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
