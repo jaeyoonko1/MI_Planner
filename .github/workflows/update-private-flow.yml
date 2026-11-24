@@ -1,0 +1,68 @@
+name: Update private project flow
+
+on:
+  push:
+  workflow_dispatch:
+
+# All output remains in this private repository. No Pages deployment.
+permissions:
+  contents: write
+
+concurrency:
+  group: private-project-flow
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Test dashboard generation
+        run: |
+          node --test tests/test_private_flow.mjs
+          python -m unittest discover -s tests -p 'test_flow_site.py' -v
+
+      - name: Build private dashboard and HTML
+        env:
+          FLOW_COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          node scripts/render_flow_markdown.mjs
+          python scripts/build_flow_site.py --output _site
+
+      - name: Show dashboard in this Actions run
+        run: cat docs/PROJECT_FLOW_STATUS.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save private HTML as downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MI-Planner-Flow-HTML
+          path: _site
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Update private Markdown status on default branch
+        run: |
+          git add docs/PROJECT_FLOW_STATUS.md
+          if git diff --cached --quiet; then
+            echo "Project dashboard unchanged"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '[P8-06] Refresh private roadmap [skip ci]'
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
