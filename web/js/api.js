@@ -81,6 +81,24 @@ export const api = {
   },
   doiImportConfirm: (token, slides) => request("POST", `/api/doi-import/${token}/confirm`, { slides }),
   doiImportCancel: (token) => fetch(`/api/doi-import/${token}`, { method: "DELETE", keepalive: true }).catch(() => {}),
+  // Share package (P5-04): export returns a zip blob; import is preview (raw zip in) -> apply (choices per DOI uid).
+  doiPackageExport: async (ids, sender, note) => {
+    const res = await fetch("/api/doi-package/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, sender, note }) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
+    }
+    const filename = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "doi-package.zip";
+    return { blob: await res.blob(), filename, count: Number(res.headers.get("X-Doi-Count") || ids.length) };
+  },
+  doiPackagePreview: async (file) => {
+    const res = await fetch(`/api/doi-package/preview?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
+    return data;
+  },
+  doiPackageApply: (token, decisions) => request("POST", `/api/doi-package/${token}/apply`, { decisions }),
+  doiPackageCancel: (token) => fetch(`/api/doi-package/${token}`, { method: "DELETE", keepalive: true }).catch(() => {}),
   plans: () => request("GET", "/api/plans"),
   plan: (id) => request("GET", `/api/plans/${id}`),
   deletePlan: (id) => request("DELETE", `/api/plans/${id}`),

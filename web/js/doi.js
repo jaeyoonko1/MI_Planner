@@ -6,6 +6,7 @@ import {
 } from "./doi-model.js";
 import { decode, drawThumb } from "./doi-thumb.js";
 import { openDoiImport } from "./doi-import.js";
+import { openDoiExport, openDoiPackageImport } from "./doi-package.js";
 import { formatSize, formatStamp } from "./plans-model.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
@@ -58,7 +59,13 @@ export async function renderDoi(host, selectedId) {
   const importBtn = button("PPT에서 가져오기", "", () => openDoiImport({ onDone: afterImport }));
   importBtn.prepend(svg("upload"));
   const heroActions = el("div", "doi-hero-actions");
-  heroActions.append(importBtn, addBtn);
+  const pkgImportBtn = button("패키지 가져오기", "", () => openDoiPackageImport({ onDone: afterPackage }));
+  pkgImportBtn.prepend(svg("upload"));
+  pkgImportBtn.title = "다른 사람이 내보낸 DOI 공유 패키지(.zip) 가져오기";
+  const pkgExportBtn = button("패키지 내보내기", "", () => exportPackage());
+  pkgExportBtn.prepend(svg("download"));
+  pkgExportBtn.title = "DOI를 이미지와 함께 공유 패키지(.zip)로 내보내기";
+  heroActions.append(importBtn, pkgImportBtn, pkgExportBtn, addBtn);
   hero.append(title, heroActions);
 
   const tools = el("div", "doi-tools");
@@ -431,7 +438,7 @@ export async function renderDoi(host, selectedId) {
     row("결함 종류", item.defect_type);
     row("설비·조건", item.tool_condition);
     row("출처", [item.source_dept, item.source_author].filter(Boolean).join(" · "));
-    row("가져온 파일", item.source_ref);
+    row(item.origin === "imported" ? "가져온 곳" : "가져온 파일", item.source_ref);
     if (item.tags.length) {
       const tags = el("div", "doi-taglist");
       for (const t of item.tags) {
@@ -464,6 +471,11 @@ export async function renderDoi(host, selectedId) {
       const del = button("휴지통으로", "quiet danger", () => trash(item));
       del.prepend(svg("trash"));
       actions.append(edit, del);
+      if (item.status !== "draft") {
+        const share = button("패키지로 내보내기", "quiet", () => exportPackage(item));
+        share.prepend(svg("download"));
+        actions.append(share);
+      }
     }
     wrap.append(actions);
     if (item.origin === "imported") wrap.append(el("p", "doi-note", "가져온 DOI는 읽기 전용이에요. 출처 정보를 그대로 보존하기 위해서예요."));
@@ -538,6 +550,22 @@ export async function renderDoi(host, selectedId) {
       await load();
       toast(list.length === 1 ? "초안을 확정했어요" : `초안 ${list.length}개를 확정했어요`);
     } catch (e) { toast(e.message, { error: true }); }
+  }
+
+  function exportPackage(only = null) {
+    if (st.trash && !only) { toast("휴지통에서는 내보낼 수 없어요. 목록으로 돌아가 주세요.", { error: true }); return; }
+    const scopes = [];
+    if (only) scopes.push({ key: "open", label: "지금 연 DOI", items: [only] });
+    scopes.push({ key: "shown", label: hasFilter() ? "필터에 보이는 DOI" : "보이는 DOI", items: shownItems() });
+    if (hasFilter()) scopes.push({ key: "all", label: "전체", items: st.items });
+    openDoiExport({ scopes: st.trash ? scopes.slice(0, 1) : scopes, initial: only ? "open" : "shown" });
+  }
+
+  async function afterPackage() {
+    if (st.trash) st.trash = false;
+    Object.assign(st, { product: "", step: "", defect: "", tags: [], query: "", draftsOnly: false });
+    search.value = "";
+    try { await load(); } catch (e) { fail(e); }
   }
 
   async function afterImport({ created }) {

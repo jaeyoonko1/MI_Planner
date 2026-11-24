@@ -1,0 +1,28 @@
+/* DOI share package (P5-04): tokens only; both themes come from theme.css */
+.dp-sheet .sheet-b { display: grid; gap: 14px; padding-top: 6px; align-content: start; }
+.dp-sheet .mos-in { font: 13px/1.5 var(--font); width: 100%; box-sizing: border-box; }
+.dp-sheet textarea.mos-in { resize: vertical; min-height: 64px; }
+.dp-sheet .btn svg.i { width: 15px; height: 15px; }
+.dp-k { font-size: 11.5px; font-weight: 650; color: var(--muted); letter-spacing: .02em; }
+.dp-field { display: grid; gap: 6px; min-width: 0; }
+.dp-hint { font-size: 11.5px; color: var(--muted); }
+.dp-scope .chips, .dp-filter { display: flex; gap: 6px; flex-wrap: wrap; }
+.dp-bulk { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 2; padding: 6px 0; background: var(--panel); }
+.dp-bulk .btn.sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.dp-bulk .chip .n { margin-left: 6px; font-variant-numeric: tabular-nums; opacity: .75; }
+
+.dp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.dp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 16px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); content-visibility: auto; contain-intrinsic-size: auto 76px; }
+.dp-row.conflict { border-color: var(--warn-bd); }
+.dp-row.identical { opacity: .8; }
+.dp-main { display: grid; gap: 3px; min-width: 0; }
+.dp-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.dp-title b { font-size: 13.5px; overflow-wrap: anywhere; }
+.dp-meta { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.dp-why { font-size: 12px; color: var(--text-2); line-height: 1.5; overflow-wrap: anywhere; }
+.dp-row.conflict .dp-why { color: var(--warn-fg); }
+.dp-choices { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 1100px) {
+  .dp-row { grid-template-columns: minmax(0, 1fr); }
+  .dp-choices { justify-content: flex-start; }
+}
