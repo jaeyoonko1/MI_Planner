@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · V-008
+- 한 일: 노트 단 삭제 불가·아래 행 추가 불가 수정(D-41). 원인: 단 추가만 있고 삭제·행 개념이 없었다. 본문 표식 `<!-- row -->`로 행을 추가(`note-column-layout.js`: insertColumn·addRowBelow·deleteColumn·mergeTarget, 표식 종류에서 행 구조 계산), 레이아웃은 2행 이상일 때만 `note_layout.rows`. `note-columns.js`: 단별 hover/Tab 도구줄(아이콘 버튼 + aria-label), 삭제 확인 패널(토글 칩 앞 단에 합치기/내용까지 삭제, 빈 단은 즉시), 단·행 변경은 스냅샷 되돌리기(토스트 + Ctrl+Z, 그 뒤 입력하면 편집기 자체 실행 취소), 단축키 Alt+Shift+←·→·↓·Delete + "단 단축키" 목록. 다른 단 편집기는 유지(포커스·undo 이력 보존).
+- 바뀐 파일: web/js/(note-column-layout, note-columns).js, web/css/note.css, app/routers/pages.py(`rows` 검증), web/test/run_note_columns.mjs, tests/test_pages.py, docs/(SPEC, DECISIONS, VOC, WORKLOG), project_flow.html
+- 테스트: Node 왕복(원본==1차==2차, 표식 없는 파일 불변, 한도 초과 표식은 본문 유지)·삽입·삭제·병합·레이아웃 테스트 통과, pytest 신규 `test_note_layout_rows_round_trip_and_validation` 포함 test_pages 통과. 격리 vault·가짜 데이터로 앱 내 브라우저에서 확인: 삭제 확인 패널·합치기·되돌리기(Ctrl+Z)·행 추가·단축키 목록, 다크/라이트, 1024px, 콘솔 오류 없음(favicon 404만).
+- 다음에 할 것 / 막힌 것: 실제 Edge·Whale 단축키·실제 노트 미확인(VERIFY). 단 합치기 시 앞 단의 접힘 상태는 제목 키 기준 유지. 이슈 메모(compact)는 `saveLayout`이 없어 도구줄을 숨김 — 필요하면 새 VOC. 전체 pytest의 test_lineeditor_core_cases 실패는 V-003 보류 중인 미커밋 수정 때문.
+
 ## 2026-11-24 · Claude Code(Sonnet) · V-004
 - 한 일: 구조 화면에서 Delete 키·삭제 버튼으로 이슈·자유 배치 그룹을 삭제하고 Ctrl+Z(·되돌리기 버튼·토스트)로 복원, Ctrl+Shift+Z/Ctrl+Y로 다시 삭제(D-40). 서버 `app/repositories/structure_trash.py`: 한 트랜잭션 소프트 삭제 + `structure_trash` 스냅샷(마이그레이션 012), 그룹 삭제는 하위를 그 자리로 올리거나(기본) 하위까지 삭제, 이슈 페이지·이미지 폴더는 `vault/.trash`로(`Vault.restore_page`·`restore_issue_files`로 복원), 일지 연결은 풀었다가 줄이 그대로면 복원 시 다시 연결, 하위 할일 부모 연결·형제 순서 복원, 실패하면 DB·페이지 이동 전부 원복. 화면: 행 다중 선택(클릭·Shift·Ctrl·Shift+방향키·Ctrl+A, `structselect.js`), 순수 되돌리기 스택 `structundo.js`(다중 단계, 진행 중 중복 입력 무시), 영향 확인 창 `structdelete.js`(그룹·페이지·일지·하위 할일이 걸릴 때만, 하위 처리 칩), 삭제 뒤 이웃 행 선택·포커스, `aria-live` 안내. 입력창·열린 창·상세 패널 안에서는 키를 가로채지 않고 Z는 `e.code`로도 판별(한글 입력 상태 대응).
 - 바뀐 파일: app/(repositories/structure_trash, routers/structure, vault).py, migrations/012_structure_trash.sql, web/js/(structure, structselect, structundo, structdelete, api).js, web/css/structure.css, web/index.html(undo 아이콘), web/test/run_structure_undo.mjs, tests/(test_structure_trash, test_lineeditor_js).py, docs/(SPEC, DECISIONS D-40, VOC, WORKLOG), project_flow.html

@@ -67,6 +67,20 @@ def test_note_layout_round_trip_without_rewriting_markdown(client) -> None:
     assert client.get("/api/pages", params={"path": page["path"]}).json()["meta"]["note_layout"] == layout
 
 
+def test_note_layout_rows_round_trip_and_validation(client) -> None:
+    client.post("/api/pages", json={"title": "grid"})
+    path = {"path": "grid"}
+    content = "A\n<!-- column -->\nB\n<!-- row -->\nC\n"
+    client.put("/api/pages", params=path, json={"content": content})
+    layout = {"mode": "fit", "rows": [[40, 60], [100]]}
+    assert client.put("/api/pages/layout", params=path, json=layout).json() == {"note_layout": layout}
+    assert client.get("/api/pages", params=path).json()["meta"]["note_layout"] == layout
+    assert (client.vault_dir / "grid" / "index.md").read_bytes() == content.encode("utf-8")
+    for bad in ([[40, 50], [100]], [[100]], [[40, 60], []], [[20] * 5, [100]], [[100]] * 7):
+        assert client.put("/api/pages/layout", params=path, json={"mode": "fit", "rows": bad}).status_code == 422
+    assert client.get("/api/pages", params=path).json()["meta"]["note_layout"] == layout
+
+
 @pytest.mark.parametrize("layout", [
     {"mode": "invalid", "widths": [50, 50]},
     {"mode": "fit", "widths": [30, 60]},

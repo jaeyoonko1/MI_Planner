@@ -110,9 +110,11 @@
 .note-format-host { position: sticky; top: calc(var(--pad-t) * -1); z-index: 2; }
 .note-format-host .note-bar { position: static; border-radius: 0; }
 .note-column-viewport { min-width: 0; overflow: auto; }
+.note-column-stack { min-width: 0; }
 .note-column-grid { display: grid; min-width: 0; }
-.note-layout[data-mode="scroll"]:not([data-columns="1"]) .note-column-grid { width: calc(320px * var(--note-columns)); }
-.note-column { min-width: 0; }
+.note-column-grid + .note-column-grid { border-top: 1px solid var(--line); }
+.note-layout[data-mode="scroll"]:not([data-span="1"]) .note-column-stack { width: calc(320px * var(--note-columns)); }
+.note-column { position: relative; min-width: 0; }
 .note-column .note-editor { overflow-wrap: anywhere; }
 .note-layout:not([data-columns="1"]) .note-column .note-editor:focus { background: var(--fill); }
 .note-column-divider { position: relative; min-width: 0; cursor: col-resize; touch-action: none; }
@@ -125,6 +127,31 @@
 .note-layout.compact .note-column:not(:first-child) { border-top: 1px solid var(--line); }
 .note-layout.compact .note-column { --gut: 20px; }
 .note-layout.compact .note-layout-status { margin-block: 5px; }
+
+/* V-008: per-column tools (hover / keyboard focus), delete confirmation, shortcut list. */
+.note-col-tools { position: absolute; top: 6px; right: 8px; z-index: 3; display: flex; gap: 1px; padding: 2px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--pop-bg); box-shadow: var(--shadow-pop); opacity: 0; transform: translateY(-2px); pointer-events: none; transition: opacity .14s var(--ease), transform .14s var(--ease); }
+.note-column:hover > .note-col-tools, .note-col-tools:focus-within, .note-column[data-open] > .note-col-tools { opacity: 1; transform: none; pointer-events: auto; }
+.note-col-btn { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; transition: background .12s, color .12s; }
+.note-col-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.note-col-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.note-col-btn.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+.note-col-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.note-col-btn:disabled { opacity: .35; cursor: default; }
+.note-col-confirm { position: absolute; top: 40px; right: 8px; z-index: 4; width: min(264px, calc(100% - 16px)); padding: 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--pop-bg); box-shadow: var(--shadow-pop); animation: note-pop .16s var(--ease); }
+.note-col-confirm-t { margin: 0 0 9px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.note-col-choices, .note-col-confirm-a { display: flex; flex-wrap: wrap; gap: 6px; }
+.note-col-confirm-a { margin-top: 10px; justify-content: flex-end; }
+.note-col-confirm .chip { min-height: 28px; font-size: 12px; }
+.note-col-confirm .chip.danger { border-color: color-mix(in srgb, var(--red) 55%, transparent); color: var(--red); }
+.note-col-confirm .chip.danger:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
+.note-layout-help { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); font-size: 12px; color: var(--text-2); }
+.note-layout-help[hidden] { display: none; }
+.note-layout-help dt, .note-layout-help dd { margin: 0; }
+.note-layout-help kbd { padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--panel); font: 11.5px var(--mono); color: var(--text); }
+@keyframes note-pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .note-col-tools, .note-col-btn, .note-col-confirm { transition: none; animation: none; } }
+@media (hover: none) { .note-col-tools { opacity: 1; transform: none; pointer-events: auto; } }
+.note-layout.compact .note-col-tools { display: none; }
 
 /* P3-06: editable tables are isolated from the surrounding rich text. */
 .note-editor .note-table { padding: 0; border: 1px solid var(--line); border-radius: 8px; }

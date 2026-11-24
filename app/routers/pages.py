@@ -38,10 +38,14 @@ Percent = Annotated[int, Field(strict=True, gt=0, le=100)]
 class NoteLayout(BaseModel):
     mode: Literal["fit", "scroll"]
     widths: Annotated[list[Percent], Field(min_length=2, max_length=4)] | None = None
+    # V-008: one width list per column row (1~4 columns each, up to 6 rows). Written only for multi-row notes.
+    rows: Annotated[list[Annotated[list[Percent], Field(min_length=1, max_length=4)]], Field(min_length=2, max_length=6)] | None = None
 
     @model_validator(mode="after")
     def check_total(self) -> NoteLayout:
         if self.widths is not None and sum(self.widths) != 100:
+            raise ValueError("단 너비 비율의 합은 100이어야 합니다.")
+        if self.rows is not None and any(sum(row) != 100 for row in self.rows):
             raise ValueError("단 너비 비율의 합은 100이어야 합니다.")
         return self
 
