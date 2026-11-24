@@ -4,6 +4,8 @@ import { api } from "./api.js";
 import {
   facets, filterItems, gridMove, metaLine, move, originLabel, parseTags, pickImage, sortItems, suggestions, thumbSize, toggle,
 } from "./doi-model.js";
+import { decode, drawThumb } from "./doi-thumb.js";
+import { openDoiImport } from "./doi-import.js";
 import { formatSize, formatStamp } from "./plans-model.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
@@ -20,25 +22,6 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const drawerMode = () => window.matchMedia("(max-width: 1239px)").matches;
 
 // ---- image helpers (browser side only) -----------------------------------------------------------------------
-
-async function decode(file) {
-  try {
-    const bmp = await createImageBitmap(file);
-    return { bmp, w: bmp.width, h: bmp.height };
-  } catch { return null; }
-}
-
-async function drawThumb(decoded) {
-  const { w, h } = thumbSize(decoded.w, decoded.h, 480);
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(decoded.bmp, 0, 0, w, h);
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.82));
-}
 
 function fallbackTile(label = "이미지를 불러오지 못했어요") {
   const box = el("span", "doi-noimg");
@@ -72,7 +55,11 @@ export async function renderDoi(host, selectedId) {
   title.append(el("p", "lead", "Defect of Interest를 이미지와 함께 모아 두고, 제품·Step·결함 종류로 바로 찾아요."));
   const addBtn = button("DOI 추가", "pri", () => openForm());
   addBtn.prepend(svg("plus"));
-  hero.append(title, addBtn);
+  const importBtn = button("PPT에서 가져오기", "", () => openDoiImport({ onDone: afterImport }));
+  importBtn.prepend(svg("upload"));
+  const heroActions = el("div", "doi-hero-actions");
+  heroActions.append(importBtn, addBtn);
+  hero.append(title, heroActions);
 
   const tools = el("div", "doi-tools");
   const search = el("input", "doi-search");
@@ -203,6 +190,10 @@ export async function renderDoi(host, selectedId) {
       b.setAttribute("aria-pressed", String(st.draftsOnly));
       b.addEventListener("click", () => { st.draftsOnly = !st.draftsOnly; paint(); });
       g.append(b);
+      if (st.draftsOnly) {
+        const drafts = filterItems(st.items, state()).filter((i) => i.status === "draft");
+        if (drafts.length) g.append(button(`보이는 초안 ${drafts.length}개 모두 확정`, "sm", () => confirmDrafts(drafts)));
+      }
       filters.append(g);
     }
     if (hasFilter()) {
@@ -411,6 +402,12 @@ export async function renderDoi(host, selectedId) {
       row.append(...bs);
       wrap.append(row);
     }
+    if (item.status === "draft" && !item.deleted) {
+      const banner = el("div", "doi-draftbar");
+      banner.append(svg("alert"), el("span", "", "PPT에서 만든 초안이에요. 이미지와 내용을 확인하고 확정하면 초안 표시가 사라져요."));
+      banner.append(button("초안 확정", "pri sm", () => confirmDrafts([item])));
+      wrap.append(banner);
+    }
     wrap.append(viewer(item));
 
     const dl = el("dl", "doi-dl");
@@ -434,6 +431,7 @@ export async function renderDoi(host, selectedId) {
     row("결함 종류", item.defect_type);
     row("설비·조건", item.tool_condition);
     row("출처", [item.source_dept, item.source_author].filter(Boolean).join(" · "));
+    row("가져온 파일", item.source_ref);
     if (item.tags.length) {
       const tags = el("div", "doi-taglist");
       for (const t of item.tags) {
@@ -533,6 +531,23 @@ export async function renderDoi(host, selectedId) {
   }
 
   // -- actions --
+  async function confirmDrafts(list) {
+    try {
+      for (const d of list) await api.doiPatch(d.id, { status: "ready" });
+      if (!st.items.some((i) => i.status === "draft" && !list.includes(i))) st.draftsOnly = false;
+      await load();
+      toast(list.length === 1 ? "초안을 확정했어요" : `초안 ${list.length}개를 확정했어요`);
+    } catch (e) { toast(e.message, { error: true }); }
+  }
+
+  async function afterImport({ created }) {
+    if (st.trash) st.trash = false;
+    Object.assign(st, { product: "", step: "", defect: "", tags: [], query: "", draftsOnly: created > 0 });
+    search.value = "";
+    try { await load(); } catch (e) { fail(e); }
+    if (created) toast(`초안 ${created}개가 만들어졌어요. 확인하고 ‘초안 확정’을 눌러 주세요.`);
+  }
+
   async function trash(item) {
     try {
       await api.doiTrash(item.id);

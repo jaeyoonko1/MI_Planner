@@ -59,3 +59,48 @@ assert.equal(pickImage([{ id: 1 }, { id: 2 }], 2).id, 2);
 assert.equal(pickImage([{ id: 1 }], 7).id, 1);
 assert.equal(pickImage([], 7), null);
 console.log("doi model ok");
+
+// ---- P5-03: PPT import model ----
+{
+  const m = await import("../js/doi-import-model.js");
+  const img = (key, extra = {}) => ({ key, caption: "", duplicate: null, repeated: false, ...extra });
+  const slide = (o) => ({ index: 1, title: "", body: "", notes: "", hidden: false, images: [], skipped: [], duplicate_slide: null, ...o });
+  const slides = [
+    slide({ index: 1, title: "A", body: "text", notes: "memo", images: [img("a"), img("logo", { repeated: true })] }),
+    slide({ index: 2, title: "B", images: [img("b", { duplicate: { doi_id: 1 } })] }),
+    slide({ index: 3, hidden: true, images: [img("c")] }),
+    slide({ index: 4, images: [img("d")], duplicate_slide: { doi_id: 2, deleted: false } }),
+    slide({ index: 5, title: "E", skipped: [{ name: "x.emf", reason: "EMF" }] }),
+  ];
+  assert.deepEqual(slides.map(m.defaultSelected), [true, false, false, false, false]);
+  assert.equal(m.buildDescription(slides[0], { body: true, notes: true }), "text\n\n[발표자 노트]\nmemo");
+  assert.equal(m.buildDescription(slides[0], { body: true, notes: false }), "text");
+  assert.equal(m.buildDescription(slides[0], { body: false, notes: false }), "");
+  const rows = m.initRows(slides, { body: true, notes: false });
+  assert.deepEqual(m.chosenKeys(rows[0]), ["a"]);
+  assert.equal(rows[0].desc, "text");
+  rows[0].descEdited = true;
+  rows[0].desc = "mine";
+  rows[4].desc = "stale";
+  m.rebuildDescriptions(rows, slides, { body: true, notes: true });
+  assert.equal(rows[0].desc, "mine", "edited descriptions are kept");
+  assert.equal(rows[4].desc, "");
+  assert.deepEqual(m.slideBadges(slides[1]).map((b) => b[1]), ["이미지 1장 이미 있음"]);
+  assert.deepEqual(m.slideBadges(slides[0]).map((b) => b[1]), ["반복 이미지 1장 제외"]);
+  assert.deepEqual(m.slideBadges(slides[4]).map((b) => b[0]), ["bad"]);
+  assert.ok(m.slideBadges(slide({ index: 9 })).some((b) => b[1] === "이미지 없음"));
+  assert.deepEqual(m.slideBadges(slides[3]).map((b) => b[1]), ["이미 가져온 슬라이드"]);
+  assert.deepEqual(m.summarize(slides, rows), { total: 5, selected: 1, images: 1, noImage: 0 });
+  rows[4].sel = true;
+  assert.equal(m.summarize(slides, rows).noImage, 1);
+  assert.deepEqual(m.visible(slides, rows, "on").map((s) => s.index), [1, 5]);
+  assert.deepEqual(m.visible(slides, rows, "issue").map((s) => s.index), [2, 4, 5]);
+  rows[1].sel = true; rows[1].title = "  "; rows[2].sel = false;
+  const payload = m.buildPayload(slides, rows, { product: "PROD-TEST-A", tags: ["x"] });
+  assert.deepEqual(payload.map((p) => p.index), [1, 2, 5]);
+  assert.equal(payload[1].title, "B", "blank title falls back to the slide title");
+  assert.equal(m.buildPayload([slide({ index: 1 })], [{ index: 1, sel: true, title: "", desc: "", defect_type: "", images: {} }], {})[0].title, "슬라이드 1");
+  assert.equal(payload[0].product, "PROD-TEST-A");
+  assert.deepEqual(m.applyResult(rows, { created: [{ index: 1 }] }).has(1), true);
+  assert.equal(rows[0].sel, false);
+}

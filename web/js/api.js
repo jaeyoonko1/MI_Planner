@@ -72,6 +72,15 @@ export const api = {
   // Raw image bytes as the body; the thumbnail is a small JPEG the browser draws on a canvas (no server-side imaging).
   doiAddImage: (id, blob, { width = 0, height = 0 } = {}) => rawUpload("POST", `/api/doi/${id}/images?width=${width}&height=${height}`, blob),
   doiPutThumb: (imageId, blob) => rawUpload("PUT", `/api/doi-images/${imageId}/thumb`, blob),
+  // PPT import (P5-03): raw .pptx bytes in, staged preview out; nothing is saved until confirm.
+  doiImportPreview: async (file) => {
+    const res = await fetch(`/api/doi-import/pptx?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
+    return data;
+  },
+  doiImportConfirm: (token, slides) => request("POST", `/api/doi-import/${token}/confirm`, { slides }),
+  doiImportCancel: (token) => fetch(`/api/doi-import/${token}`, { method: "DELETE", keepalive: true }).catch(() => {}),
   plans: () => request("GET", "/api/plans"),
   plan: (id) => request("GET", `/api/plans/${id}`),
   deletePlan: (id) => request("DELETE", `/api/plans/${id}`),

@@ -18,6 +18,7 @@ from app.repositories.tasks import TaskError
 from app.routers import dashboard as dashboard_router
 from app.routers import eval_templates, evaluations
 from app.routers import doi as doi_router
+from app.routers import doi_import as doi_import_router
 from app.routers import html_pages
 from app.routers import plans as plans_router
 from app.routers import search as search_router
@@ -64,6 +65,7 @@ def create_app(
     app.include_router(evaluations.router)
     app.include_router(evaluations.cell_router)
     app.include_router(plans_router.router)
+    app.include_router(doi_import_router.router)
     app.include_router(doi_router.router)
     app.include_router(doi_router.image_router)
 

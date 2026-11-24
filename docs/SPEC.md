@@ -359,12 +359,14 @@ vault/
   - API: `GET /api/plans`, `GET /api/plans/{id}`, `DELETE /api/plans/{id}`, `POST /api/plans/import?name=&dry_run=&options=` (본문 = .xlsx 바이트, `options` = JSON `{sheet, header_row, mapping, product, fill_down, source_path}`). 설정 키 `plan_mapping`(JSON, 필드→머리글 이름).
 - **DOI 라이브러리 (D-18)**: DOI = Defect of Interest. **이미지가 핵심**이라 표가 아니라 카드+표 겸용 화면.
   - 항목: 제품, plan, step, 결함 종류, 설명, 검출 설비·조건, 이미지 여러 장, 출처(부서·작성자), 태그.
-  - **PPT 가져오기**: 기존 DOI PPT에서 슬라이드별 이미지·텍스트를 뽑아 초안 생성 → 사람이 확인·수정. (python-pptx)
+  - **PPT 가져오기**: 기존 DOI PPT에서 슬라이드별 이미지·텍스트를 뽑아 초안 생성 → 사람이 확인·수정. (표준 라이브러리, D-34)
   - 보기: 제품·step·결함 종류 버튼 필터, 이미지 그리드 / 표 전환. plan/step 정보와 연결.
   - **구현 (P5-02)**: 화면 `#/doi`(사이드바 `DOI 라이브러리`, `#/doi/<id>`는 상세가 열린 상태). 카드/표 전환 칩(기억됨), 찾기(제목·설명·설비·출처·태그·이미지 설명, 단어 AND), 제품·Step·결함 종류 단일 선택 칩 + 태그 다중 선택 칩(모두 가진 DOI, 칩의 개수는 다른 필터를 반영), `휴지통` 토글 칩, 초안이 있을 때만 `초안만 보기`. 카드: 대표 이미지(썸네일)·장수·제목·제품/Plan/Step·결함 종류·태그, 방향키로 카드 이동. 표: 정렬 가능한 머리글. 상세: 이미지 뷰어(이전/다음·썸네일 줄·클릭 시 전체 화면 보기, ←/→), 항목, 태그(누르면 필터), 같은 이름의 Plan이 있으면 `#/plans/<id>` 링크. 1240px 이상은 오른쪽 패널, 미만은 오른쪽 서랍(바깥 클릭·Esc로 닫기).
   - `DOI 추가/편집` 창: 항목 + 제품·Plan·Step·결함 종류 제안 칩(Plan·Step 표와 기존 DOI 값), 태그 칩 입력, 이미지 끌어놓기·고르기·붙여넣기(Ctrl+V), 이미지별 설명·순서(↑↓, 맨 앞이 대표)·빼기. 저장 = 레코드 → 이미지 올리기(+브라우저가 만든 썸네일) → 설명·순서. 중간에 실패하면 만들어진 DOI를 유지하고 다시 `저장`하면 이어서 올림. 닫을 때 바뀐 내용이 있으면 확인.
   - 저장·삭제 규칙은 D-33: 이미지 파일은 `data/doi/<DOI uid>/<이미지 uid>.<ext>`(git 제외), DOI·이미지 삭제는 휴지통(복구 가능), 가져온 DOI는 읽기 전용.
   - API: `GET /api/doi?trash=`, `POST /api/doi`, `GET|PATCH|DELETE /api/doi/{id}`(DELETE = 휴지통), `POST /api/doi/{id}/restore`, `POST /api/doi/{id}/images?width=&height=`(본문 = 이미지 바이트), `PUT /api/doi/{id}/images/order {ids}`, `PATCH|DELETE /api/doi/{id}/images/{image_id}`, `GET /api/doi-images/{id}/file|thumb`, `PUT /api/doi-images/{id}/thumb`. 목록은 이미지 메타를 함께 돌려줌.
+  - **PPT 가져오기 (P5-03, D-34)**: 헤더 `PPT에서 가져오기` → 창에 `.pptx`를 끌어놓거나 고르면 미리보기(저장 없음): 슬라이드마다 선택 체크, 삽입된 그림 썸네일(눌러서 넣기/빼기), 제목·결함 종류·설명 편집, `설명에 넣기` 토글 칩(슬라이드 본문·발표자 노트), 공통 항목(제품·Plan·Step·출처 부서·태그), 보기 칩(전체/가져올 것/건너뜀/확인 필요), 상태 배지(이미 가져온 슬라이드·이미지 이미 있음·반복 이미지 제외·숨긴 슬라이드·가져올 수 없는 그림과 이유). `초안 N개 만들기` → 슬라이드마다 `status='draft'` DOI(`source_ref` = `파일명#슬라이드 N`)와 이미지가 생기고 `초안만 보기`로 열린다. 초안은 상세의 `초안 확정`으로 `ready`가 된다. 일부 실패하면 실패한 슬라이드만 다시 선택된 채 남는다.
+  - API: `POST /api/doi-import/pptx?name=`(본문 = .pptx 바이트 → `{token, filename, slides[{index,title,body,notes,hidden,images[{key,ext,size,width,height,caption,cropped,sha256,duplicate,repeated}],skipped[{name,reason}],duplicate_slide}], warnings}`), `GET /api/doi-import/{token}/image/{key}`, `POST /api/doi-import/{token}/confirm {slides:[{index,title,description,product,plan,step,defect_type,source_dept,tags,images:[key],captions}]}` → `{created[{index,id,images[{key,id}]}], failed[{index,message}]}`, `DELETE /api/doi-import/{token}`(취소). 테스트용 가짜 .pptx: `python scripts/make_sample_pptx.py`.
   - **공유 패키지**: 선택한 DOI를 폴더 한 개(이미지 + `doi.json`)로 내보내기 → 사내 드라이브에 두면 다른 사람·부서가 가져오기. 가져온 항목은 출처 표시 + 읽기 전용. (다른 제품·부서 DOI를 참고할 수 없는 불편 해소의 첫 단계)
 - 공통: 엑셀 붙여넣기 일괄 입력, 다른 페이지에서 링크.
 
