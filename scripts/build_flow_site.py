@@ -1,7 +1,7 @@
-"""Build an isolated, public project-flow site for GitHub Pages.
+"""Build a private-download HTML artifact for GitHub Actions.
 
 Only project_flow.html is copied. Private vault/DB/config/docs never enter the
-published artifact. FLOW completion flags remain the source of truth.
+artifact. FLOW completion flags remain the source of truth.
 """
 
 from __future__ import annotations
@@ -59,10 +59,10 @@ def build_site(source: Path, output: Path, *, sha: str, subject: str, repo: str,
     # The published site is a static snapshot. Browser checkboxes still store
     # local overrides; changing them never changes repository FLOW data.
     banner = (
-        '<div class="card" aria-label="GitHub Pages 자동 배포 정보" '
+        '<div class="card" aria-label="GitHub 비공개 빌드 정보" '
         'style="margin-top:12px;padding:10px 14px;display:flex;gap:10px;'
         'align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)">'
-        '<strong style="color:var(--done)">● GitHub 자동 배포</strong>'
+        '<strong style="color:var(--done)">● GitHub 비공개 빌드</strong>'
         f'<span>{escape(date_label)} · {escape(version)}</span>'
         f'<span style="flex:1;min-width:160px">{safe_subject}</span>'
         f'{ref}'
@@ -89,7 +89,7 @@ def main() -> None:
         repo=os.getenv("GITHUB_REPOSITORY", "jaeyoonko1/MI_Planner"),
         deployed_at=datetime.now(ZoneInfo("Asia/Seoul")),
     )
-    print(f"Built GitHub Pages site: {args.output}")
+    print(f"Built private HTML artifact: {args.output}")
 
 
 if __name__ == "__main__":
