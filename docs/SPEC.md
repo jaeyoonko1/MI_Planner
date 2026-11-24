@@ -503,6 +503,7 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 - 정형 데이터는 에이전트용 CLI로: `python -m app.cli eval show <id>`, `task add ...`, `eval set-stage ...`
   - **구현(P7-01)**: `app/cli.py`, JSON 출력·오류는 `{"error"}`+종료 코드 1. `task list|show|add|set|done`, `eval list|show [--full]|stalled|set-stage <id> --cells 1,2 --stage KEY [--at ISO]|set-cell <cell> --value K=V --note|history <cell>`, `search <q>`. 전역 옵션 `--db`·`--vault`. 값에 `none`을 주면 날짜·메모 등을 비움.
 - `skills/` 폴더 (에이전트가 읽는 SKILL.md):
+  - **구현(P7-02)**: `skills/<이름>/SKILL.md`(frontmatter `name`=폴더명·`description` + 본문), 형식·공통 규칙은 `skills/README.md`, 검사기 `python scripts/check_skills.py`(표준 라이브러리, 외부 URL 금지 검사 포함). `skill-maker`만 구현됨.
   | 스킬 | 예시 요청 |
   |---|---|
   | `status-brief` | "지금 이 설비 뭐 해야 돼?" → 평가·할일·MOS에서 그 설비의 남은 일 정리 |

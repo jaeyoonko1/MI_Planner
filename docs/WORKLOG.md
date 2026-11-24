@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P7-02
+- 한 일: flow에 Opus로 표시된 작업이라 안전한 범위만 구현. `skills/README.md`(폴더·SKILL.md 형식·공통 오프라인 규칙), `skills/skill-maker/SKILL.md`(대화로 목적 파악 → 이름 → 초안 → 검사 → 가짜 데이터 시험 → 보고), `scripts/check_skills.py`(frontmatter·name=폴더명·description·본문·외부 URL 검사, 표준 라이브러리). SPEC 4.7 갱신.
+- 바뀐 파일: skills/(README.md, skill-maker/SKILL.md), scripts/check_skills.py, tests/test_skills.py, docs/(SPEC, WORKLOG), project_flow.html
+- 테스트: pytest 429 passed(test_flow_site 제외), 신규 tests/test_skills.py 3건.
+- 다음에 할 것 / 막힌 것: skill-maker 대화 절차의 품질은 Opus 검토 필요(VERIFY P7-02). 사내 OpenCode의 스킬 인식 방식 확인 필요. 다음은 P7-03.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P7-01
 - 한 일: 에이전트용 CLI `python -m app.cli`(표준 라이브러리 argparse, 새 의존성 없음). 기존 repository를 그대로 호출하므로 앱과 같은 검증·로그 규칙(D-09)을 따르고 출력은 항상 JSON 한 덩어리, 오류는 `{"error": ...}` + 종료 코드 1. 명령: `task list|show|add|set|done`, `eval list|show [--full]|stalled|set-stage|set-cell|history`, `search`. `--db`·`--vault`로 경로 지정(기본은 data/·vault/). RCP 쓰기 명령은 만들지 않음(D-11). AGENTS.md 9장에 사용법 추가, SPEC 4.7 갱신.
 - 바뀐 파일: app/cli.py, tests/test_cli.py, AGENTS.md, docs/(SPEC, WORKLOG), project_flow.html
