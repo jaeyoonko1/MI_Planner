@@ -6,7 +6,7 @@
 //   inline : **bold** *italic* ~~strike~~ `code`, and ONLY these HTML tags:
 //            <u>, <mark style="background:#rrggbb">, <span style="color:#rrggbb;font-size:NNpx">
 // Anything else is dropped on save (serializer) or shown as plain text (reader).
-// Links (V-007): [text](https://…) is shown as a link (Ctrl+click opens it) and written back the same way; only http(s),
+// Links (V-007): [text](url) is shown as a link (Ctrl+click opens it) and written back the same way; only http(s),
 // mailto, onenote and ftp addresses count, anything else stays plain text.
 //
 // P3-02R (D-20 constraints): the file is cut into blocks (mdblocks.js). Every top-level element remembers the exact
