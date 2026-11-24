@@ -1,0 +1,17 @@
+/* "AI에게 요청" button + popover (P7-03). Tokens only, same look as other panels. */
+#btn-ai { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; flex: none; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+#btn-ai:hover, #btn-ai[aria-expanded="true"] { background: var(--hover); color: var(--text); border-color: var(--line-2); }
+#btn-ai svg.i { width: 14px; height: 14px; color: var(--blue); }
+.ai-pop { position: fixed; top: 62px; right: 20px; width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 80px); overflow: auto; z-index: 40; padding: 14px; display: flex; flex-direction: column; gap: 6px; background: var(--pop-bg); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow-pop); animation: enter .2s var(--ease); }
+.ai-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; letter-spacing: -.02em; }
+.ai-x { border: 0; background: none; color: var(--dim); font-size: 11.5px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.ai-x:hover { background: var(--hover); color: var(--text); }
+.ai-where { font-size: 11.5px; color: var(--cyan); }
+.ai-k { font-size: 11px; font-weight: 650; color: var(--dim); margin-top: 6px; }
+.ai-pop .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-note { font-size: 11.5px; color: var(--dim); }
+.ai-ask, .ai-preview { width: 100%; box-sizing: border-box; resize: vertical; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); padding: 8px 10px; font: 12.5px/1.5 var(--sans, inherit); }
+.ai-preview { font: 11.5px/1.5 var(--mono); color: var(--muted); min-height: 120px; }
+.ai-ask:focus, .ai-preview:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+.ai-copy { margin-top: 8px; height: 36px; border-radius: 9px; border: 1px solid var(--blue); background: var(--blue-s); color: var(--on-blue); font-size: 12.5px; font-weight: 650; cursor: pointer; }
+.ai-copy:hover { filter: brightness(1.08); }

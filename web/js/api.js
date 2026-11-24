@@ -20,6 +20,7 @@ async function rawUpload(method, url, blob) {
 const q = (path) => `?path=${encodeURIComponent(path)}`;
 
 export const api = {
+  skills: () => request("GET", "/api/skills").then((d) => d.skills),
   search: (q) => request("GET", "/api/search?" + new URLSearchParams({ q })),
   backlinks: (path) => request("GET", "/api/search/backlinks" + q(path)).then((d) => d.pages),
   tree: () => request("GET", "/api/pages/tree").then((d) => d.tree),

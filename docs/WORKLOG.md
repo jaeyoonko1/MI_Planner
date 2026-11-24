@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P7-03
+- 한 일: 상단 바에 `AI에게 요청` 버튼(팝오버). 현재 위치(화면 또는 페이지 경로 → `vault/<경로>/`) + 누른 순간 드래그해 둔 선택 글(4000자 제한) + 스킬 토글 칩(D-12, 여러 개) + 요청 입력을 합쳐 규칙(CLI·vault·RCP 쓰기 금지)이 붙은 요청문을 미리보기로 보여 주고 클립보드로 복사(권한이 막히면 미리보기 선택 + Ctrl+C 안내). 스킬 목록은 새 `GET /api/skills`(skills/*/SKILL.md frontmatter, 형식 불량 폴더는 제외). 순수 모듈 `ai-request-model.js`.
+- 바뀐 파일: web/js/(ai-request, ai-request-model 신규; main, api).js, web/css/ai-request.css, web/index.html, app/(skills_index.py, routers/skills.py, main.py), web/test/run_ai_request.mjs, tests/test_ai_request.py, docs/(SPEC, WORKLOG), project_flow.html
+- 테스트: pytest 434 passed(test_flow_site 제외), 신규 tests/test_ai_request.py 5건 + Node run_ai_request. 격리 DB로 앱 내 브라우저에서 팝오버·칩·미리보기 확인(다크).
+- 다음에 할 것 / 막힌 것: 실제 Edge·Whale 선택 유지·클립보드는 VERIFY. 라이트 테마·1024px 시각 확인은 안 함. 다음은 P7-04(status-brief · fill-table 스킬).
+
 ## 2026-11-24 · Claude Code(Sonnet) · P7-02
 - 한 일: flow에 Opus로 표시된 작업이라 안전한 범위만 구현. `skills/README.md`(폴더·SKILL.md 형식·공통 오프라인 규칙), `skills/skill-maker/SKILL.md`(대화로 목적 파악 → 이름 → 초안 → 검사 → 가짜 데이터 시험 → 보고), `scripts/check_skills.py`(frontmatter·name=폴더명·description·본문·외부 URL 검사, 표준 라이브러리). SPEC 4.7 갱신.
 - 바뀐 파일: skills/(README.md, skill-maker/SKILL.md), scripts/check_skills.py, tests/test_skills.py, docs/(SPEC, WORKLOG), project_flow.html

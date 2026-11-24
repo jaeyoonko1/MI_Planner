@@ -20,6 +20,7 @@ import { closeInspector, openInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
 import { flash, initShell, setCrumb } from "./shell.js";
 import { mountSearchPalette } from "./search-palette.js";
+import { mountAiRequest } from "./ai-request.js";
 import { installContextMenu } from "./contextmenu.js";
 import { toast } from "./toast.js";
 import { mountBacklinks, pageHash as toHash, setWikiPages } from "./wikilinks.js";
@@ -319,6 +320,7 @@ document.addEventListener("keydown", (e) => {
 
 initShell();
 installContextMenu();
+mountAiRequest();
 const go = (path) => () => { location.hash = path; };
 const cycle = (target) => () => {
   const buttons = [...document.querySelectorAll(target + " button")];

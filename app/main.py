@@ -26,6 +26,7 @@ from app.routers import plans as plans_router
 from app.routers import recipes as recipes_router
 from app.routers import search as search_router
 from app.routers import settings as settings_router
+from app.routers import skills as skills_router
 from app.routers import journal as journal_router
 from app.routers import pages
 from app.routers import ppt as ppt_router
@@ -65,6 +66,7 @@ def create_app(
     app.include_router(tasks_router.router)
     app.include_router(structure_router.router)
     app.include_router(settings_router.router)
+    app.include_router(skills_router.router)
     app.include_router(dashboard_router.router)
     app.include_router(eval_templates.router)
     app.include_router(search_router.router)
