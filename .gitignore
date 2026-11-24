@@ -1,6 +1,7 @@
 # data
 data/*.db
 data/*.db-*
+data/doi/
 backups/
 vault/
 recipe_cache/

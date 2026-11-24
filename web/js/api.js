@@ -10,6 +10,13 @@ async function request(method, url, body) {
   return data;
 }
 
+async function rawUpload(method, url, blob) {
+  const res = await fetch(url, { method, body: blob });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
+  return data;
+}
+
 const q = (path) => `?path=${encodeURIComponent(path)}`;
 
 export const api = {
@@ -53,6 +60,18 @@ export const api = {
   },
   deleteTodo: (id) => request("DELETE", `/api/todos/${id}`),
   promoteLine: (date, line_index) => request("POST", "/api/todos/from-line", { date, line_index }),
+  doiList: (trash = false) => request("GET", `/api/doi?trash=${trash}`).then((d) => d.items),
+  doiGet: (id) => request("GET", `/api/doi/${id}`),
+  doiCreate: (body) => request("POST", "/api/doi", body),
+  doiPatch: (id, body) => request("PATCH", `/api/doi/${id}`, body),
+  doiTrash: (id) => request("DELETE", `/api/doi/${id}`),
+  doiRestore: (id) => request("POST", `/api/doi/${id}/restore`),
+  doiPatchImage: (id, imageId, caption) => request("PATCH", `/api/doi/${id}/images/${imageId}`, { caption }),
+  doiDeleteImage: (id, imageId) => request("DELETE", `/api/doi/${id}/images/${imageId}`),
+  doiOrder: (id, ids) => request("PUT", `/api/doi/${id}/images/order`, { ids }),
+  // Raw image bytes as the body; the thumbnail is a small JPEG the browser draws on a canvas (no server-side imaging).
+  doiAddImage: (id, blob, { width = 0, height = 0 } = {}) => rawUpload("POST", `/api/doi/${id}/images?width=${width}&height=${height}`, blob),
+  doiPutThumb: (imageId, blob) => rawUpload("PUT", `/api/doi-images/${imageId}/thumb`, blob),
   plans: () => request("GET", "/api/plans"),
   plan: (id) => request("GET", `/api/plans/${id}`),
   deletePlan: (id) => request("DELETE", `/api/plans/${id}`),

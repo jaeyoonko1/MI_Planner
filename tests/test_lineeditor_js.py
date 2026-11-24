@@ -113,3 +113,13 @@ def test_plans_model():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_doi_model():
+    """P5-02: DOI filtering, facets, sorting, grid keys and tags (web/test/run_doi.mjs)."""
+    result = subprocess.run(
+        ["node", str(ROOT / "web" / "test" / "run_doi.mjs")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

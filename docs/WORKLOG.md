@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-24 · Claude Code(Sonnet) · P5-02
+- 한 일: DOI 라이브러리 `#/doi`. migration 009(`doi`·`doi_images`, 안정 uid·상대 경로·sha256), `app/repositories/doi.py`·`routers/doi.py`(레코드 CRUD, 이미지 원본 바이트 업로드·순서·설명·삭제, 썸네일 PUT, 휴지통·되돌리기, 가져온 DOI 읽기 전용). 이미지 검증은 파일 앞부분으로(SVG 거부), 이미지 삭제는 `data/doi/.trash/`로 이동, 썸네일은 브라우저 캔버스(서버 이미지 라이브러리 없음). 화면: 카드/표 전환 칩, 찾기, 제품·Step·결함 종류 칩 + 태그 다중 칩(개수는 다른 필터 반영), 상세 패널(1240px 이상 옆, 미만 서랍), 이미지 뷰어·전체 화면 보기, 추가/편집 창(끌어놓기·붙여넣기·설명·순서·제안 칩·닫기 확인). 결정은 D-33, `data/doi/`는 .gitignore에 추가.
+- 바뀐 파일: migrations/009_doi.sql, app/(main, repositories/doi, routers/doi).py, web/js/(doi, doi-model, api, main, sheet).js, web/css/doi.css, web/index.html(nav·아이콘 5개·css), web/test/run_doi.mjs, scripts/seed_doi_sample.py(가짜 DOI+생성 이미지를 실행 중인 앱에 추가), tests/(test_doi, test_db, test_task_fields, test_lineeditor_js).py, docs/(SPEC, DECISIONS, WORKLOG), project_flow.html, .gitignore. 부수 수정: `confirmSheet`의 `content` 기본값 `[]`(P5-01 Plan 지우기 확인 창이 content 없이 호출해 오류 나던 문제).
+- 테스트: pytest 전체 통과(DOI API·검증·휴지통·읽기 전용·경로 이탈·썸네일 + Node 모델). Edge 앱 내 브라우저(가짜 이미지)에서 1280px 다크/라이트 옆 패널·표, 1024px 서랍, 추가(끌어놓기)·편집(설명·이미지 빼기)·닫기 확인·전체 화면 보기(←/→)·휴지통→되돌리기·빈 결과/빈 휴지통 확인. 콘솔 오류 0.
+- 다음에 할 것 / 막힌 것: 영구 삭제(휴지통 비우기)·`data/doi/.trash` 정리 없음. 가져온 DOI를 "내 DOI로 복사"하는 기능 없음(P5-04에서 결정). 목록은 전부 한 번에 받아 브라우저에서 거름(수천 건이면 서버 쪽 거르기 필요). 이미지 확대는 전체 화면 보기만(확대·이동 없음), 이미지 드래그로 순서 바꾸기 없음(↑↓). 목록 키보드는 카드 방향키만(표는 Tab). P5-03은 `create(status='draft', source_ref=…)`+`add_image`, P5-04는 `uid`·`sha256`·`create(uid=…, origin='imported')`를 쓰면 됨(SPEC 참고). 실브라우저·회사 PC 확인은 flow VERIFY.
+
 ## 2026-11-24 · Claude Code(Sonnet) · P5-01
 - 한 일: process plan 엑셀 가져오기 + Plan/Step 표. 표준 라이브러리 `.xlsx` 읽기(`app/xlsx_read.py`, D-32: openpyxl 미추가), 머리글 자동 탐지·한영 별칭 매핑·위 셀 값 이어받기·줄 오류(`app/plan_import.py`), 저장소/라우터(`plans`, migration 008, 설정 `plan_mapping`). 미리보기(dry run) → `N개 반영`(한 트랜잭션), 같은 파일 재가져오기는 키(제품·Plan·Step ID/이름)로 갱신하고 파일에 없는 Step은 `파일에 없음` 표시(삭제 안 함). 지정하지 않은 열은 `기타 열`로 보존. 화면 `#/plans`: 제품 칩 + Plan 목록 → Step 표(찾기, 파일에 없는 Step 토글 칩), 가져오기 창(끌어놓기, 시트 칩, 머리글 줄, 열 지정 칩, 개수·줄별 결과). 가짜 샘플 생성 `scripts/make_sample_plan_xlsx.py`(`--variant 2`로 개정판).
 - 바뀐 파일: migrations/008_plans.sql, app/(xlsx_read, plan_import, main, repositories/plans, routers/(plans, settings)).py, web/js/(plans, plans-model, api, main).js, web/css/plans.css, web/index.html(nav·upload 아이콘·css), web/test/run_plans.mjs, scripts/make_sample_plan_xlsx.py, tests/(test_plans, test_lineeditor_js).py, docs/(SPEC, DECISIONS), project_flow.html.

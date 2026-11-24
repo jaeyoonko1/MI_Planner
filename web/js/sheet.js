@@ -45,7 +45,7 @@ export function button(label, cls = "", onClick) {
 }
 
 // Confirmation with consequences spelled out. Resolves true only on the confirm button.
-export function confirmSheet({ title, sub, content, confirmLabel, danger = false }) {
+export function confirmSheet({ title, sub, content = [], confirmLabel, danger = false }) {
   return new Promise((resolve) => {
     let answer = false;
     const s = openSheet({ title, sub, onClose: () => resolve(answer) });

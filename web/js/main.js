@@ -8,6 +8,7 @@ import { renderTodos } from "./todos.js";
 import { renderToday } from "./today.js";
 import { renderWeek } from "./week.js";
 import { openEvaluationWizard, renderEvaluationPage, renderEvaluations } from "./evaluations.js";
+import { renderDoi } from "./doi.js";
 import { renderPlans } from "./plans.js";
 import { renderStructure } from "./structure.js";
 import { hub } from "./hub.js";
@@ -135,15 +136,19 @@ async function route() {
   const isMonth = path && MONTH_PAGE.test(path);
   const struct = screen.match(/^structure(?:\/(classes|rules))?$/);
   const plans = screen.match(/^plans(?:\/(\d+))?$/);
-  const name = plans ? "plans" : ["todos", "today", "evaluations"].includes(screen) ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
+  const doi = screen.match(/^doi(?:\/(\d+))?$/);
+  const name = doi ? "doi" : plans ? "plans" : ["todos", "today", "evaluations"].includes(screen) ? screen : week ? "week" : struct ? "structure" : isMonth ? "month" : "";
   showScreen(name);
-  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : screen === "evaluations" ? ["평가 현황판"] : plans ? ["MI 정보", "Plan · Step"] : struct ? ["구조", ...(struct[1] ? [struct[1] === "rules" ? "페이지 위치 규칙" : "분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
+  setCrumb(screen === "today" ? ["오늘"] : screen === "todos" ? ["할일"] : screen === "evaluations" ? ["평가 현황판"] : plans ? ["MI 정보", "Plan · Step"] : doi ? ["MI 정보", "DOI 라이브러리"] : struct ? ["구조", ...(struct[1] ? [struct[1] === "rules" ? "페이지 위치 규칙" : "분류 관리"] : [])] : week ? ["주간 일지"] : path ? path.split("/") : ["홈"]);
   const fail = (e) => viewEl.replaceChildren(errorState(e.message, route));
   if (screen === "today") {
     return renderToday(viewEl).catch(fail);
   }
   if (screen === "evaluations") {
     return renderEvaluations(viewEl, { onAdd: () => showEvaluationWizard(), pageHref: toHash }).catch(fail);
+  }
+  if (doi) {
+    return renderDoi(viewEl, doi[1] ? Number(doi[1]) : null).catch(fail);
   }
   if (plans) {
     return renderPlans(viewEl, plans[1] ? Number(plans[1]) : null, { go: (id) => { location.hash = `#/plans/${id}`; } }).catch(fail);

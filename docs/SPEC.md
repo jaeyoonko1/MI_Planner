@@ -361,6 +361,10 @@ vault/
   - 항목: 제품, plan, step, 결함 종류, 설명, 검출 설비·조건, 이미지 여러 장, 출처(부서·작성자), 태그.
   - **PPT 가져오기**: 기존 DOI PPT에서 슬라이드별 이미지·텍스트를 뽑아 초안 생성 → 사람이 확인·수정. (python-pptx)
   - 보기: 제품·step·결함 종류 버튼 필터, 이미지 그리드 / 표 전환. plan/step 정보와 연결.
+  - **구현 (P5-02)**: 화면 `#/doi`(사이드바 `DOI 라이브러리`, `#/doi/<id>`는 상세가 열린 상태). 카드/표 전환 칩(기억됨), 찾기(제목·설명·설비·출처·태그·이미지 설명, 단어 AND), 제품·Step·결함 종류 단일 선택 칩 + 태그 다중 선택 칩(모두 가진 DOI, 칩의 개수는 다른 필터를 반영), `휴지통` 토글 칩, 초안이 있을 때만 `초안만 보기`. 카드: 대표 이미지(썸네일)·장수·제목·제품/Plan/Step·결함 종류·태그, 방향키로 카드 이동. 표: 정렬 가능한 머리글. 상세: 이미지 뷰어(이전/다음·썸네일 줄·클릭 시 전체 화면 보기, ←/→), 항목, 태그(누르면 필터), 같은 이름의 Plan이 있으면 `#/plans/<id>` 링크. 1240px 이상은 오른쪽 패널, 미만은 오른쪽 서랍(바깥 클릭·Esc로 닫기).
+  - `DOI 추가/편집` 창: 항목 + 제품·Plan·Step·결함 종류 제안 칩(Plan·Step 표와 기존 DOI 값), 태그 칩 입력, 이미지 끌어놓기·고르기·붙여넣기(Ctrl+V), 이미지별 설명·순서(↑↓, 맨 앞이 대표)·빼기. 저장 = 레코드 → 이미지 올리기(+브라우저가 만든 썸네일) → 설명·순서. 중간에 실패하면 만들어진 DOI를 유지하고 다시 `저장`하면 이어서 올림. 닫을 때 바뀐 내용이 있으면 확인.
+  - 저장·삭제 규칙은 D-33: 이미지 파일은 `data/doi/<DOI uid>/<이미지 uid>.<ext>`(git 제외), DOI·이미지 삭제는 휴지통(복구 가능), 가져온 DOI는 읽기 전용.
+  - API: `GET /api/doi?trash=`, `POST /api/doi`, `GET|PATCH|DELETE /api/doi/{id}`(DELETE = 휴지통), `POST /api/doi/{id}/restore`, `POST /api/doi/{id}/images?width=&height=`(본문 = 이미지 바이트), `PUT /api/doi/{id}/images/order {ids}`, `PATCH|DELETE /api/doi/{id}/images/{image_id}`, `GET /api/doi-images/{id}/file|thumb`, `PUT /api/doi-images/{id}/thumb`. 목록은 이미지 메타를 함께 돌려줌.
   - **공유 패키지**: 선택한 DOI를 폴더 한 개(이미지 + `doi.json`)로 내보내기 → 사내 드라이브에 두면 다른 사람·부서가 가져오기. 가져온 항목은 출처 표시 + 읽기 전용. (다른 제품·부서 DOI를 참고할 수 없는 불편 해소의 첫 단계)
 - 공통: 엑셀 붙여넣기 일괄 입력, 다른 페이지에서 링크.
 
@@ -517,8 +521,9 @@ UNIQUE(equipment_id, wafer_id)
 실제 회사 엑셀 열 구성은 아직 보지 못했으므로 열 집합은 잠정(별칭 목록은 `app/plan_import.py`의 `FIELDS`).
 
 ### doi / doi_images (P5)
-`doi: product, plan, step, defect_type, title, description, tool_condition, source_dept, source_author, origin('mine'|'imported'), package_id, tags`
-`doi_images: doi_id FK, file_path (data/doi/<id>/…), caption, sort`
+`doi: id, uid(안정 ID, UNIQUE), product, plan, step, defect_type, title, description, tool_condition, source_dept, source_author, origin('mine'|'imported'), package_id, source_ref(예: 원본 PPT 이름#슬라이드), status('ready'|'draft'), tags(JSON 배열), created_at, updated_at, deleted_at(휴지통)`
+`doi_images: id, uid(안정 ID, UNIQUE), doi_id FK(CASCADE), file_path(data/doi 기준 상대 경로 <doi uid>/<image uid>.<ext>), thumb_path, mime, width, height, size, sha256, caption, sort` (migration 009)
+P5-03(PPT 가져오기)은 `repositories/doi.create(..., status='draft', source_ref=…)`와 `add_image`를, P5-04(패키지)는 `uid`·`sha256`·상대 경로와 `origin='imported'`·`package_id`·`create(uid=…)`를 쓴다.
 ### recipe_sources / recipes / recipe_params / recipe_snapshots (P6) — P6-01에서 상세화
 
 ### settings
