@@ -309,5 +309,46 @@ export function mountFormatBar(ed, bar, o) {
     return true;
   }
 
-  return { handleKey, toggleHighlight, sync: queue, syncNow: sync, shortcutSwitch: sw };
+  // ---- context menu (V-010): the same commands as the toolbar, with the caret's current state as check marks
+  function menuItems() {
+    const c = read();
+    const off = c.raw && "표·코드 블록 안에서는 쓸 수 없어요";
+    const keys = (k) => (editorKeys.on ? k : "");
+    const go = (fn) => () => { ed.focus(); fn(); o.schedule(); queue(); };
+    const toggle = (label, cmd, key, always) => ({ label, keys: always ? key : keys(key), checked: !off && c.el ? document.queryCommandState(cmd) : false, disabled: off, run: go(exec(cmd)) });
+    const radio = (label, checked, run, extra = {}) => ({ label, radio: true, checked: !off && Boolean(c.el) && checked, disabled: off, run: go(run), ...extra });
+    const block = (tag, label, key) => radio(label, blockIs(tag)(c), tag ? () => setBlock(tag) : () => run("formatBlock", "div"), { keys: keys(key) });
+    return [
+      [
+        toggle("굵게", "bold", KEYS.bold, true), toggle("기울임", "italic", KEYS.italic, true),
+        toggle("밑줄", "underline", KEYS.underline, true), toggle("취소선", "strikeThrough", KEYS.strike),
+        { label: "형광펜", keys: keys(KEYS.highlight), checked: !off && c.hlIdx === 0, disabled: off, run: go(toggleHighlight) },
+      ],
+      [
+        { label: "문단 모양", icon: "body", items: [
+          block(null, "본문", KEYS.body), block("h1", "제목 1", KEYS.h1), block("h2", "제목 2", KEYS.h2), block("h3", "제목 3", KEYS.h3),
+          { separator: true },
+          { label: "글머리 목록", keys: keys(KEYS.bullet), checked: !!c.el?.closest("ul") && !c.el.closest("li[data-m]"), disabled: off, run: go(() => o.lineAction("bullet")) },
+          { label: "번호 목록", checked: !!c.el?.closest("ol"), disabled: off, run: go(exec("insertOrderedList")) },
+          { label: "체크 목록", checked: !!c.el?.closest("li[data-m]"), disabled: off, run: go(() => o.lineAction("check")) },
+        ] },
+        ...(o.compact ? [] : [
+          { label: "글자 크기", icon: "size", items: [
+            ...SIZES.map((px, i) => radio(`${px}px · ${SIZE_NAMES[i]}`, c.sizeIdx === i, () => setSize(curSizeIdx() === i ? BASE_PX : px))),
+            { separator: true },
+            { label: "키우기", keys: keys(KEYS.sizeUp), disabled: off, run: go(() => stepSize(1)) },
+            { label: "줄이기", keys: keys(KEYS.sizeDown), disabled: off, run: go(() => stepSize(-1)) },
+          ] },
+          { label: "글자색", icon: "color", items: COLORS.map((color, i) => radio(COLOR_NAMES[i], c.colorIdx === i, () => setColor(i), { swatch: i ? color : "auto" })) },
+        ]),
+        { label: "형광펜 색", icon: "marker", items: [
+          radio("없음", c.hlIdx < 0, () => setHighlight(-1)),
+          ...HLS.map((color, i) => radio(HL_NAMES[i], c.hlIdx === i, () => setHighlight(i), { swatch: color })),
+        ] },
+      ],
+      [{ label: "서식 지우기", icon: "fmt-clear", keys: keys(KEYS.clear), disabled: off, run: go(clearFormat) }],
+    ];
+  }
+
+  return { handleKey, toggleHighlight, sync: queue, syncNow: sync, shortcutSwitch: sw, menuItems, isRaw: noInline };
 }

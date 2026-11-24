@@ -7,6 +7,7 @@ import {
 } from "./note-column-layout.js";
 import { TABLE_KEY_HELP } from "./note-table.js";
 import { toast } from "./toast.js";
+import { registerContext } from "./contextmenu.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ICONS = {
@@ -377,6 +378,27 @@ export function mountNoteColumns(mountEditor, cfg) {
     event.preventDefault();
     run();
   });
+
+  // ---- context menu (V-010): the same functions as the column tool buttons; disabled states come from those buttons ----
+  if (saveLayout) {
+    registerContext(root, (ctx) => {
+      const col = columns.find((c) => c.cell.contains(ctx.target));
+      if (!col) return null;
+      const off = (button, why) => button.disabled && why;
+      const undoable = undoStack.at(-1);
+      return [
+        [
+          { label: "왼쪽에 단 추가", icon: "col-left", keys: "Alt+Shift+←", disabled: off(col.buttons.left, `한 행에 단은 ${MAX_COLUMNS}개까지`), run: () => addColumn(col, "left") },
+          { label: "오른쪽에 단 추가", icon: "col-right", keys: "Alt+Shift+→", disabled: off(col.buttons.right, `한 행에 단은 ${MAX_COLUMNS}개까지`), run: () => addColumn(col, "right") },
+          { label: "아래에 행 추가", icon: "row-below", keys: "Alt+Shift+↓", disabled: off(col.buttons.row, `행은 ${MAX_ROWS}개까지`), run: () => addRow(col) },
+        ],
+        [
+          { label: "단·행 변경 되돌리기", icon: "undo", keys: "Ctrl+Z", disabled: !(undoable && !undoable.stale) && "되돌릴 변경이 없어요", run: () => { if (!undo()) updateStatus("되돌릴 수 없어요.", true); } },
+          { label: "이 단 삭제", icon: "trash", danger: true, keys: "Alt+Shift+Delete", disabled: off(col.buttons.remove, "마지막 단은 삭제할 수 없어요"), run: () => askDelete(col) },
+        ],
+      ];
+    });
+  }
 
   function paintTools() {
     if (!columns.length) return;

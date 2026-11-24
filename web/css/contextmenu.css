@@ -1,0 +1,64 @@
+/* Context menu (V-010). Tokens only (theme.css), density follows --row-h / --fs, no external assets.
+   State is never color alone: disabled items show their reason as text, danger items carry an icon + the word,
+   checked items carry a check mark, submenu parents carry a chevron. */
+.cx {
+  position: fixed; inset: auto; z-index: 400; margin: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  box-sizing: border-box; min-width: 216px; max-width: min(360px, calc(100vw - 16px)); padding: 5px;
+  color: var(--text); font: var(--fs)/1.3 var(--font); letter-spacing: -.01em; outline: none;
+  background: color-mix(in srgb, var(--pop-bg) 90%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6); backdrop-filter: blur(22px) saturate(1.6);
+  border: 1px solid var(--line-2); border-radius: 12px;
+  box-shadow: var(--shadow-pop), inset 0 0 0 .5px color-mix(in srgb, var(--text) 8%, transparent);
+  transform-origin: var(--cx-ox, 0%) var(--cx-oy, 0%);
+  opacity: 0; transform: scale(.965) translateY(-3px);
+  transition: opacity .1s ease-out, transform .17s var(--ease);
+  scrollbar-width: thin;
+}
+.cx[data-open] { opacity: 1; transform: none; }
+
+.cx-i {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; column-gap: 9px;
+  width: 100%; min-height: calc(var(--row-h) - 2px); padding: 2px 10px 2px 8px; margin: 0;
+  border: 0; border-radius: 7px; background: none; color: inherit; font: inherit; text-align: left; cursor: default;
+  -webkit-user-select: none; user-select: none;
+}
+.cx-i:focus, .cx-i[aria-expanded="true"] { outline: none; background: var(--sel-bg); color: var(--sel-fg); box-shadow: inset 0 0 0 1px var(--sel-bd); }
+.cx-i:focus-visible { outline: none; }
+.cx-ic { display: grid; place-items: center; width: 18px; height: 18px; color: var(--muted); }
+.cx-ic svg.i { width: 16px; height: 16px; stroke-width: 1.7; }
+.cx-i:focus .cx-ic, .cx-i[aria-expanded="true"] .cx-ic { color: var(--blue); }
+.cx-chk svg.i { stroke-width: 2.2; color: var(--blue); }
+.cx-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-r { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--dim); font-size: .86em; white-space: nowrap; }
+.cx-k { font-variant-numeric: tabular-nums; letter-spacing: .01em; color: var(--muted); padding-left: 18px; }
+.cx-h { max-width: 160px; overflow: hidden; text-overflow: ellipsis; padding-left: 12px; }
+.cx-r svg.i.s { width: 12px; height: 12px; stroke-width: 2.2; color: var(--muted); }
+
+.cx-i[aria-disabled="true"] { color: var(--dim); cursor: not-allowed; }
+.cx-i[aria-disabled="true"] .cx-ic { opacity: .55; }
+.cx-i[aria-disabled="true"]:focus { background: color-mix(in srgb, var(--hover) 70%, transparent); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); }
+.cx-i[aria-disabled="true"]:focus .cx-ic { color: var(--muted); }
+
+.cx-danger .cx-ic, .cx-danger .cx-l { color: var(--red); }
+.cx-danger:focus, .cx-danger[aria-expanded="true"] { background: color-mix(in srgb, var(--red) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 55%, transparent); color: var(--red); }
+.cx-danger:focus .cx-ic { color: var(--red); }
+
+.cx-sep { height: 1px; margin: 5px 8px; background: var(--line); }
+.cx-hd { padding: 7px 10px 3px; color: var(--dim); font-size: 10.5px; font-weight: 650; letter-spacing: .1em; }
+.cx-note { padding: 6px 10px 4px; color: var(--dim); font-size: 11px; line-height: 1.4; border-top: 1px solid var(--line); margin-top: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cx { transition: none; transform: none; }
+}
+@media (forced-colors: active) {
+  .cx { border-color: CanvasText; background: Canvas; }
+  .cx-i:focus, .cx-i[aria-expanded="true"] { background: Highlight; color: HighlightText; }
+}
+
+/* inline page rename in the sidebar tree (opened from the context menu) */
+.tree-edit { flex: 1; min-width: 0; height: calc(var(--row-h) - 8px); margin: 0 4px 0 3px; padding: 0 7px; border: 1px solid var(--sel-bd); border-radius: 7px; background: var(--panel); color: var(--text); font: inherit; outline: none; box-shadow: 0 0 0 3px var(--le-ring, var(--sel-bg)); }
+
+/* color swatches (text / highlight colors): the name is the label, a check mark on the right says which is on */
+.cx-sw { width: 13px; height: 13px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 28%, transparent); }
+.cx-sw.auto { background: none; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.cx-r svg.i.s.ck { color: var(--blue); stroke-width: 2.4; }

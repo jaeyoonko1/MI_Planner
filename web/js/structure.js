@@ -15,6 +15,7 @@ import { openAddGroupSheet, openMoveSheet } from "./structmove.js";
 import { click as selClick, deleteItems, isTypingTarget, moveTo, neighbourAfterRemoval, prune, selectAll, single, toggleActive } from "./structselect.js";
 import { createUndoStack } from "./structundo.js";
 import { toast } from "./toast.js";
+import { registerContext } from "./contextmenu.js";
 import { dueInfo, el, emptyState, errorState, fmtMD, skeleton, svg } from "./ui.js";
 
 const STATUS = { todo: "할일", doing: "진행", hold: "보류", done: "완료" };
@@ -689,6 +690,42 @@ async function renderTree(container, initialView, reloadScreen) {
     else if (e.key === " ") { e.preventDefault(); (e.ctrlKey || e.metaKey) ? choose(toggleActive(cur())) : select(n.id); }
     else if (e.key === "Escape" && picked.size > 1) { e.preventDefault(); select(n.id); }
     else if (e.key === "F2" && n.kind === "issue") { e.preventDefault(); renameIssue(n, r); }
+  });
+
+  // ---- context menu (V-010): the toolbar buttons' own handlers, so delete keeps its confirm sheet and undo stack ----
+  registerContext(rows, (ctx) => {
+    const r = ctx.target.closest?.(".srow");
+    const n = r && index.get(r.dataset.id);
+    if (!n) return null;
+    if (!picked.has(n.id)) select(n.id, { focus: true });
+    const many = picked.size > 1;
+    const group = n.kind === "group";
+    const sib = siblingsOf(n);
+    const k = sib.indexOf(n);
+    const doomed = deleteItems([...picked], index, { free: free_() });
+    const last = history.peekUndo();
+    const place = free_() && !many ? [
+      { label: "위로", icon: "arrow-up", keys: "Alt+↑", disabled: k <= 0 && "맨 위예요", run: () => placeNode(n, n.parent, sib[k - 1]) },
+      { label: "아래로", icon: "arrow-down", keys: "Alt+↓", disabled: k >= sib.length - 1 && "맨 아래예요", run: () => placeNode(n, n.parent, sib[k + 2] ?? null) },
+      { label: "앞 그룹 안으로", icon: "indent", keys: "Alt+→", disabled: !(k > 0 && sib[k - 1].kind === "group") && "앞에 그룹이 없어요", run: () => placeNode(n, sib[k - 1], null) },
+      { label: "한 단계 바깥으로", icon: "outdent", keys: "Alt+←", disabled: !n.parent && "이미 최상위예요", run: () => { const ps = siblingsOf(n.parent); placeNode(n, n.parent.parent ?? null, ps[ps.indexOf(n.parent) + 1] ?? null); } },
+      { separator: true },
+    ] : [];
+    return [
+      [
+        !many && !group ? { label: "이슈 열기", icon: "open", keys: "Enter", run: () => openInspector(n.task.id) } : null,
+        !many && group ? { label: folded.has(n.id) ? "펼치기" : "접기", icon: "chev", keys: folded.has(n.id) ? "→" : "←", run: () => toggleFold(n.id) } : null,
+        !many && !group ? { label: "이름 변경", icon: "edit", keys: "F2", run: () => renameIssue(n, rowEls.get(n.id)) } : null,
+      ],
+      [
+        { label: bCopy.textContent.trim() || "복사", icon: "copy", disabled: bCopy.disabled && (bCopy.title || "복사할 수 없어요"), run: copySelected },
+        { label: "이동", icon: "move-to", disabled: bMove.disabled && (many ? "행을 하나만 골라야 해요" : bMove.title), items: many ? null : [...place, { label: "다른 그룹으로…", icon: "move-to", run: () => bMove.click() }] },
+      ],
+      [
+        last ? { label: `${last.label} 삭제 되돌리기`, icon: "undo", keys: "Ctrl+Z", disabled: history.busy && "처리 중이에요", run: undoLast } : null,
+        { label: doomed.items.length > 1 ? `삭제 ${doomed.items.length}개` : "삭제", icon: "trash", danger: true, keys: "Delete", disabled: !doomed.items.length && "분류 기준 보기의 그룹은 분류 관리에서 정리해요", run: requestDelete },
+      ],
+    ];
   });
 
   // drag and drop: where would it land?

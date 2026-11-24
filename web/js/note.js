@@ -18,6 +18,7 @@ import { toast } from "./toast.js";
 import { mountPptPanel } from "./ppt.js";
 import { LINK_HREF, htmlToMd, loadInto } from "./mdconv.js";
 import { mountFormatBar } from "./note-format.js";
+import { registerNoteMenu } from "./note-menu.js";
 import { MIN_W, SMALL_PX, clampWidth, foldPlan, imgCssWidth, ownerHeading, pruneFolds } from "./memocore.js";
 
 const SAVE_DELAY_MS = 700;
@@ -217,6 +218,7 @@ export function mountEditor(cfg) {
     fold: foldAtCaret,
     cleanups,
   });
+  cleanups.push(registerNoteMenu(ed, { fmt, noteTables, schedule })); // V-010 right-click menu
   foldBtn = el("button", "nb txt fold-all", "모두 접기");
   foldBtn.type = "button";
   foldBtn.hidden = true;

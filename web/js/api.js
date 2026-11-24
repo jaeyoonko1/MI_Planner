@@ -141,6 +141,8 @@ export const api = {
   savePageRules: (rules, fallback) => request("PUT", "/api/todos/page-rules", { rules, fallback }),
   rulesOverview: (rules, fallback) => request("POST", "/api/todos/page-rules/overview", rules ? { rules, fallback } : {}),
   movePage: (path, data) => request("PATCH", `/api/pages${q(path)}`, data),
+  deletePage: (path) => request("DELETE", `/api/pages${q(path)}`),
+  restorePage: (trashed, original) => request("POST", "/api/pages/restore", { trashed, original }),
   create: (parent, title, type) => request("POST", "/api/pages", { parent, title, type }),
   // RCP management (P6-02)
   recipeSources: () => request("GET", "/api/recipe-sources").then((d) => d.items),

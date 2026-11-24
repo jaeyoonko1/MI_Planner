@@ -20,6 +20,8 @@ import { closeInspector, openInspector } from "./inspector.js";
 import { errorState, todayISO } from "./ui.js";
 import { flash, initShell, setCrumb } from "./shell.js";
 import { mountSearchPalette } from "./search-palette.js";
+import { installContextMenu } from "./contextmenu.js";
+import { toast } from "./toast.js";
 import { mountBacklinks, pageHash as toHash, setWikiPages } from "./wikilinks.js";
 
 const treeEl = document.getElementById("tree");
@@ -42,7 +44,7 @@ let treeData = [];
 let quickInput = null;
 
 function paintTree() {
-  renderTree(treeEl, treeData, { activePath: currentPath(), onAdd: showAddForm, onCreateRoot: createRoot, onMove: movePage });
+  renderTree(treeEl, treeData, { activePath: currentPath(), onAdd: showAddForm, onCreateRoot: createRoot, onMove: movePage, onRename: renamePage, onTrash: trashPage });
 }
 
 async function createRoot(title) {
@@ -86,6 +88,40 @@ async function movePage(from, parent, where) {
   } catch (e) {
     flash(false, e.message);
     await refreshTree();
+  }
+}
+
+// Sidebar context menu (V-010): rename keeps the page's place; trash moves the folder to vault/.trash and offers undo.
+async function renamePage(path, title) {
+  try {
+    const page = await api.movePage(path, { title });
+    const active = currentPath();
+    await refreshTree();
+    if (active && (active === path || active.startsWith(path + "/"))) location.hash = toHash(page.path + active.slice(path.length));
+    flash(true, "이름을 바꿨어요");
+  } catch (e) {
+    flash(false, e.message);
+    await refreshTree();
+  }
+}
+
+async function trashPage(node) {
+  try {
+    const { trashed } = await api.deletePage(node.path);
+    const active = currentPath();
+    await refreshTree();
+    if (active && (active === node.path || active.startsWith(node.path + "/"))) location.hash = "#/";
+    const kids = node.children.length ? ` · 하위 ${node.children.length}개 포함` : "";
+    toast(`‘${node.title}’ 페이지를 휴지통으로 보냈어요${kids}`, {
+      ms: 9000,
+      action: { label: "되돌리기", run: async () => {
+        const back = await api.restorePage(trashed, node.path);
+        await refreshTree();
+        location.hash = toHash(back.path);
+      } },
+    });
+  } catch (e) {
+    flash(false, e.message);
   }
 }
 
@@ -282,6 +318,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 initShell();
+installContextMenu();
 const go = (path) => () => { location.hash = path; };
 const cycle = (target) => () => {
   const buttons = [...document.querySelectorAll(target + " button")];

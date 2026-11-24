@@ -10,6 +10,7 @@ import {
 import { blockSources, clipboardToTable, pasteNotes, tableBlockToSource } from "./paste-html.js";
 import { hidePasteChip, showPasteChip } from "./paste-chip.js";
 import { toast } from "./toast.js";
+import { inMenu, pasteClipboard, registerContext } from "./contextmenu.js";
 
 // Inside a table cell the innermost scope wins: these keys edit the table, not the note columns (V-008).
 export const TABLE_KEY_HELP = [
@@ -346,9 +347,11 @@ function mountTable(block, table, host) {
   }
 
   // ---- sort chips: off -> ascending -> descending -> off (off puts the rows back in their original order) ----
-  function sortBy(column) {
+  // `want` (context menu): 1 / -1 sets that direction, or turns the sort off when it is already on.
+  function sortBy(column, want) {
     commitEdit();
-    const direction = nextSortDirection(sort?.column === column ? sort.direction : 0);
+    const now = sort?.column === column ? sort.direction : 0;
+    const direction = want === undefined ? nextSortDirection(now) : now === want ? 0 : want;
     const before = writeNoteTable(table);
     const saved = selection();
     if (!sort) sortBase = table.rows.slice(1);
@@ -627,6 +630,15 @@ function mountTable(block, table, host) {
     focusCell(pos);
     dragging = true;
   });
+  // Right click inside the selected range keeps the range (the context menu then acts on all of it).
+  block.addEventListener("mousedown", event => {
+    if (event.button !== 2) return;
+    const field = fieldUnder(event);
+    if (!field) return;
+    const [row, column] = position(field);
+    const rc = rect();
+    if (row >= rc.r0 && row <= rc.r1 && column >= rc.c0 && column <= rc.c1 && mode !== "edit") event.preventDefault();
+  }, true);
   block.addEventListener("mousemove", event => {
     if (!dragging) return;
     if (!(event.buttons & 1)) { dragging = false; return; }
@@ -660,7 +672,7 @@ function mountTable(block, table, host) {
     field.select();
   });
   block.addEventListener("focusout", event => {
-    if (!block.contains(event.relatedTarget)) { commitEdit(); dragging = false; }
+    if (!block.contains(event.relatedTarget) && !inMenu(event.relatedTarget)) { commitEdit(); dragging = false; }
   });
   block.addEventListener("focus", event => {
     if (event.target === block) announce("표를 선택했어요 · Delete로 삭제 · Enter로 편집");
@@ -847,6 +859,63 @@ function mountTable(block, table, host) {
     spacer, status,
     group(tool.keys, tool.remove),
   );
+  // ---- context menu (V-010): the same functions as the toolbar buttons and shortcuts, so undo / confirm rules are shared ----
+  const clipRun = command => () => { fieldAt(end)?.focus(); document.execCommand(command); };
+  function menuGroups(ctx) {
+    const cell = ctx.target.closest?.("td, th");
+    const field = cell?.querySelector("textarea.note-table-cell");
+    if (field) {
+      const pos = position(field);
+      const rc = rect();
+      const inside = pos[0] >= rc.r0 && pos[0] <= rc.r1 && pos[1] >= rc.c0 && pos[1] <= rc.c1;
+      if (!(mode === "edit" && field === editField)) {
+        commitEdit();
+        if (!inside) setSelection(pos);
+        focusCell(inside ? end : pos);
+      }
+    }
+    const r = range();
+    const many = r.rows * r.cols > 1;
+    const editing = mode === "edit";
+    const head = r.firstRow === 0;
+    const blank = tableHeaderBlank(table);
+    const column = r.firstCol;
+    const sortNow = sort?.column === column ? sort.direction : 0;
+    const keys = (k) => "Alt+Shift+" + k;
+    return [
+      field ? [
+        { label: "잘라내기", icon: "cut", keys: "Ctrl+X", run: clipRun("cut") },
+        { label: many ? "선택한 칸 복사" : "복사", icon: "copy", keys: "Ctrl+C", run: clipRun("copy") },
+        { label: "붙여넣기", icon: "paste", keys: "Ctrl+V", run: () => pasteClipboard(false) },
+        { label: "텍스트로 붙여넣기", icon: "paste-plain", keys: "Ctrl+Shift+V", run: () => pasteClipboard(true) },
+        { label: many ? `${r.rows * r.cols}칸 지우기` : "칸 지우기", icon: "x", keys: "Delete", disabled: editing && "편집 중에는 글자로 지워요", run: clearSelection },
+      ] : null,
+      field ? [
+        { label: "위에 행 삽입", icon: "row-above", keys: keys("↑"), disabled: head && "머리글 위에는 못 넣어요", run: () => insertRows(false) },
+        { label: "아래에 행 삽입", icon: "row-below", keys: keys("↓"), run: () => insertRows(true) },
+        { label: r.rows > 1 ? `선택한 ${r.rows}개 행 삭제` : "행 삭제", icon: "trash", danger: true, keys: keys("Delete"), run: deleteRows },
+      ] : null,
+      field ? [
+        { label: "왼쪽에 열 삽입", icon: "col-left", keys: keys("←"), run: () => insertColumns(false) },
+        { label: "오른쪽에 열 삽입", icon: "col-right", keys: keys("→"), run: () => insertColumns(true) },
+        { label: r.cols > 1 ? `선택한 ${r.cols}개 열 삭제` : "열 삭제", icon: "trash", danger: true, keys: keys("Backspace"), run: deleteColumns },
+      ] : null,
+      [
+        { label: "머리글 행", checked: !blank, keys: keys("H"), disabled: blank && table.rows.length < 2 && "본문 행이 없어요", run: flipHeader },
+        field ? {
+          label: `${column + 1}열 정렬`, icon: "sort-asc",
+          items: [
+            { label: "오름차순", icon: "sort-asc", radio: true, checked: sortNow === 1, run: () => sortBy(column, 1) },
+            { label: "내림차순", icon: "sort-desc", radio: true, checked: sortNow === -1, run: () => sortBy(column, -1) },
+            { label: "정렬 끄기 · 원래 순서", disabled: !sortNow && "정렬 중이 아니에요", run: () => sortBy(column, sortNow) },
+          ],
+        } : null,
+      ],
+      [{ label: "표 삭제", icon: "trash", danger: true, run: () => askRemoveTable() }],
+    ].filter(Boolean);
+  }
+  registerContext(block, menuGroups);
+
   block.classList.add("note-table");
   block.removeAttribute("title");
   block.replaceChildren(tools, help, scroller);

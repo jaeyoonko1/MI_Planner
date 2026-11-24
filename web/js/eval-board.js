@@ -18,6 +18,8 @@ import {
 } from "./eval-select-model.js";
 import { boardNow, cellWait, formatThreshold, formatWait, waitSentence, waitSummary } from "./eval-wait-model.js";
 import { toast } from "./toast.js";
+import { registerContext } from "./contextmenu.js";
+import { boardMenu } from "./eval-menu.js";
 import { chipRow, el, emptyState, errorState, skeleton, store, svg } from "./ui.js";
 
 const STATE = { active: "진행 중", done: "완료", hold: "보류" };
@@ -1053,6 +1055,11 @@ export async function renderBoard(host, page, onError) {
     root.dataset.paintMs = String(Math.round(performance.now() - t0));
     return count;
   }
+
+  // V-010: right click / Shift+F10 on a cell, stage item, header or status badge
+  registerContext(root, (ctx) => boardMenu({
+    board: () => board, sel, activeIds, setSelection, selectLine, moveCells, setStatuses, setExcluded, editor, root,
+  }, ctx.target));
 
   body.append(panel.el);
   root.append(stageStyle(board), summaryEl, toolbar(board, prefs, change, limits), limitsHost, status, body);

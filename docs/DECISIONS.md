@@ -291,3 +291,11 @@ DOI 레코드는 DB(`doi`, `doi_images`), 이미지 파일은 `data/doi/<DOI uid
 평가 현황판 .xlsx는 `zipfile` + XML로 쓰는 `app/xlsx.py`로 만든다(문자열은 inline, 머리글 스타일·열 너비·머리글 고정·자동 필터만 지원). 새 패키지를 추가하지 않는다.
 - 이유: 보안망 오프라인 설치 부담을 늘리지 않고, 내보내기는 쓰기 전용이라 openpyxl이 필요 없다. 테스트는 zipfile·ElementTree로 다시 읽어 구조(모든 파트가 XML로 파싱되고 시트·셀이 맞음)를 확인한다.
 - openpyxl은 P5-01의 **가져오기**에서만 필요하면 그때 따로 결정·기록한다. 실제 Excel에서 열리는지는 회사 PC 확인 항목(project_flow VERIFY).
+
+### D-46 우클릭 컨텍스트 메뉴: 공용 컴포넌트 + 화면별 등록 (V-010, 2026-11-24)
+새 패키지 없음. `web/js/contextmenu.js`(DOM) + `contextmenu-core.js`(순수: 배치·항목 정리·키보드 모델, Node 테스트) + `contextmenu.css`(클래스 접두 `cx-`; `.cm`은 분류 관리 화면이 이미 씀).
+- **등록 API**: `registerContext(요소, (ctx) => 그룹들 | null)`. 클릭한 요소의 조상마다 등록된 제공자를 안쪽부터 불러 그룹을 이어 붙인다(그룹 사이 구분선, 빈 그룹·겹친 구분선 정리). 항목: `label icon keys run checked radio swatch disabled(문자열=이유) danger items(하위 메뉴) separator header note`. 위험 항목은 항상 아이콘, 비활성은 이유 글자를 오른쪽에 보여 **색에만 의존하지 않는다**.
+- **열기**: contextmenu 이벤트(우클릭·Shift+F10·메뉴 키 — 키 입력은 직접도 처리하고 뒤따르는 이벤트는 700ms 무시), Ctrl+우클릭은 항상 브라우저 메뉴, `[data-native-menu]`는 제외. 제공자가 없는 입력창·글상자는 잘라내기·복사·붙여넣기·텍스트로 붙여넣기·모두 선택 최소 메뉴(맞춤법·번역은 Ctrl+우클릭 안내). 붙여넣기는 클립보드 API로 읽어 **합성 paste 이벤트**를 보내 각 화면의 기존 paste 처리(표 칸·노트 블록·그림)를 그대로 쓴다(권한이 없으면 Ctrl+V 안내).
+- **포커스**: 실제 포커스가 메뉴로 옮겨 가며(마우스는 메뉴 자체, 키보드는 첫 항목) 닫으면 원래 요소·선택 범위를 복원한 뒤 실행한다. 표 칸의 focusout은 메뉴 안으로 가는 경우 편집을 끝내지 않는다(`inMenu`). 닫힘: Esc·바깥 클릭·스크롤(열린 직후 400ms는 화면이 반응하며 생기는 스크롤이라 무시)·창 크기·창 포커스 잃음. 애니메이션은 `prefers-reduced-motion`이면 끔, 최상위 레이어(popover)라 `<dialog>` 위에도 뜬다.
+- **원칙**: 모든 항목은 기존 구현을 호출(복제 금지)하고 되돌리기도 그대로: 표(`insertRows`·`deleteRows`·`sortBy(열, 방향)`·`askRemoveTable`…), 단(`addColumn`·`addRow`·`askDelete`, 비활성은 도구 버튼 상태 그대로), 서식(`note-format.js`의 `menuItems` — 도구줄과 같은 명령), 구조(`copySelected`·`requestDelete`·`undoLast`·`placeNode`), 할일(`taskactions.js`: 행·상세 패널 공용, 삭제 되돌리기도 상세와 같은 코드), 현황판(`moveCells`·`setStatuses`·`setExcluded`·`editor`, `eval-menu.js`), 페이지 트리(`onMove`·`api.movePage`).
+- **새 API**: `POST /api/pages/restore {trashed, original}` — 사이드바 "휴지통으로 이동"의 되돌리기(`Vault.restore_page` 재사용, 휴지통 밖 경로는 404). 일지·이슈·현황판 페이지와 최상위 트리는 사이드바에서 지울 수 없다(이유를 메뉴에 표시).

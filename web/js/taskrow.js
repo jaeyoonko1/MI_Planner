@@ -4,16 +4,10 @@ import { hub } from "./hub.js";
 import { toast } from "./toast.js";
 import { openInspector } from "./inspector.js";
 import { dueInfo, el, fmtMD, svg } from "./ui.js";
+import { registerContext } from "./contextmenu.js";
+import { taskGroups, writeTask as write } from "./taskactions.js";
 
 const STATUS_LABEL = { todo: "할일", doing: "진행", hold: "보류", done: "완료" };
-
-async function write(id, data) {
-  try {
-    await hub.patchTask(id, data);
-  } catch (e) {
-    toast(`저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: () => write(id, data) } });
-  }
-}
 
 // opts: { drag, showPlanned, fieldLabels: {key: fieldDef} }
 export function taskRow(t, opts = {}) {
@@ -98,6 +92,8 @@ export function taskRow(t, opts = {}) {
   }
   main.append(title, meta);
   row.append(check, main);
+  // V-010: right click / Shift+F10 on the row; the menu reads the freshest copy of the task from the hub
+  registerContext(row, () => taskGroups(hub.task(t.id) || t, { open: () => openInspector(t.id), rename }));
 
   if (opts.drag) {
     row.draggable = true;

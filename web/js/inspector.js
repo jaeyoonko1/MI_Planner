@@ -7,6 +7,8 @@ import { mountNoteColumns } from "./note-columns.js";
 import { classRows, toggleMulti } from "./inspector-fields.js";
 import { openPageSheet } from "./pagedialog.js";
 import { toast } from "./toast.js";
+import { editableOf, registerContext } from "./contextmenu.js";
+import { deleteTaskUndoable, taskGroups } from "./taskactions.js";
 import { chipRow, dateChoices, el, fmtMD, svg } from "./ui.js";
 
 const STATUS = [["todo", "할일"], ["doing", "진행"], ["hold", "보류"], ["done", "완료"]];
@@ -25,6 +27,11 @@ function ensurePanel() {
   panel.id = "insp";
   panel.tabIndex = -1;
   panel.setAttribute("aria-label", "이슈 상세");
+  // V-010: the same task actions as the list rows; text fields and the memo editor keep their own text menus
+  registerContext(panel, (ctx) => {
+    if (editableOf(ctx.target) || openId == null || !hub.task(openId)) return null;
+    return taskGroups(hub.task(openId), { close: closeInspector });
+  });
   panel.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !e.defaultPrevented) { e.stopPropagation(); closeInspector(); }
   });
@@ -275,20 +282,7 @@ function paint(focusTitle) {
       setTimeout(() => { armed = false; del.textContent = "삭제"; }, 3000);
       return;
     }
-    const snapshot = { ...hub.task(openId) };
-    try {
-      await hub.deleteTask(openId);
-      closeInspector();
-      toast(`#${snapshot.id} 삭제했어요`, {
-        action: {
-          label: "되돌리기",
-          run: async () => {
-            const { id, created_at, updated_at, props: p2, ...rest } = snapshot;
-            await hub.createTask(Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null && v !== "")));
-          },
-        },
-      });
-    } catch (e) { toast(`삭제하지 못했어요 · ${e.message}`, { error: true }); }
+    await deleteTaskUndoable(openId, closeInspector);
   });
   foot.append(el("span", "hint", "일지 줄 · 목록 · 월간이 이 이슈를 함께 봅니다"), del);
   body.append(props, memoWrap);

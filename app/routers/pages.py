@@ -28,6 +28,11 @@ class PageUpdate(BaseModel):
     order: Optional[int] = None
 
 
+class PageRestore(BaseModel):
+    trashed: str
+    original: str
+
+
 class PageContent(BaseModel):
     content: str
 
@@ -125,3 +130,10 @@ def delete_page(request: Request, path: str) -> dict:
     trashed = _vault(request).delete(path)
     _relink(request, lambda c: placement.unlink(c, path))
     return {"trashed": trashed}
+
+
+@router.post("/restore")
+def restore_page(request: Request, body: PageRestore) -> dict:
+    """Undo a page delete (V-010 sidebar menu): put the trashed folder back next to where it was."""
+    vault = _vault(request)
+    return vault.read(vault.restore_page(body.trashed, body.original))
