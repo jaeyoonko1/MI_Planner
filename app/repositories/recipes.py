@@ -167,7 +167,7 @@ def get_source(conn: sqlite3.Connection, source_id: int) -> dict[str, Any]:
 def list_recipes(conn: sqlite3.Connection, source_id: int | None = None, q: str = "",
                  include_missing: bool = False) -> list[dict[str, Any]]:
     sql = ("SELECT r.*, s.name AS source_name, s.equipment, s.line, s.vendor, s.model,"
-           " sn.collected_at, sn.content_hash, sn.param_count "
+           " sn.collected_at, sn.content_hash, sn.param_count, sn.parse_status "
            "FROM recipes r JOIN recipe_sources s ON s.id = r.source_id "
            "LEFT JOIN recipe_snapshots sn ON sn.id = r.current_snapshot_id WHERE 1 = 1")
     args: list[Any] = []
@@ -249,6 +249,37 @@ def content_hash(files: list[FileIn]) -> str:
     return h.hexdigest()
 
 
+def parse_status(files: list[FileIn]) -> str:
+    """ok / partial (some files failed) / error (all failed) / unparsed (no parser applied, no error)."""
+    errors = sum(1 for f in files if f.error)
+    if errors:
+        return "error" if errors == len(files) else "partial"
+    return "ok" if any(f.parser for f in files) else "unparsed"
+
+
+def current_hash(conn: sqlite3.Connection, recipe_id: int) -> str:
+    row = conn.execute("SELECT s.content_hash FROM recipes r LEFT JOIN recipe_snapshots s"
+                       " ON s.id = r.current_snapshot_id WHERE r.id = ?", (recipe_id,)).fetchone()
+    return (row["content_hash"] if row else "") or ""
+
+
+def replace_parse(conn: sqlite3.Connection, snapshot_id: int, parsed: dict[int, FileIn],
+                  parser_info: dict[str, Any]) -> None:
+    """Re-parse in place (D-36): rebuild only the parameter rows and parse flags of this snapshot. The snapshot id,
+    content hash and files stay, so no new version appears. `parsed` maps recipe_files.id → FileIn (parser/error/params)."""
+    conn.execute("DELETE FROM recipe_params WHERE snapshot_id = ?", (snapshot_id,))
+    for fid, f in parsed.items():
+        conn.execute("UPDATE recipe_files SET parser = ?, error = ? WHERE id = ?", (f.parser, f.error, fid))
+        conn.executemany(
+            "INSERT INTO recipe_params (snapshot_id, file_id, path, value, label, unit, group_name, sort)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            [(snapshot_id, fid, p["path"], str(p.get("value", "")), p.get("label", ""), p.get("unit", ""),
+              p.get("group", ""), i) for i, p in enumerate(f.params)])
+    conn.execute("UPDATE recipe_snapshots SET param_count = ?, parse_status = ?, parser_info = ? WHERE id = ?",
+                 (sum(len(f.params) for f in parsed.values()), parse_status(list(parsed.values())),
+                  json.dumps(parser_info, ensure_ascii=False), snapshot_id))
+
+
 def upsert_recipe(conn: sqlite3.Connection, source_id: int, name: str, remote_path: str = "") -> int:
     now = _now()
     conn.execute(
@@ -275,10 +306,7 @@ def add_snapshot(conn: sqlite3.Connection, recipe_id: int, files: list[FileIn], 
         raise RecipeError("레시피를 찾을 수 없어요.", 404)
     if cur["content_hash"] == digest:
         return cur["id"], False
-    errors = sum(1 for f in files if f.error)
-    status = "ok" if not errors else ("error" if errors == len(files) else "partial")
-    if not any(f.parser for f in files) and not errors:
-        status = "unparsed"
+    status = parse_status(files)
     sid = conn.execute(
         "INSERT INTO recipe_snapshots (recipe_id, run_id, collected_at, content_hash, file_count, param_count,"
         " parse_status, parser_info) VALUES (?,?,?,?,?,?,?,?)",

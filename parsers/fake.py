@@ -1,5 +1,5 @@
 """Test-only parser (P6-01): `key = value` lines in `.fake` files. Not imported by default, so it is never picked
-for real recipe files. Real generic parsers (xml/ini/txt) arrive in P6-03."""
+for real recipe files. Real generic parsers: parsers/generic.py."""
 from __future__ import annotations
 
 from parsers.base import Param, ParseError, ParseResult, RecipeParser, decode_text, register
@@ -11,7 +11,7 @@ class FakeKeyValueParser(RecipeParser):
     version = "1"
     extensions = (".fake",)
 
-    def _parse(self, data: bytes, file_name: str) -> ParseResult:
+    def _parse(self, data: bytes, file_name: str, options: dict) -> ParseResult:
         text, enc = decode_text(data)
         result = ParseResult(encoding=enc)
         for no, raw in enumerate(text.splitlines(), start=1):

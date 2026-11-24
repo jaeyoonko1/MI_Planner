@@ -1,0 +1,20 @@
+{
+  "format": "mi-planner-recipe-mapping",
+  "format_version": 1,
+  "vendor": "VENDOR-A",
+  "models": ["MODEL-A1"],
+  "mapping_version": "2026-11-24.1",
+  "description": "가짜 예시 (D-17): <Param Name=\"...\">값</Param> 형태의 XML. 실제 설비사 매핑은 config/recipe_mappings/에 둔다.",
+  "files": [
+    {"match": "recipe.xml", "parser": "xml", "options": {"key_attr": "Name"}},
+    {"match": "*.xml", "parser": "xml"}
+  ],
+  "params": [
+    {"path": "Optics/Focus", "label": "초점", "unit": "um", "group": "광학", "compare": "number", "tolerance": 0.05},
+    {"path": "Optics/Gain", "label": "게인", "group": "광학", "compare": "number"},
+    {"path_glob": "Scan/Pass*/Speed", "label": "스캔 속도", "unit": "mm/s", "group": "스캔", "compare": "number"},
+    {"path": "Scan/Mode", "label": "스캔 모드", "group": "스캔"}
+  ],
+  "ignore": ["Header/*", "*@Timestamp"],
+  "show_unmapped": true
+}

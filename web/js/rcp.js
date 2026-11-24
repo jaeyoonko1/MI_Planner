@@ -4,8 +4,9 @@
 import { api } from "./api.js";
 import {
   cleanRules, filterRecipes, filterSummary, formatStamp, isRunning, LAYOUTS, RULE_TYPES, runLine, runStatus,
-  splitList, splitNames,
+  parseStatus, splitList, splitNames,
 } from "./rcp-model.js";
+import { openRecipeDetail } from "./rcp-detail.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
 import { chipRow, debounce, el, emptyState, errorState, skeleton, svg } from "./ui.js";
@@ -152,7 +153,7 @@ export async function renderRcp(host, sourceId, { go }) {
     t.append(el("h2", "", source.name));
     for (const bit of [source.vendor, source.model, source.equipment, source.line].filter(Boolean)) t.append(el("span", "rcp-chip", bit));
     if (!source.enabled) t.append(el("span", "rcp-chip off", "꺼짐"));
-    const sub = el("p", "rcp-sub", `프로필 ${source.ftp_profile || "(없음)"} · 경로 ${source.remote_dir || "/"} · ${source.layout === "folder" ? "폴더 = 레시피" : "파일 = 레시피"}`);
+    const sub = el("p", "rcp-sub", `프로필 ${source.ftp_profile || "(없음)"} · 경로 ${source.remote_dir || "/"} · ${source.layout === "folder" ? "폴더 = 레시피" : "파일 = 레시피"} · 매핑 ${source.mapping || "자동"}`);
     const left = el("div", "grow");
     left.append(t, sub);
 
@@ -162,6 +163,17 @@ export async function renderRcp(host, sourceId, { go }) {
       try { await api.cancelRecipeRun(current.id); toast("취소를 요청했어요 · 현재 파일을 마치고 멈춰요"); } catch (e) { toast(e.message, { error: true }); }
     });
     cancelBtn.hidden = true;
+    const reparseBtn = button("다시 파싱", "sm", async () => {
+      reparseBtn.disabled = true;
+      try {
+        const r = await api.reparseRecipeSource(source.id);
+        toast(`레시피 ${num(r.snapshots)}개를 다시 파싱했어요${r.with_problems ? ` · 문제 있는 것 ${num(r.with_problems)}개` : ""}`);
+        await refreshRecipes();
+      } catch (e) { toast(e.message, { error: true }); }
+      reparseBtn.disabled = false;
+    });
+    reparseBtn.title = "받아 둔 파일을 현재 매핑으로 다시 읽어요 (설비에 연결하지 않아요)";
+    reparseBtn.prepend(svg("refresh", "i s"));
     const editBtn = button("편집", "sm", () => editSource(source));
     editBtn.prepend(svg("edit", "i s"));
     const delBtn = button("지우기", "sm quiet danger", async () => {
@@ -178,7 +190,7 @@ export async function renderRcp(host, sourceId, { go }) {
       } catch (e) { toast(e.message, { error: true }); }
     });
     const acts = el("div", "rcp-actions");
-    acts.append(runBtn, cancelBtn, editBtn, delBtn);
+    acts.append(runBtn, cancelBtn, reparseBtn, editBtn, delBtn);
     head.append(left, acts);
 
     const rules = el("div", "rcp-rules");
@@ -301,7 +313,7 @@ export async function renderRcp(host, sourceId, { go }) {
       scroll.setAttribute("aria-label", "수집한 레시피 목록");
       const table = el("table", "rcp-table");
       const hr = el("tr");
-      for (const h of ["레시피", "마지막 수집", "파라미터", "버전"]) {
+      for (const h of ["레시피", "마지막 수집", "파싱", "파라미터", "버전"]) {
         const th = el("th", "", h);
         th.scope = "col";
         hr.append(th);
@@ -317,9 +329,23 @@ export async function renderRcp(host, sourceId, { go }) {
         const frag = document.createDocumentFragment();
         for (const r of rows) {
           const tr = el("tr", r.missing ? "missing" : "");
-          const nm = el("td", "nm", r.name);
+          const nm = el("td", "nm");
+          if (r.current_snapshot_id) {
+            const open = el("button", "rcp-open", r.name);
+            open.type = "button";
+            open.title = "파라미터 보기";
+            open.addEventListener("click", () => openRecipeDetail({ recipe: { ...r, source_name: source.name }, onChanged: refreshRecipes }));
+            nm.append(open);
+          } else nm.textContent = r.name;
           if (r.missing) nm.append(el("em", "rcp-miss", "설비에서 안 보임"));
-          tr.append(nm, el("td", "", formatStamp(r.collected_at) || "—"), el("td", "n", r.param_count ? num(r.param_count) : "—"),
+          const ps = el("td");
+          if (r.parse_status) {
+            const [pl, pt, pi] = parseStatus(r.parse_status);
+            const pb = el("span", `mos-badge ${pt}`);
+            pb.append(svg(pi, "i"), pl);
+            ps.append(pb);
+          } else ps.textContent = "—";
+          tr.append(nm, el("td", "", formatStamp(r.collected_at) || "—"), ps, el("td", "n", r.param_count ? num(r.param_count) : "—"),
             el("td", "mono", r.content_hash ? r.content_hash.slice(0, 8) : "—"));
           frag.append(tr);
         }
@@ -378,7 +404,7 @@ export function openSourceEditor({ source, profiles, enabled, onSaved }) {
   });
   sheet.dlg.classList.add("rcp-sheet");
   const d = {
-    ftp_profile: source?.ftp_profile ?? profiles[0]?.name ?? "", layout: source?.layout ?? "folder",
+    ftp_profile: source?.ftp_profile ?? profiles[0]?.name ?? "", layout: source?.layout ?? "folder", mapping: source?.mapping ?? "",
     enabled: source?.enabled ?? true,
     rules: (source?.name_filter ?? []).map((r) => ({ ...r })),
   };
@@ -416,8 +442,22 @@ export function openSourceEditor({ source, profiles, enabled, onSaved }) {
     layoutHost.replaceChildren(row);
   }
   paintLayout();
+  const mapHost = el("div");
+  let mappings = [];
+  function paintMapping() {
+    const known = new Set(mappings.map((m) => m.name));
+    const items = [["", "자동", "설비사·모델이 같은 매핑 파일을 찾아요. 없으면 확장자로만 읽어요."],
+      ...mappings.map((m) => [m.name, m.name, m.error ? `문제 있음 · ${m.error}` : `${m.vendor} · v${m.mapping_version}`])];
+    if (d.mapping && !known.has(d.mapping)) items.push([d.mapping, `${d.mapping} (파일 없음)`, "매핑 파일을 찾을 수 없어요"]);
+    const row = chipRow(items, d.mapping, (v) => { d.mapping = v; paintMapping(); });
+    row.setAttribute("aria-label", "설비사 매핑");
+    mapHost.replaceChildren(row);
+  }
+  paintMapping();
+  api.recipeMappings().then((list) => { mappings = list; paintMapping(); }).catch(() => {});
   connBox.append(field("FTP 프로필", profileHost), field("경로", remote), field("레시피 단위", layoutHost,
-    "폴더: 하위 폴더 하나가 레시피예요. 파일: 파일 하나가 레시피예요."), field("파일 패턴", globs, "폴더 안에서 받을 파일(쉼표로 구분, 대소문자 무시)."));
+    "폴더: 하위 폴더 하나가 레시피예요. 파일: 파일 하나가 레시피예요."), field("파일 패턴", globs, "폴더 안에서 받을 파일(쉼표로 구분, 대소문자 무시)."),
+    field("설비사 매핑", mapHost, "파라미터 이름·단위·표시 순서를 정하는 파일이에요 (config/recipe_mappings 또는 parsers/mappings)."));
 
   // ---- name filter with live preview
   const filterBox = el("div", "rcp-block");
@@ -522,7 +562,7 @@ export function openSourceEditor({ source, profiles, enabled, onSaved }) {
     const payload = {
       name: name.value.trim(), vendor: vendor.value.trim(), model: model.value.trim(), equipment: equipment.value.trim(),
       line: line.value.trim(), ftp_profile: d.ftp_profile, remote_dir: remote.value.trim(), layout: d.layout,
-      name_filter: cleanRules(d.rules), file_globs: splitList(globs.value), enabled: d.enabled,
+      name_filter: cleanRules(d.rules), file_globs: splitList(globs.value), mapping: d.mapping, enabled: d.enabled,
     };
     save.disabled = true;
     try {

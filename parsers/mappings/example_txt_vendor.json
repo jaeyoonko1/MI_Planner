@@ -1,0 +1,19 @@
+{
+  "format": "mi-planner-recipe-mapping",
+  "format_version": 1,
+  "vendor": "VENDOR-C",
+  "models": ["MODEL-C1", "MODEL-C2"],
+  "mapping_version": "2026-11-24.1",
+  "description": "가짜 예시 (D-17): 고정폭 텍스트(params.txt)와 쉼표 표(points.txt). options로 읽는 방식을 정한다.",
+  "files": [
+    {"match": "params.txt", "parser": "txt", "options": {"mode": "fixed", "name_cols": [0, 20], "value_cols": [20, 40]}},
+    {"match": "points.txt", "parser": "txt", "options": {"mode": "table", "delimiter": ","}},
+    {"match": "*.txt", "parser": "txt"}
+  ],
+  "params": [
+    {"path": "FOCUS_OFFSET", "label": "초점 오프셋", "unit": "um", "group": "광학", "compare": "number"},
+    {"path": "STAGE_SPEED", "label": "스테이지 속도", "unit": "mm/s", "group": "스테이지", "compare": "number"}
+  ],
+  "ignore": ["*/Note"],
+  "show_unmapped": true
+}

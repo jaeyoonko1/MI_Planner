@@ -1,0 +1,18 @@
+{
+  "format": "mi-planner-recipe-mapping",
+  "format_version": 1,
+  "vendor": "VENDOR-B",
+  "models": [],
+  "mapping_version": "2026-11-24.1",
+  "description": "가짜 예시 (D-17): [섹션] key=value 형태의 INI. 표시할 항목만 고르고(show_unmapped=false) 나머지는 숨긴다.",
+  "files": [
+    {"match": "*.ini", "parser": "ini"}
+  ],
+  "params": [
+    {"path": "Optics/Focus", "label": "초점", "unit": "um", "group": "광학", "compare": "number", "tolerance": 0.01},
+    {"path": "Optics/Exposure", "label": "노출 시간", "unit": "ms", "group": "광학", "compare": "number"},
+    {"path_glob": "Detect*/Threshold", "label": "임계값", "group": "검출", "compare": "number"}
+  ],
+  "ignore": ["System/*"],
+  "show_unmapped": false
+}

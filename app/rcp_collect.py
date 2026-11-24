@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from app import db
+from app import db, rcp_parse
 from app.repositories import recipes as repo
 from app.repositories.recipes import FileIn
 from app.rcp_ftp import Entry, FtpProblem, ReadOnlyFtp, TooBig, describe, valid_name
@@ -81,6 +81,14 @@ class _Run:
         self.errors: list[dict[str, str]] = []
         self.error_count = 0
         self.recipes_ok = 0
+        self.parse_errors = 0
+        self.notes: list[str] = []
+
+    def parse_problem(self, recipe: str, file: str, message: str) -> None:
+        """A file that could not be parsed is kept (snapshot saved); it is listed but does not fail the run."""
+        self.parse_errors += 1
+        if len(self.errors) < MAX_ERRORS:
+            self.errors.append({"recipe": recipe, "file": file, "message": "파싱 실패: " + message})
 
     def error(self, recipe: str, file: str, message: str) -> None:
         self.error_count += 1
@@ -160,6 +168,9 @@ def run_collection(db_path: Path, data_dir: Path, source_id: int, run_id: int, f
     try:
         source = repo.get_source(conn, source_id)
         rules, globs = source["name_filter"], source["file_globs"]
+        mapping_ctx = rcp_parse.resolve_mapping(source)
+        if mapping_ctx.error:
+            run.notes.append(f"매핑을 쓰지 못했어요: {mapping_ctx.error}")
         tmp.mkdir(parents=True, exist_ok=True)
         ftp = ReadOnlyFtp(ftp_open)
         candidates, rejected = list_candidates(ftp, source["remote_dir"], source["layout"], limits)
@@ -175,7 +186,8 @@ def run_collection(db_path: Path, data_dir: Path, source_id: int, run_id: int, f
                 raise _Stop("cancelled", "사용자가 수집을 취소했어요.")
             if time.monotonic() > deadline:
                 raise _Stop("partial", f"실행 시간 한도({limits.max_seconds}초)에 닿아 중단했어요.")
-            _collect_recipe(conn, ftp, run, source, entry, globs, limits, tmp, data_dir, total, secrets, cancel)
+            _collect_recipe(conn, ftp, run, source, entry, globs, limits, tmp, data_dir, total, secrets, cancel,
+                            mapping_ctx)
             run.save()
         complete = run.error_count == 0
         if complete and run.listed > 0:
@@ -186,6 +198,9 @@ def run_collection(db_path: Path, data_dir: Path, source_id: int, run_id: int, f
                    + ("" if complete else f" · 문제 {run.error_count}건"))
         if complete and run.listed == 0:
             message += " · 목록이 비어 있어 누락 표시는 하지 않았어요."
+        if run.parse_errors:
+            message += f" · 파싱 못 한 파일 {run.parse_errors}개(원본은 저장됨)"
+        message += "".join(" · " + n for n in run.notes)
         if ftp.used_list_fallback:
             message += " (MLSD 미지원 서버: LIST로 읽음)"
     except _Stop as stop:
@@ -213,7 +228,7 @@ def _mark_missing(conn, source_id: int, seen: list[str]) -> None:
 
 def _collect_recipe(conn, ftp: ReadOnlyFtp, run: _Run, source: dict[str, Any], entry: Entry, globs: list[str],
                     limits: Limits, tmp: Path, data_dir: Path, total: dict[str, int], secrets: list[str],
-                    cancel: threading.Event) -> None:
+                    cancel: threading.Event, mapping_ctx: rcp_parse.MappingCtx) -> None:
     name = entry.name
     base = source["remote_dir"].rstrip("/") + "/" + name if source["remote_dir"] else name
     problems: list[str] = []
@@ -255,7 +270,13 @@ def _collect_recipe(conn, ftp: ReadOnlyFtp, run: _Run, source: dict[str, Any], e
         run.downloaded += 1
         total["files"] += 1
     rid = repo.upsert_recipe(conn, source["id"], name, base)
-    _, created = repo.add_snapshot(conn, rid, files, run.run_id)
+    info = None
+    if repo.content_hash(files) != repo.current_hash(conn, rid):  # unchanged recipes are not parsed again
+        info = rcp_parse.parse_files(files, data_dir, mapping_ctx)  # never raises; failures become file errors
+        for f in files:
+            if f.error:
+                run.parse_problem(name, f.rel_path, f.error)
+    _, created = repo.add_snapshot(conn, rid, files, run.run_id, info)
     conn.commit()
     run.recipes_ok += 1
     if created:

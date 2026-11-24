@@ -420,9 +420,10 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 
 **5) 파서 플러그인 (`parsers/`, D-19)**
 - `parsers/base.py`: `RecipeParser`(`name`, `version`, `extensions`, `can_write=False`, `sniff(file_name, head)`, `parse(bytes, file_name) → ParseResult{params[Param(path, value, line)], warnings, encoding}`), `register`·`get`·`pick`·`names`, `ParseError`(한국어 메시지), `decode_text`(UTF-8(BOM) → CP949 → Latin-1). 공통 검사: 20MB·파라미터 5만 개·경로 중복 거부.
-- 파서는 순수 함수(네트워크·파일 쓰기 없음). 경로 표기 잠정: XML `A/B/C`(속성 `A/B@attr`, 반복 요소 `A/B[2]`), INI `섹션/키`, TXT `키`. 구체 규칙은 P6-03에서 확정.
-- 내장 파서: P6-03에 `xml`·`ini`·`txt`. XML은 DTD·엔티티 거부(pptx/xlsx 읽기와 같은 방식). `parsers/fake.py`는 테스트 전용(`.fake`, 기본 import 안 됨).
+- 파서는 순수 함수(네트워크·파일 쓰기 없음). **경로 표기(P6-03 확정)**: XML `A/B/C`(루트 요소 이름은 뺌, 속성 `A/B@attr`, 같은 이름 형제는 첫째 `A/B`·둘째부터 `A/B[2]`·`A/B[3]`, 네임스페이스 제거, 하위 요소가 있는 요소의 본문 글자는 경고만 하고 버림), INI `섹션/키`(섹션 앞 키는 `키`, 중복 키 `키[2]`), TXT `키`(표 모드 `행키/열이름`, 고정폭 모드 `이름`, 중복 `[2]`). 경로 안의 `/`는 `_`로 바꾼다.
+- 내장 파서(`parsers/generic.py`, `parsers/__init__`이 등록): `xml`(`.xml`)·`ini`(`.ini .cfg .conf`, 줄 번호 보존을 위해 configparser 대신 직접 읽음)·`txt`(`.txt .prm .par`). 인코딩은 UTF-16(BOM) → UTF-8(BOM) → CP949 → Latin-1, NUL 바이트가 있으면 바이너리로 거부. **XML 안전**: `<!DOCTYPE`·`<!ENTITY`가 있으면 전체 거부(디코딩한 전체 텍스트에서 검사), 깊이 64·요소 10만 개·파라미터 5만 개·파일 20MB 한도, 선언된 `encoding=`은 이미 디코딩했으므로 제거하고 파싱. 파서 옵션(`options`)은 매핑 파일 `files` 규칙에서 받아 파서가 검증한다: xml `key_attr`(예: `<Param Name="Focus">1</Param>` → 경로 `…/Focus`), txt `mode`=`kv`(기본, `키 = 값`·`키: 값`·`키<TAB>값`, 주석 `# ; //`)·`table`(`delimiter` `,` `;` `|` `tab`, 기본 공백; 첫 줄이 머리글)·`fixed`(`name_cols`·`value_cols` = [시작, 끝) 열 번호). `parsers/fake.py`는 테스트 전용(`.fake`, 기본 import 안 됨).
 - `version`이 바뀌면 캐시 blob에서 다시 파싱해 해당 스냅샷의 `recipe_params`만 다시 만든다(새 스냅샷 아님, `parser_info`에 파서·매핑 버전 기록).
+- **파싱 연결(P6-03, `app/rcp_parse.py`)**: 수집이 새 버전(내용 해시가 현재와 다름)을 만들 때만 파일마다 `parse_one`을 돌린다(변화 없으면 파싱 생략). 파서는 매핑 `files` 규칙 첫 일치, 없으면 확장자(`pick`), 그것도 없으면 파싱 대상 아님(원본만 보관, 오류 아님). **어떤 파일이 실패해도 수집은 멈추지 않는다**: 한국어 메시지가 `recipe_files.error`에 남고(예상 못 한 예외는 고정 문구만, 내부 문구·경로 비노출), 스냅샷 `parse_status` = `ok`(오류 0, 하나 이상 파싱) / `partial` / `error`(전부 실패) / `unparsed`(적용된 파서 없음). 파싱 실패는 실행 `errors`에 `파싱 실패: …`로 보이지만 실행 상태·`missing` 판단에는 영향이 없다. `parser_info` = `{mapping, mapping_version, mapping_auto, parsers{이름:버전}, warnings(최대 50), warning_count, parsed_at, mapping_error?}`.
 
 **6) 설비사 매핑 파일** — `parsers/mappings/<이름>.json`(가짜 예시만 커밋) + `config/recipe_mappings/<이름>.json`(git 제외, 회사 실제 매핑, 같은 이름이면 우선)
 ```json
@@ -433,7 +434,9 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
              {"path_glob": "Inspection/Detect/*/Threshold", "label": "임계값", "group": "검출"}],
   "ignore": ["Header/*", "*/Timestamp"], "show_unmapped": true }
 ```
-- 들여쓴 JSON(사람·LLM이 메모장으로 고침). `files`는 위에서부터 첫 일치, 없으면 `pick`(확장자). `params` 순서 = 표시 순서. `ignore`는 비교·표시 제외. 더 높은 `format_version`은 "앱 업데이트" 안내로 거부. 검증: `parsers/mapping.py` `validate`·`load`.
+- 들여쓴 JSON(사람·LLM이 메모장으로 고침). `files`는 위에서부터 첫 일치(`/` 없는 패턴은 파일 이름에만, 대소문자 무시; 규칙에 `options` 객체를 둘 수 있음), 없으면 `pick`(확장자). `params` 순서 = 표시 순서. `ignore`는 비교·표시 제외. 더 높은 `format_version`은 "앱 업데이트" 안내로 거부. 검증: `parsers/mapping.py` `validate`·`load`.
+- **적용 순서(P6-03, `parsers/mapping.py` `apply`)**: `ignore` 글롭(대소문자 무시, `*`는 `/`도 포함)에 맞는 경로 제거 → `params`에 처음 맞는 규칙(`path` 정확히 또는 `path_glob`)으로 `label`·`unit`·`group` 부여 → **매핑된 것이 `params` 순서대로 먼저, 나머지는 파일 순서**(`show_unmapped: false`면 나머지 숨김). `compare: number`인데 숫자가 아닌 값은 경고. 매핑이 없으면 파서 결과를 그대로 저장.
+- **매핑 선택**: 소스의 `mapping` 이름 → 비어 있으면 같은 `vendor`(대소문자 무시)이고 `models`가 비었거나 소스 `model`이 들어 있는 첫 매핑(이름순) → 없으면 매핑 없이 확장자로 읽음. 이름이 있는데 파일이 없거나 깨졌으면 매핑 없이 읽고 `parser_info.mapping_error`·실행 메시지로 알린다. 예시(가짜): `parsers/mappings/example_vendor.json`·`example_xml_vendor.json`(`key_attr`)·`example_ini_vendor.json`(`show_unmapped: false`)·`example_txt_vendor.json`(고정폭·표). 가짜 레시피 파일은 `scripts/make_sample_recipes.py`.
 - 스킬 `recipe-parser-maker`(P7)는 이 형식의 파일을 만든다.
 
 **7) 스냅샷·diff 의미**
@@ -475,6 +478,12 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 - **상태**: `ok`(오류 0) / `partial`(일부 레시피 성공 + 오류 또는 한도·시간 초과) / `error`(접속·목록 실패 또는 성공 0) / `cancelled`. 앱 시작 시 `running`으로 남은 실행은 `error`("앱이 종료되어…")로 닫는다.
 - **API**: `POST/PATCH/DELETE /api/recipe-sources[/{id}]`(DELETE는 DB 행만, 캐시 blob 유지) · `POST /api/recipe-preview/filter`(이름 목록에 필터 적용, 네트워크 없음) · `POST /api/recipe-preview/list`(`rcp_enabled` 필요, 이름만 읽고 받지 않음, 설비에 연결) · `POST /api/recipe-sources/{id}/run`(202, 작업 스레드, `rcp_enabled` 꺼짐 403·꺼진 소스/실행 중 409·프로필 없음 422) · `GET /api/recipe-runs/{id}` · `POST /api/recipe-runs/{id}/cancel`. 한 번에 한 실행(연결 1개)이며 미리보기도 같은 잠금을 쓴다.
 - **화면 `#/rcp`**(사이드바 `RCP 관리`): 헤더에 `수집 켜짐/꺼짐` 토글 칩(= `rcp_enabled`, 꺼짐이면 안내 띠와 비활성 버튼), 소스 목록 + 상세(필터 요약, 수집 버튼·취소·편집·지우기, 상태 카드 5칸·오류 목록·이전 실행, 수집한 레시피 표·`누락 N개 보기` 칩·이름 찾기). 편집 창: 프로필·레시피 단위 칩(D-12), 경로·파일 패턴, 규칙 행(종류 칩 4개 + 값 + `제외` 칩), 미리보기 이름 칸(`목록 불러오기`로 채우거나 직접 입력) + 즉시 일치 표시(색 + 아이콘 + 글자).
+
+### 4.6.3 파싱·다시 파싱 (P6-03, D-38)
+- **다시 파싱** `app/rcp_parse.py` `reparse_snapshot`: 캐시 blob(`data/recipes/blobs/`, 경로가 blobs 밖이면 거부, sha256 재확인 — 없거나 달라졌으면 그 파일만 오류)을 **현재** 매핑·파서로 다시 읽어 그 스냅샷의 `recipe_params`·파일 `parser/error`·`param_count`·`parse_status`·`parser_info`를 한 트랜잭션으로 바꾼다. 스냅샷 id·내용 해시는 그대로라 **새 버전이 생기지 않는다**. 설비에 연결하지 않으므로 `rcp_enabled`와 무관.
+- **낡음 표시**: `GET /api/recipe-snapshots/{id}`의 `parse` = `{stale, mapping, mapping_version, mapping_error, mapping_auto}`. 저장된 `parser_info`의 매핑 이름·버전 또는 파서 버전이 지금과 다르면(또는 파서 도입 전 `unparsed`) `stale`. 자동으로 다시 파싱하지는 않는다(사용자가 `다시 파싱`을 누른다).
+- **API**: `GET /api/recipe-mappings`(찾은 매핑 목록: name·vendor·models·mapping_version·description·error) · `POST /api/recipe-snapshots/{id}/reparse`(스냅샷 상세 + `parse`) · `POST /api/recipe-sources/{id}/reparse`(소스 레시피들의 **현재** 스냅샷, 수집 중이면 409, `{snapshots, with_problems}`). `GET /api/recipes` 항목에 `parse_status` 추가.
+- **화면**: 레시피 표에 `파싱` 상태 배지 열, 레시피 이름을 누르면 상세 창 — 상태 배지·수집 시각·파일/파라미터 수·버전, 매핑 한 줄(이름·버전·자동 선택 여부)과 낡음/매핑 오류 안내 띠, 확인할 점(경고) 접이식, 파일별 파서·오류, 파일 선택 칩·찾기·`이름 붙은 항목만` 토글 칩, 그룹별 파라미터 표(이름·값·단위·경로, 최대 500행), 바닥 `다시 파싱`. 소스 머리글에 `다시 파싱`(소스 전체), 소스 편집 창에 `설비사 매핑` 칩(자동·찾은 매핑).
 
 ### 4.7 LLM 연동 (P7, D-10)
 **1단계 — 파일 + 스킬 + CLI** (사내 OpenCode / Claude Code / Codex 공통)
@@ -692,6 +701,8 @@ GET    /api/dashboard/today
 GET    /api/recipe-sources        GET /api/recipe-sources/{id}
 GET    /api/recipes?source_id=&q=&include_missing=   GET /api/recipes/{id}   # 레시피 + 스냅샷 목록 + 현재 파일·파라미터
 GET    /api/recipe-snapshots/{id}  GET /api/recipe-runs?source_id=&limit=
+GET    /api/recipe-mappings        # P6-03
+POST   /api/recipe-snapshots/{id}/reparse   POST /api/recipe-sources/{id}/reparse   # 캐시 blob 다시 파싱(로컬)
 ```
 
 ## 8. 단계 계획 (project_flow.html과 동일)

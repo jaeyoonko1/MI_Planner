@@ -12,10 +12,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from app import config, rcp_collect, rcp_ftp
+from app import config, rcp_collect, rcp_ftp, rcp_parse
 from app.repositories import recipes as repo
 from app.routers import settings as settings_router
 from app.routers.tasks import get_conn
+from parsers import mapping as mapping_files
 
 router = APIRouter(prefix="/api")
 
@@ -43,7 +44,8 @@ def get_recipe(recipe_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> 
 
 @router.get("/recipe-snapshots/{snapshot_id}")
 def get_snapshot(snapshot_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
-    return repo.get_snapshot(conn, snapshot_id)
+    got = repo.get_snapshot(conn, snapshot_id)
+    return {**got, "parse": rcp_parse.parse_state(conn, got["snapshot"])}
 
 
 @router.get("/recipe-runs")
@@ -194,3 +196,31 @@ def get_run(run_id: int, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
 def cancel_run(run_id: int, request: Request, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
     repo.get_run(conn, run_id)
     return {"cancelling": _runner(request).cancel(run_id)}
+
+
+# ---- parsing (P6-03) --------------------------------------------------------------------------------------------
+# Local only: reads cached blobs and rewrites parameter rows of existing snapshots. Never contacts equipment.
+
+def _data_dir(request: Request) -> Path:
+    return request.app.state.db_path.parent / "recipes"
+
+
+@router.get("/recipe-mappings")
+def list_mappings() -> dict:
+    """Mapping files found (config/recipe_mappings overrides parsers/mappings): name, vendor, version, error."""
+    return {"items": mapping_files.available()}
+
+
+@router.post("/recipe-snapshots/{snapshot_id}/reparse")
+def reparse_snapshot(snapshot_id: int, request: Request, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """Parse the cached files again with the current mapping. Same snapshot, no new version."""
+    got = rcp_parse.reparse_snapshot(conn, _data_dir(request), snapshot_id)
+    return {**got, "parse": rcp_parse.parse_state(conn, got["snapshot"])}
+
+
+@router.post("/recipe-sources/{source_id}/reparse")
+def reparse_source(source_id: int, request: Request, conn: sqlite3.Connection = Depends(get_conn)) -> dict:
+    """Re-parse the current snapshot of every recipe of the source (after editing its mapping file)."""
+    if _runner(request).busy():
+        raise repo.RecipeError("수집이 진행 중이에요. 끝난 뒤에 다시 파싱해 주세요.", 409)
+    return rcp_parse.reparse_source(conn, _data_dir(request), source_id)

@@ -60,3 +60,44 @@ export function filterRecipes(items, { query = "", showMissing = false } = {}) {
   const q = query.trim().toLowerCase();
   return items.filter((r) => (showMissing || !r.missing) && (!q || r.name.toLowerCase().includes(q)));
 }
+
+// ---- parsing (P6-03) ---------------------------------------------------------------------------------------------
+
+// parse_status -> [label, tone, icon]
+export const PARSE_STATUS = {
+  ok: ["파싱 완료", "ok", "check"],
+  partial: ["일부 파일 실패", "warn", "alert"],
+  error: ["파싱 실패", "bad", "alert"],
+  unparsed: ["파싱 안 됨", "mute", "clock"],
+};
+
+export function parseStatus(status) {
+  return PARSE_STATUS[status] ?? [status || "—", "mute", "clock"];
+}
+
+/** Parameter rows for the detail table: file chip, text search (path/label/value/unit/group), "named only" toggle. */
+export function filterParams(params, { file = "", query = "", namedOnly = false } = {}) {
+  const q = query.trim().toLowerCase();
+  return params.filter((p) => (!file || p.file === file) && (!namedOnly || p.label)
+    && (!q || [p.path, p.label, p.value, p.unit, p.group_name].some((t) => String(t ?? "").toLowerCase().includes(q))));
+}
+
+/** [[groupLabel, rows]] keeping first-seen group order; rows without a group go last as "기타". */
+export function groupParams(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = r.group_name || "";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(r);
+  }
+  const named = [...map].filter(([k]) => k).map(([k, v]) => [k, v]);
+  return map.has("") ? [...named, ["기타", map.get("")]] : named;
+}
+
+/** One line telling which mapping parsed the snapshot and whether it is outdated. */
+export function mappingLine(parse, info) {
+  const name = info?.mapping ?? parse?.mapping ?? "";
+  if (!name) return "매핑 없음 · 파일 확장자로 파서를 골랐어요";
+  const ver = info?.mapping_version ? ` v${info.mapping_version}` : "";
+  return `매핑 ${name}${ver}${info?.mapping_auto ? " · 설비사·모델로 자동 선택" : ""}`;
+}

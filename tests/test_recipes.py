@@ -148,7 +148,7 @@ def test_parser_registry_and_fake_parser():
     from parsers import fake  # noqa: F401  (registers the test-only parser)
     assert "fake" in base.names()
     p = base.get("fake")
-    assert base.pick("aabb.fake") is p and base.pick("aabb.xml") is None
+    assert base.pick("aabb.fake") is p and base.pick("aabb.zzz") is None
     res = p.parse("# 주석\nFocus = 1.0\nStage/Speed=20\n잘못된 줄\n".encode("cp949"), "a.fake")
     assert res.as_dict() == {"Focus": "1.0", "Stage/Speed": "20"}
     assert res.params[0].line == 2 and res.encoding == "cp949" and len(res.warnings) == 1
@@ -163,7 +163,7 @@ def test_parser_registry_and_fake_parser():
         class Clash(base.RecipeParser):
             name = "fake"
 
-            def _parse(self, data, file_name):
+            def _parse(self, data, file_name, options):
                 return base.ParseResult()
 
 

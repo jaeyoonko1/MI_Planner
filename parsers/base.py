@@ -1,7 +1,7 @@
 """Recipe parser plugin interface (P6-01, D-19 / D-36).
 
 A parser turns one recipe file (bytes) into flat parameter rows {path: value}. Parsers are pure: no network, no file
-writes, no globals beyond the registry. Generic XML/INI/TXT parsers arrive in P6-03; vendor differences live in
+writes, no globals beyond the registry. Generic XML/INI/TXT parsers live in parsers/generic.py (P6-03); vendor differences live in
 mapping files (parsers/mapping.py), and a vendor-specific code parser is added only when the generic ones fail.
 """
 from __future__ import annotations
@@ -54,10 +54,13 @@ class RecipeParser(ABC):
         """Cheap guess used when no mapping rule names a parser. Default: extension match."""
         return file_name.lower().endswith(self.extensions) if self.extensions else False
 
-    def parse(self, data: bytes, file_name: str = "") -> ParseResult:
+    def parse(self, data: bytes, file_name: str = "", options: dict | None = None) -> ParseResult:
+        """`options` comes from the mapping file's file rule (parser specific, validated by the parser)."""
         if len(data) > MAX_FILE_BYTES:
             raise ParseError(f"파일이 너무 커요 ({MAX_FILE_BYTES // (1024 * 1024)}MB 초과).")
-        result = self._parse(data, file_name)
+        if options is not None and not isinstance(options, dict):
+            raise ParseError("파서 옵션은 JSON 객체여야 해요.")
+        result = self._parse(data, file_name, options or {})
         if len(result.params) > MAX_PARAMS:
             raise ParseError(f"파라미터가 너무 많아요 ({MAX_PARAMS}개 초과).")
         seen: set[str] = set()
@@ -68,7 +71,7 @@ class RecipeParser(ABC):
         return result
 
     @abstractmethod
-    def _parse(self, data: bytes, file_name: str) -> ParseResult: ...
+    def _parse(self, data: bytes, file_name: str, options: dict) -> ParseResult: ...
 
 
 _REGISTRY: dict[str, RecipeParser] = {}
