@@ -42,6 +42,7 @@ export function renderFlow(flow, { sha = '', subject = '', now = new Date(), rep
   const safeSha = /^[a-f0-9]{7,40}$/i.test(sha) ? sha : '';
   const safeRepo = /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : 'jaeyoonko1/MI_Planner';
   const short = safeSha ? `[${safeSha.slice(0, 7)}](https://github.com/${safeRepo}/commit/${safeSha})` : '로컬 미리보기';
+  const shortSubject = String(subject ?? '').split(/\r?\n/, 1)[0].slice(0, 140);
 
   const lines = [
     '# 🗂️ MI Planner — 비공개 개발 현황',
@@ -50,7 +51,7 @@ export function renderFlow(flow, { sha = '', subject = '', now = new Date(), rep
     '',
     `**최종 갱신:** ${date} (KST)　·　**원본 FLOW:** ${clean(flow.updated)}　·　**커밋:** ${short}`,
     '',
-    `**최신 작업:** ${clean(subject) || '프로젝트 진행 현황 갱신'}`,
+    `**최신 작업:** ${clean(shortSubject) || '프로젝트 진행 현황 갱신'}`,
     '',
     '## 전체 진행률',
     '',
