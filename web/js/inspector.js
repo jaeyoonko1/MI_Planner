@@ -96,7 +96,11 @@ async function refresh(reloadFields = false) {
   if (reloadFields) fields = await loadFields();
   try { hub.putTask(await api.getTodo(openId)); } catch { /* deleted: close below */ return closeInspector(); }
   if (panel.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
-  if (memo?.ctl.contains(document.activeElement)) { memo.ctl.syncFrom(hub.task(openId)?.note || ""); return; }
+  if (memo?.ctl.contains(document.activeElement)) {
+    const task = hub.task(openId);
+    memo.ctl.syncFrom(task?.note || "", task?.note_revision);
+    return;
+  }
   paint(false);
 }
 
@@ -295,6 +299,12 @@ function paint(focusTitle) {
     const id = openId;
     const ctl = mountNoteColumns(mountEditor, {
       content: t.note || "",
+      revision: t.note_revision,
+      draftKey: `memo:${id}`,
+      loadLatest: async () => {
+        const task = await api.getTodo(id);
+        return { content: task.note || "", revision: task.note_revision };
+      },
       pagePath: t.page_path || undefined,
       compact: true,
       label: "메모",
@@ -303,12 +313,17 @@ function paint(focusTitle) {
       // after the issue gets a page this URL keeps working (the server looks in the page folder first)
       fileUrl: (rel) => `/api/todos/${id}/file?name=${encodeURIComponent(rel.replace(/^files\//, ""))}`,
       upload: (file, name) => api.uploadTodoFile(id, file, name),
-      save: async (md) => { await hub.patchTask(id, { note: md.trim() ? md : null }); },
-      onError: (e, retry) => toast(`메모를 저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: retry } }),
+      save: async (md, revision) => {
+        const task = await hub.patchTask(id, { note: md.trim() ? md : null, note_revision: revision });
+        return task.note_revision;
+      },
+      onError: (e, retry) => {
+        if (e.status !== 409) toast(`메모를 저장하지 못했어요 · ${e.message}`, { error: true, action: { label: "다시 시도", run: retry } });
+      },
     });
     memo = { id, ctl };
   } else {
-    memo.ctl.syncFrom(t.note || "");
+    memo.ctl.syncFrom(t.note || "", t.note_revision);
   }
   memoWrap.append(memo.ctl.el);
 

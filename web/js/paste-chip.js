@@ -10,7 +10,7 @@ export function hidePasteChip() {
   bar?.classList.remove("show");
 }
 
-// opts: { message, notes: string[], canFormat, format, onFormat(bool), onUndo() }
+// opts: { message, notes: string[], canFormat, format, plainLabel, onFormat(bool), onUndo() }
 export function showPasteChip(opts) {
   hidePasteChip();
   bar?.remove();
@@ -30,14 +30,14 @@ export function showPasteChip(opts) {
       chip.setAttribute("aria-pressed", String(opts.format === value));
       chip.addEventListener("click", () => {
         if (opts.format === value) return;
+        if (opts.onFormat(value) === false) return;
         opts.format = value;
         for (const other of group.children) other.setAttribute("aria-pressed", String(other === chip));
-        opts.onFormat(value);
         arm();
       });
       return chip;
     };
-    group.append(make("원본 서식 유지", true), make("텍스트만", false));
+    group.append(make("원본 서식 유지", true), make(opts.plainLabel ?? "텍스트만", false));
     parts.push(group);
   } else if (opts.canFormat === false) {
     parts.push(el("span", "paste-chip-note", "서식 없음"));

@@ -13,8 +13,9 @@
 // margins other than the indent step, line height, borders, alignment outside tables.
 
 import {
-  applyStyle, baseStyle, collectRuns, cssPx, htmlToBlocks, pasteNotes, registerBlockParser, runsToLines, runsToMarkdown,
-  styleOf, tableBlockToSource, tableFromNode, textOf, tsvToBlock, walk,
+  applyStyle, baseStyle, collectRuns, cssPx, excelOverflowOf, hasContentOutsideTables, htmlToBlocks, isExcelHtml,
+  pasteNotes, registerBlockParser, runsToLines, runsToMarkdown, styleOf, tableBlockToSource, tableFromNode, textOf,
+  tsvToBlock, walk,
 } from "./paste-html.js";
 
 export const DOC_LIMITS = { html: 6000000, items: 4000, images: 30, imageBytes: 12 * 1024 * 1024, level: 8 };
@@ -276,15 +277,16 @@ function walkDocument(body, doc, rules) {
   };
 
   /** A block whose children are only inline: one item per line. */
-  const emitLeaf = (node, ctx) => {
+  const emitLeaf = (node, ctx, excelOverflow = null) => {
     const css = styleOf(node, rules);
     const style = applyStyle(ctx.style, node, rules);
     const lead = leadingIndent(node);
     const level = Number(node.attrs?.["data-indent"]) || 0;
     const mso = msoListLevel(css);
     const headingClass = /^(?:Heading|MsoHeading)\s*([1-6])$/i.exec((node.attrs?.class || "").split(/\s+/)[0] || "");
-    const lines = runsToLines(collectRuns(node, style, rules, [], { image: st.image }));
+    const lines = runsToLines(collectRuns(node, style, rules, [], { image: st.image, excelOverflow }));
     if (!lines.length) return;
+    if (excelOverflow) st.hasExcelOverflow = true;
     const indent = Math.min(DOC_LIMITS.level, levelOf(ctx.indentPx + indentPxOf(css)) + lead + level);
     if (mso) {
       const marker = wordMarker(node);
@@ -355,7 +357,16 @@ function walkDocument(body, doc, rules) {
 
   function emitTable(node, ctx) {
     const cells = [...walk(node)].filter((n) => n.tag === "td" || n.tag === "th");
-    if (cells.length === 1) { walkChildren(cells[0], { ...ctx, style: applyStyle(ctx.style, cells[0], rules) }); return; } // a layout table (Outlook): its single cell is the content
+    if (cells.length === 1) {
+      const cell = cells[0];
+      const excelOverflow = isExcelHtml(doc) && !hasContentOutsideTables(doc.root) && excelOverflowOf(cell);
+      if (excelOverflow) {
+        if (!hiddenNode(cell, rules) && !hiddenNode(cell.parent, rules)) emitLeaf(cell, ctx, excelOverflow);
+      } else { // a layout table (Outlook) or an ordinary single cell
+        walkChildren(cell, { ...ctx, style: applyStyle(ctx.style, cell, rules) });
+      }
+      return;
+    }
     const block = tableFromNode(node, rules);
     if (block.rows.length) push({ k: "table", block });
   }
@@ -403,6 +414,7 @@ export function documentFromParsed(parsed) {
     source: detectSource(root),
     truncated: st.truncated,
     skippedImages: st.skippedImages || 0,
+    hasExcelOverflow: Boolean(st.hasExcelOverflow),
   };
   block.hasFormat = items.some((item) => (item.lines || []).some((line) => line.some((run) => run.b || run.i || run.u || run.s || run.color || run.bg || run.size || run.href))
     || (item.k === "table" && item.block.hasFormat));
@@ -556,18 +568,20 @@ export function docNotes(block, failed = {}) {
  * Clipboard -> what to paste: `{ kind: "table", block, via }`, `{ kind: "doc", block }` or null (plain text paste).
  * Order: a sheet (only a table) > a document (anything richer than one plain line) > tab separated text.
  */
-export function planPaste({ html = "", text = "" }) {
+export function planPaste({ html = "", text = "", keepSingleExcelCell = false }) {
   let block = null;
   if (html.trim()) {
     try {
       const input = html.length > DOC_LIMITS.html && !/<table[\s>]/i.test(html.slice(0, 20000)) ? html.slice(0, DOC_LIMITS.html) : html;
-      block = htmlToBlocks(input);
+      block = htmlToBlocks(input, { keepSingleExcelCell });
     } catch {
       block = null; // hostile / absurdly nested HTML: the plain text is still pasted
     }
   }
   if (block?.type === "table" && block.rows.length) return { kind: "table", block, via: "html" };
-  if (block?.type === "doc" && (block.items.length || block.images.length) && !isPlainLine(block)) return { kind: "doc", block };
+  if (block?.type === "doc" && (block.items.length || block.images.length)) {
+    if (!isPlainLine(block) || (block.hasExcelOverflow && !text)) return { kind: "doc", block };
+  }
   const tsv = tsvToBlock(text);
   return tsv ? { kind: "table", block: tsv, via: "tsv" } : null;
 }

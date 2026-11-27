@@ -1,6 +1,7 @@
 // V-001: clipboard HTML / TSV -> note table, and cell-range operations. Fake data only.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { excelTableFromPaste, readExcelTable, serializeExcelTable } from "../js/excel-table-block.js";
 import { PASTE_LIMITS, clipboardToTable, pasteNotes, tableBlockToSource, tsvToBlock } from "../js/paste-html.js";
 import {
   clearRange, fillDown, fillRight, cellHtml, cellPlain, isRichCell, moveCursor, nextSortDirection, normalizeRange,
@@ -35,6 +36,208 @@ assert.equal(eb.merged, 2);
 assert.equal(eb.hasFormat, true);
 assert.match(pasteNotes(eb)[0], /병합 셀 2개/);
 
+// The same parse exposes the source geometry independently of its GFM projection.
+const sourceCell = (block, row, col) => block.excel.cells.find((cell) => cell.row === row && cell.col === col);
+assert.deepEqual(eb.excel.columnWidths, ["65pt", "65pt", "94pt", "94pt"]);
+assert.deepEqual(eb.excel.rowHeights, Array(4).fill("15.0pt"));
+assert.deepEqual(eb.excel.numberSeparators, { decimal: String.raw`"\."`, thousands: String.raw`"\,"` });
+assert.equal(sourceCell(eb, 0, 0).styles["background-color"], "#D9D9D9");
+assert.equal(sourceCell(eb, 0, 0).styles["font-family"], '"맑은 고딕", monospace');
+assert.equal(sourceCell(eb, 1, 0).styles.color, "#C00000");
+assert.deepEqual(sourceCell(eb, 1, 1).value, { type: "number", raw: "7" });
+assert.equal(sourceCell(eb, 1, 1).displayText, "007.00");
+assert.equal(sourceCell(eb, 1, 1).numberFormat, String.raw`"0\.00"`);
+assert.equal(sourceCell(eb, 1, 3).rowSpan, 2);
+assert.equal(sourceCell(eb, 2, 3), undefined);
+assert.equal(sourceCell(eb, 3, 0).colSpan, 2);
+assert.equal(sourceCell(eb, 3, 1), undefined);
+assert.equal(sourceCell(eb, 3, 3).displayText, "2*3*4 ~~ `x`");
+
+// Excel's web export gives a hidden <col> zero width, while its cells still contain values.
+const hiddenColumnTable = `<table>
+  <colgroup><col width="50"><col width="0" span="2" style="display:none"><col width="90"></colgroup>
+  <tr><td>Metric</td><td>Hidden</td><td>Also hidden</td><td>Result</td></tr>
+  <tr><td colspan="4" style="border-right:1pt solid black">Merged across hidden columns</td></tr>
+  <tr><td>LOT-TEST-001</td><td colspan="3">Merged from a hidden column</td></tr>
+  <tr><td>Visible</td><td colspan="2">Entirely hidden merge</td><td x:num="0.125">12.5%</td></tr>
+</table>`;
+const hiddenColumnExcel = clipboardToTable({
+  html: '<html xmlns:x="urn:schemas-microsoft-com:office:excel">' + hiddenColumnTable + '</html>',
+}).block;
+assert.deepEqual(hiddenColumnExcel.rows.map((row) => row.map(({ plain }) => plain)), [
+  ["Metric", "Result"], ["Merged across hidden columns", ""],
+  ["LOT-TEST-001", "Merged from a hidden column"], ["Visible", "12.5%"],
+]);
+assert.deepEqual(hiddenColumnExcel.excel.columnWidths, ["50", "90"]);
+assert.equal(hiddenColumnExcel.merged, 1);
+assert.equal(sourceCell(hiddenColumnExcel, 1, 0).colSpan, 2);
+assert.equal(sourceCell(hiddenColumnExcel, 1, 0).styles["border-right"], "1pt solid black");
+assert.equal(sourceCell(hiddenColumnExcel, 2, 1).colSpan, 1);
+assert.deepEqual(sourceCell(hiddenColumnExcel, 3, 1).value, { type: "number", raw: "0.125" });
+assert.doesNotMatch(tableBlockToSource(hiddenColumnExcel), /Entirely hidden merge|Also hidden/);
+assert.equal(clipboardToTable({ html: hiddenColumnTable }).block.cols, 4);
+
+// Excel rowspans include hidden worksheet rows in the HTML geometry.
+const hiddenRowsExcel = clipboardToTable({ html: `
+  <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+  <style>.hidden{display:none}.pattern{background:#DACA66;mso-pattern:#BB5522 diag-cross}</style>
+  <table><col><col style="display:none"><col>
+    <tr height="24"><td class="pattern" rowspan="3" colspan="2">Visible anchor</td><td>First</td></tr>
+    <tr class="hidden"><td>Hidden row value</td></tr>
+    <tr height="36"><td>Second</td></tr>
+    <tr class="hidden"><td rowspan="2" class="pattern">Hidden anchor</td><td colspan="2">Hidden row value</td></tr>
+    <tr height="42"><td>Hidden column value</td><td>Third</td></tr>
+    <tr class="hidden"><td rowspan="2">Entirely hidden merge</td></tr>
+    <tr class="hidden"><td colspan="6">Hidden row value</td></tr>
+    <tr><td style="background:yellow;mso-pattern:black none">After merges</td>
+      <td></td><td style="mso-pattern:url(invalid) diag-cross">Fourth</td></tr>
+  </table></html>` }).block;
+assert.deepEqual(hiddenRowsExcel.rows.map((row) => row.map(({ plain }) => plain)), [
+  ["Visible anchor", "First"], ["Visible anchor", "Second"], ["Hidden anchor", "Third"], ["After merges", "Fourth"],
+]);
+assert.deepEqual(hiddenRowsExcel.excel.rowHeights, ["24", "36", "42", null]);
+assert.equal(hiddenRowsExcel.merged, 1);
+assert.equal(sourceCell(hiddenRowsExcel, 0, 0).rowSpan, 2);
+assert.equal(sourceCell(hiddenRowsExcel, 0, 0).colSpan, 1);
+assert.equal(sourceCell(hiddenRowsExcel, 1, 0), undefined);
+assert.equal(sourceCell(hiddenRowsExcel, 2, 0).rowSpan, 1);
+assert.equal(hiddenRowsExcel.rows[2][0].repeated, false);
+assert.equal(sourceCell(hiddenRowsExcel, 0, 0).styles["background-color"], "#DACA66");
+assert.deepEqual(sourceCell(hiddenRowsExcel, 2, 0).fillPattern, { pattern: "diag-cross", foreground: "#BB5522" });
+assert.equal(sourceCell(hiddenRowsExcel, 3, 0).fillPattern, undefined);
+assert.equal(sourceCell(hiddenRowsExcel, 3, 1).fillPattern, undefined);
+assert.doesNotMatch(tableBlockToSource(hiddenRowsExcel), /Entirely hidden merge|Hidden (?:row|column) value/);
+
+// Excel's web export also uses colspans for text overflow and compressed runs of blank cells.
+const layoutSpans = `<table><col><col style="display:none"><col><col>
+  <tr><td>Group</td><td></td><td>Value</td><td>End</td></tr>
+  <tr><td colspan="3" style="mso-ignore:colspan">Overflow text</td><td>Right</td></tr>
+  <tr><td colspan="3" style="mso-ignore:padding">True merge</td><td>Right</td></tr>
+  <tr><td colspan="2" style="mso-ignore:colspan"></td><td>After blanks</td><td>Right</td></tr>
+  <tr><td>Left</td><td colspan="2" style="mso-ignore:colspan">Hidden overflow</td><td>Right</td></tr>
+</table>`;
+const layoutSpanExcel = clipboardToTable({
+  html: '<html xmlns:x="urn:schemas-microsoft-com:office:excel">' + layoutSpans + '</html>',
+}).block;
+assert.deepEqual(layoutSpanExcel.rows.map((row) => row.map(({ plain }) => plain)), [
+  ["Group", "Value", "End"], ["Overflow text", "", "Right"], ["True merge", "", "Right"],
+  ["", "After blanks", "Right"], ["Left", "", "Right"],
+]);
+assert.equal(layoutSpanExcel.merged, 1);
+assert.equal(sourceCell(layoutSpanExcel, 1, 0).colSpan, 1);
+assert.equal(sourceCell(layoutSpanExcel, 2, 0).colSpan, 2);
+assert.equal(sourceCell(layoutSpanExcel, 3, 1).displayText, "After blanks");
+assert.doesNotMatch(tableBlockToSource(layoutSpanExcel), /Hidden overflow/);
+assert.equal(clipboardToTable({ html: layoutSpans }).block.merged, 4);
+
+const customExcel = clipboardToTable({ html: `
+  <style>br{mso-data-placement:same-cell}td{mso-number-format:General}</style>
+  <table><colgroup><col span="2" width="88"></colgroup>
+    <tr height="24"><td x:num="0.125" style='mso-number-format:"0.0%;[Red]-0.0%";
+      vertical-align:middle; border-bottom:.5pt solid windowtext; text-indent:2pt;
+      mso-rotate:45; background-image:url(https://invalid.example)'>12.5%</td>
+    <td x:str="0017" style='color:var(--external);font-family:url(evil)'>0017</td></tr>
+    <tr><td x:num>1,234</td><td x:num>1.234</td></tr>
+  </table>` }).block;
+assert.deepEqual(customExcel.excel.columnWidths, ["88", "88"]);
+assert.deepEqual(customExcel.excel.rowHeights, ["24", null]);
+assert.equal(sourceCell(customExcel, 0, 0).numberFormat, '"0.0%;[Red]-0.0%"');
+assert.deepEqual(sourceCell(customExcel, 0, 0).styles, {
+  "border-bottom": ".5pt solid windowtext",
+  "vertical-align": "middle",
+  "text-indent": "2pt",
+  "mso-rotate": "45",
+});
+assert.deepEqual(sourceCell(customExcel, 0, 1).value, { type: "text", raw: "0017" });
+assert.deepEqual(sourceCell(customExcel, 0, 1).styles, {});
+assert.equal(sourceCell(customExcel, 1, 0).value, null);
+assert.equal(sourceCell(customExcel, 1, 1).value, null);
+assert.deepEqual(customExcel.excel.numberSeparators, { decimal: null, thousands: null });
+
+// Excel's General alignment is not a CSS keyword. The exported HTML align attribute
+// supplies the rendered direction without changing the legacy GFM projection.
+const alignedExcel = clipboardToTable({ html: String.raw`
+  <head><meta name="Generator" content="Microsoft Excel 15">
+  <style>td{text-align:general}.center{text-align:center}</style></head>
+  <table style='mso-displayed-decimal-separator:"\,";mso-displayed-thousand-separator:"\."'>
+    <tr><td>Heading</td><td>Summary</td></tr>
+    <tr><td align="RIGHT">12,5%</td><td class="center" align="right">LOT-TEST-001</td></tr>
+  </table>` }).block;
+assert.equal(sourceCell(alignedExcel, 0, 0).styles["text-align"], "general");
+assert.equal(sourceCell(alignedExcel, 1, 0).styles["text-align"], "right");
+assert.equal(sourceCell(alignedExcel, 1, 0).displayText, "12,5%");
+assert.equal(sourceCell(alignedExcel, 1, 0).value, null);
+assert.equal(sourceCell(alignedExcel, 1, 1).styles["text-align"], "center");
+assert.deepEqual(alignedExcel.aligns, ["", "center"]);
+assert.deepEqual(alignedExcel.excel.numberSeparators, {
+  decimal: String.raw`"\,"`, thousands: String.raw`"\."`,
+});
+
+// Excel exports mixed cell fonts as class-based <font> elements, including Office-only double underline.
+const mixedExcel = clipboardToTable({ html: `
+  <head><meta name=Generator content="Microsoft Excel 15"></head>
+  <style>
+    td { color:black; font-size:11.0pt; font-weight:400; text-decoration:none }
+    .xl65 { color:#12265B; font-weight:700 }
+    .font0 { color:black; font-weight:400 }
+    .font7 { color:black; font-weight:400; font-family:Arial,sans-serif; font-size:16.0pt; font-style:italic }
+    .font8 { color:black; font-weight:400; text-decoration:underline; text-underline-style:double }
+  </style>
+  <table><tr><td class=xl65>LOT<font class=font0>-</font><font class=font7>TEST</font><font
+    class=font0>-001<br></font><font class=font8><s>READY</s></font></td>
+    <td>Same <span style="color:var(--external);font-family:url(evil)">font</span></td></tr></table>
+` }).block;
+const mixedCell = sourceCell(mixedExcel, 0, 0);
+assert.equal(mixedCell.displayText, "LOT-TEST-001\nREADY");
+assert.deepEqual(mixedCell.richText.map((line) => line.map((run) => run.text)), [["LOT", "-", "TEST", "-001"], ["READY"]]);
+assert.equal(mixedCell.richText[0][0].styles.color, "#12265B");
+assert.equal(mixedCell.richText[0][0].styles["font-weight"], "700");
+assert.equal(mixedCell.richText[0][1].styles.color, "black");
+assert.equal(mixedCell.richText[0][1].styles["font-weight"], "400");
+assert.equal(mixedCell.richText[0][2].styles["font-family"], "Arial,sans-serif");
+assert.equal(mixedCell.richText[0][2].styles["font-size"], "16.0pt");
+assert.equal(mixedCell.richText[1][0].styles["text-decoration-line"], "underline line-through");
+assert.equal(mixedCell.richText[1][0].styles["text-underline-style"], "double");
+assert.equal(sourceCell(mixedExcel, 0, 1).richText, undefined);
+
+for (const block of [eb, hiddenColumnExcel, hiddenRowsExcel, layoutSpanExcel, customExcel, alignedExcel, mixedExcel]) {
+  const ids = {
+    id: "sheet-test",
+    rowIds: block.rows.map((_, index) => "r" + index),
+    columnIds: Array.from({ length: block.cols }, (_, index) => "c" + index),
+  };
+  const model = excelTableFromPaste(block, ids);
+  assert.ok(model);
+  const stored = serializeExcelTable(model);
+  assert.ok(stored);
+  const reopened = readExcelTable(stored, ids.id);
+  assert.deepEqual(reopened.rows.map(row => row.id), ids.rowIds);
+  assert.deepEqual(reopened.columns, ids.columnIds);
+  assert.deepEqual(reopened.rows.map(row => row.height), block.excel.rowHeights);
+  assert.deepEqual(reopened.columns.map(id => reopened.columnWidths[id] ?? null), block.excel.columnWidths);
+  assert.deepEqual(reopened.numberSeparators, block.excel.numberSeparators);
+  const cells = reopened.rows.flatMap((row, r) => row.cells.flatMap((cell, c) => cell ? [{ row: r, col: c, ...cell }] : []));
+  assert.deepEqual(cells, JSON.parse(JSON.stringify(block.excel.cells)));
+}
+assert.equal(excelTableFromPaste(eb, { id: "test", rowIds: [], columnIds: [] }), null);
+assert.equal(excelTableFromPaste(eb, {
+  id: "test", rowIds: ["r1", "r1", "r3", "r4"], columnIds: ["c1", "c2", "c3", "c4"],
+}), null);
+assert.equal(excelTableFromPaste(tsvToBlock("왼쪽\t오른쪽"), {
+  id: "test", rowIds: ["r1"], columnIds: ["c1", "c2"],
+}), null);
+assert.equal(mixedExcel.rows[0][0].plain, mixedCell.displayText);
+
+const clippedExcel = clipboardToTable({ html: `
+  <html xmlns:x="urn:schemas-microsoft-com:office:excel"><table>
+    <tr><td colspan="70" rowspan="1000">Merged</td><td>Outside</td></tr><tr><td>Outside</td></tr>
+  </table></html>` }).block;
+assert.equal(clippedExcel.cols, PASTE_LIMITS.cols);
+assert.equal(clippedExcel.excel.cells.length, 1);
+assert.equal(sourceCell(clippedExcel, 0, 0).colSpan, clippedExcel.cols);
+assert.equal(sourceCell(clippedExcel, 0, 0).rowSpan, clippedExcel.rows.length);
+
+
 const NL = "\n";
 const source = tableBlockToSource(eb, { format: true, eol: NL });
 const parsed = parseNoteTable(source);
@@ -58,8 +261,33 @@ const plainSource = tableBlockToSource(eb, { format: false, eol: NL });
 assert.ok(!/\*\*|<u>|<mark|<span|:---|---:/.test(plainSource.replace(/\\\*/g, "")));
 assert.equal(cellText(parseNoteTable(plainSource).rows[3].cells[2]), "파랑 기울임 일반 밑줄 취소");
 
+// Excel's Save as Web Page output puts the clipped tail in a trailing, plain hidden span.
+const excelOverflowTable = `<table>
+  <tr><td>Lot</td><td>Equipment</td></tr>
+  <tr><td>LOT-TEST-<span style='display:none'>001</span></td><td>EQ-A01</td>
+  <td style="display:none">Hidden column cell</td></tr>
+  <tr><td>A<span style="display:none">Hidden</span>B</td><td>EQ-A02<span style="display:none;mso-hide:all">Hidden</span></td></tr>
+  <tr><td><span style="display:none">Hidden</span></td><td>EQ-A03</td></tr>
+  <tr style="display:none"><td>Hidden row</td><td>EQ-A04</td></tr>
+</table>`;
+const excelOverflowBlocks = [
+  `<html><head><meta name=Generator content="Microsoft Excel 15"></head><body>${excelOverflowTable}</body></html>`,
+  "<style>br{mso-data-placement:same-cell}td{mso-number-format:General}</style>" + excelOverflowTable,
+];
+for (const html of excelOverflowBlocks) {
+  const { block } = clipboardToTable({ html });
+  assert.deepEqual(block.rows.map((row) => row.map((cell) => cell.plain)), [
+    ["Lot", "Equipment"], ["LOT-TEST-001", "EQ-A01"], ["AB", "EQ-A02"], ["", "EQ-A03"],
+  ]);
+  assert.equal(cellText(grid(tableBlockToSource(block))[1][0]), "LOT-TEST-001");
+}
+for (const html of [excelOverflowTable, "<style>td{mso-number-format:General}</style>" + excelOverflowTable]) {
+  assert.equal(clipboardToTable({ html }).block.rows[1][0].plain, "LOT-TEST-");
+}
+
 // ---- Google Sheets
 const sheets = clipboardToTable({ html: fixture("sheets-clipboard.html"), text: "" }).block;
+assert.equal(sheets.excel, undefined);
 assert.equal(sheets.rows[0][0].md, '<mark>**Lot**</mark>'); // pale yellow fill -> yellow highlight
 assert.deepEqual(sheets.rows[1].map((c) => c.plain), ["LOT-TEST-001", "0.5"]);
 assert.equal(sheets.rows[1][0].md, '<span style="color:#d93025"><u>LOT-TEST-001</u></span>');

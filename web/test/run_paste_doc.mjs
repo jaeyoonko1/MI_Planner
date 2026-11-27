@@ -187,6 +187,29 @@ const lines = (md) => md.split("\n");
   // a layout table with one cell (Outlook) is just a wrapper
   const wrapped = docOf("<table><tr><td><p>바깥 표 안의 문단</p><ul><li>목록</li></ul></td></tr></table>");
   assert.deepEqual(lines(docToMarkdown(wrapped)).filter(Boolean), ["바깥 표 안의 문단", "", "- 목록"].filter(Boolean));
+  // A single clipped Excel value still pastes inline, even when only HTML is available.
+  const singleCell = (style = "") => `<table><tr><td ${style}>LOT-TEST-<span style="display:none">001</span></td></tr></table>`;
+  const excelCell = (style) => `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body>${singleCell(style)}</body></html>`;
+  const plainExcel = planPaste({ html: excelCell() });
+  assert.equal(plainExcel.kind, "doc");
+  assert.ok(isInlineDoc(plainExcel.block));
+  assert.equal(inlineMarkdown(plainExcel.block), "LOT-TEST-001");
+  assert.equal(planPaste({ html: excelCell(), text: "LOT-TEST-001" }), null); // intact text/plain uses native insertion
+  for (const text of ["", "LOT-TEST-001"]) {
+    const boldExcel = planPaste({ html: excelCell('style="font-weight:bold"'), text });
+    assert.ok(isInlineDoc(boldExcel.block));
+    assert.equal(inlineMarkdown(boldExcel.block), "**LOT-TEST-001**");
+  }
+  assert.equal(inlineMarkdown(docOf(singleCell('style="font-weight:bold"'))), "**LOT-TEST-**");
+  const noteExcel = planPaste({
+    html: excelCell('style="background:#fed;mso-pattern:#b52 gray-25"'),
+    text: "LOT-TEST-001",
+    keepSingleExcelCell: true,
+  });
+  assert.equal(noteExcel.kind, "table");
+  assert.equal(noteExcel.block.excel.cells[0].displayText, "LOT-TEST-001");
+  assert.deepEqual(noteExcel.block.excel.cells[0].fillPattern, { foreground: "#b52", pattern: "gray-25" });
+  assert.equal(planPaste({ html: singleCell('style="font-weight:bold"'), keepSingleExcelCell: true }).kind, "doc");
   // one formatted phrase is pasted inline, one plain phrase is plain text
   const phrase = docOf("<span style='font-weight:bold'>굵은 말</span>");
   assert.equal(isInlineDoc(phrase), true);

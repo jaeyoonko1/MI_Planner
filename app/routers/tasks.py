@@ -5,8 +5,9 @@ from typing import Iterator
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
-from app import db, journal, journal_links, memo
+from app import db, journal, journal_links, memo, search
 from app.repositories import tasks as repo
+from app.vault import content_revision
 
 router = APIRouter(prefix="/api/todos")
 
@@ -38,6 +39,7 @@ class TodoPatch(BaseModel):
     eval_id: int | None = None
     page_path: str | None = None
     note: str | None = None
+    note_revision: str | None = None
     props: dict | None = None
     mark: str | None = None
     level_id: int | None = None
@@ -94,6 +96,7 @@ def list_todos(
         due_within=due_within, overdue=overdue, planned_date=planned_date,
         eval_id=eval_id, page_path=page_path, parent_task_id=parent_task_id,
         top_level=top_level, q=q, field_filters=ff or None,
+        search_body=search.task_list_body(request.app.state.vault) if q else None,
         ids=id_list, planned_from=planned_from, planned_to=planned_to, due_from=due_from,
         due_to=due_to, unplanned=unplanned, marked=marked, open_only=open_only,
     )
@@ -133,17 +136,23 @@ def promote_line(request: Request, body: FromLine, conn=Depends(get_conn)) -> di
 @router.get("/{task_id}")
 def get_todo(request: Request, task_id: int, conn=Depends(get_conn)) -> dict:
     # the memo of an issue with a page IS the page body (P2B-10); reading unifies old diverged pairs once
-    return memo.read(conn, request.app.state.vault, task_id)
+    vault = request.app.state.vault
+    with vault.page_lock:
+        return memo.read(conn, vault, task_id)
 
 
 @router.patch("/{task_id}")
 def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get_conn)) -> dict:
     # fields_set lets clients clear a field by sending null explicitly
-    data = {k: getattr(body, k) for k in body.model_fields_set}
-    before = repo.get(conn, task_id)
-    if "note" in data:
-        memo.write_note(conn, request.app.state.vault, before, data["note"])
-    task = repo.update(conn, task_id, data)
+    data = body.model_dump(exclude_unset=True, exclude={"note_revision"})
+    vault = request.app.state.vault
+    with vault.page_lock:
+        before = repo.get(conn, task_id)
+        if "note" in data:
+            memo.write_note(conn, vault, before, data["note"], body.note_revision)
+        task = repo.update(conn, task_id, data)
+        if "note" in data:
+            task["note_revision"] = content_revision(task.get("note"))
     # the linked journal line follows the task (title, check, mark, planned day)
     return {**task, "journal_days": journal_links.after_task_change(request.app.state.vault, before, task)}
 

@@ -3,6 +3,10 @@
 Usage (from the MI_Planner folder):
     python skills/fill-table/scripts/fill_table.py raw  data/tmp/raw.csv
     python skills/fill-table/scripts/fill_table.py tables "vault/<page>/index.md"
+    python skills/fill-table/scripts/fill_table.py excel-tables "vault/<page>/index.md"
+    python skills/fill-table/scripts/fill_table.py excel-export "vault/<page>/index.md" --table-id TABLE_ID
+    python skills/fill-table/scripts/fill_table.py excel-fill "vault/<page>/index.md" --table-id TABLE_ID \
+        --values data/tmp/cells.json [--overwrite] [--apply]
     python skills/fill-table/scripts/fill_table.py md "vault/<page>/index.md" --table 1 --raw data/tmp/raw.csv \
         --key Wafer=WF --map "Scan(분)=scan_min" [--overwrite] [--add-missing] [--apply]
     python skills/fill-table/scripts/fill_table.py board 3 --raw data/tmp/raw.csv \
@@ -23,9 +27,14 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+from app.excel_table_search import plan_value_fill, read_grids  # noqa: E402
+from app.vault_content import content_write_lock, replace_content  # noqa: E402
+
 DELIM = re.compile(r"^:?-+:?$")
 BOARD_KEYS = ("equipment", "lot", "wafer")
 
@@ -105,28 +114,67 @@ def cell_source(text: str) -> str:
     return re.sub(r"^ +| +$", lambda m: "&#32;" * len(m.group(0)), src)
 
 
+# Keep these block boundaries in step with web/js/mdblocks.js. Table numbers
+# should refer only to tables that the note editor recognizes as editable.
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+OTHER_BLOCK = re.compile(r"^(?: {0,3}>|#{1,3}[ \t]|#{4,}(?:[ \t]|$)|[ \t]*(?:[-*+]|[0-9]+[.)])(?:[ \t]|$))")
+TABLE_PIPE = re.compile(r"^\s*\|")
+INDENTED = re.compile(r"^(?: {4}|\t)")
+
+
+def starts_other_block(line: str) -> bool:
+    return bool(FENCE.match(line) or OTHER_BLOCK.match(line) or line.lstrip().startswith("<!--"))
+
+
 def find_tables(lines: list[str]) -> list[dict[str, Any]]:
-    tables, fence, i = [], None, 0
-    while i < len(lines):
-        stripped = lines[i].strip()
-        mark = re.match(r"^(`{3,}|~{3,})", stripped)
+    rows = [line.rstrip("\r\n") for line in lines]
+    tables, i = [], 0
+    while i < len(rows):
+        line = rows[i]
+        mark = FENCE.match(line)
         if mark:
-            fence = None if fence and stripped.startswith(fence) else (fence or mark.group(1))
+            fence = mark[1]
+            i += 1
+            while i < len(rows):
+                close = FENCE.match(rows[i])
+                i += 1
+                if close and close[1].startswith(fence) and not close[2].strip():
+                    break
+            continue
+        if line.lstrip().startswith("<!--"):
+            while i < len(rows):
+                closed = "-->" in rows[i]
+                i += 1
+                if closed:
+                    break
+            continue
+        if starts_other_block(line):
             i += 1
             continue
-        nxt = lines[i + 1] if i + 1 < len(lines) else ""
-        indented = re.match(r"^( {4}|\t)", lines[i]) or re.match(r"^( {4}|\t)", nxt)
-        header, pipes = split_row(lines[i])
+
+        nxt = rows[i + 1] if i + 1 < len(rows) else ""
+        header, pipes = split_row(line)
         delim, _ = split_row(nxt)
-        if fence is None and not indented and pipes and len(delim) == len(header) and all(DELIM.match(c) for c in delim):
+        valid = (pipes and header and not INDENTED.match(line) and not INDENTED.match(nxt)
+                 and len(delim) == len(header) and all(DELIM.fullmatch(c) for c in delim))
+        if valid:
             end = i + 2
-            while end < len(lines) and lines[end].strip() and split_row(lines[end])[1]:
+            body = []
+            while end < len(rows) and not starts_other_block(rows[end]):
+                cells, row_pipes = split_row(rows[end])
+                if not row_pipes:
+                    break
+                body.append(cells)
                 end += 1
-            tables.append({"start": i, "end": end, "header": header,
-                           "rows": [split_row(lines[j])[0] for j in range(i + 2, end)]})
+            tables.append({"start": i, "end": end, "header": header, "rows": body})
             i = end
             continue
+
         i += 1
+        # A run of leading pipes with a malformed header is one read-only block.
+        if TABLE_PIPE.match(line):
+            while i < len(rows) and TABLE_PIPE.match(rows[i]):
+                i += 1
     return tables
 
 
@@ -183,15 +231,35 @@ def decide(old: str, new: str, overwrite: bool) -> str | None:
     return "overwrite" if overwrite else "conflict"
 
 
-# ---------- md mode ----------
-
-def fill_md(opts: argparse.Namespace) -> dict[str, Any]:
+def writable_note(opts: argparse.Namespace) -> tuple[Path, Path]:
     page = Path(opts.page).resolve()
     vault = Path(opts.vault).resolve() if opts.vault else ROOT / "vault"
     if vault not in page.parents or page.name != "index.md":
         raise FillError(f"vault 안의 노트 파일(…/index.md)만 채울 수 있습니다: {opts.page}")
-    original = page.read_text(encoding="utf-8")
-    lines = original.splitlines(keepends=True)
+    return page, vault
+
+
+def save_note(page: Path, vault: Path, original: bytes, updated: str) -> Path:
+    with content_write_lock(vault):
+        if page.read_bytes() != original:
+            raise FillError("파일이 그 사이에 바뀌었습니다. 다시 실행하세요.")
+        backups = vault / ".backup" / "fill-table"
+        backups.mkdir(parents=True, exist_ok=True)
+        prefix = f"{datetime.now():%Y%m%d-%H%M%S}_{page.parent.name}_"
+        with NamedTemporaryFile(dir=backups, prefix=prefix, suffix="_index.md", delete=False) as handle:
+            handle.write(original)
+            backup = Path(handle.name)
+        replace_content(page, updated.encode("utf-8"))
+    return backup
+
+
+# ---------- md mode ----------
+
+def fill_md(opts: argparse.Namespace) -> dict[str, Any]:
+    page, vault = writable_note(opts)
+    original_bytes = page.read_bytes()
+    original = original_bytes.decode("utf-8")
+    lines = io.StringIO(original, newline="").readlines()
     tables = find_tables(lines)
     if not 1 <= opts.table <= len(tables):
         raise FillError(f"표 {opts.table}번이 없습니다(이 페이지의 표 {len(tables)}개).")
@@ -208,7 +276,8 @@ def fill_md(opts: argparse.Namespace) -> dict[str, Any]:
     map_cols = [(column(header, t, "표"), column(raw["header"], r, "raw data"), t) for t, r in maps]
     index, dupes = raw_index(raw, [rc for _, rc in key_cols])
     width = len(header)
-    ending = next((ln[len(ln.rstrip("\r\n")):] for ln in lines[table["start"]:table["end"]] if ln.endswith("\n")), "\n")
+    ending = next((ln[len(ln.rstrip("\r\n")):] for ln in lines[table["start"]:table["end"]]
+                   if ln.endswith(("\r", "\n"))), "\n")
 
     changes, conflicts, used, new_lines = [], [], set(), {}
     for n, cells in enumerate(table["rows"]):
@@ -230,7 +299,9 @@ def fill_md(opts: argparse.Namespace) -> dict[str, Any]:
                 cells[tc] = cell_source(new)
                 touched = True
         if touched:
-            new_lines[table["start"] + 2 + n] = serialize(cells, ending)
+            line_index = table["start"] + 2 + n
+            previous = lines[line_index]
+            new_lines[line_index] = serialize(cells, previous[len(previous.rstrip("\r\n")):])
     missing = [row for key, row in index.items() if key not in used]
     added = []
     if opts.add_missing:
@@ -246,19 +317,62 @@ def fill_md(opts: argparse.Namespace) -> dict[str, Any]:
               "unmatched_raw": [" / ".join(r[rc] for _, rc in key_cols) for r in missing],
               "added_rows": len(added), "duplicate_raw_keys": dupes, "applied": False}
     if opts.apply and (changes or added):
-        if page.read_text(encoding="utf-8") != original:
-            raise FillError("파일이 그 사이에 바뀌었습니다. 다시 실행하세요.")
         out = [new_lines.get(i, ln) for i, ln in enumerate(lines)]
         last = table["end"] - 1
         if added and not out[last].endswith(("\n", "\r")):
             out[last] += ending
         out[table["end"]:table["end"]] = added
-        backup = vault / ".backup" / "fill-table" / f"{datetime.now():%Y%m%d-%H%M%S}_{page.parent.name}_index.md"
-        backup.parent.mkdir(parents=True, exist_ok=True)
-        backup.write_text(original, encoding="utf-8", newline="")
-        page.write_text("".join(out), encoding="utf-8", newline="")
+        backup = save_note(page, vault, original_bytes, "".join(out))
         result.update(applied=True, backup=str(backup))
     return result
+
+
+# ---------- structured Excel tables ----------
+
+def fill_excel(opts: argparse.Namespace) -> dict[str, Any]:
+    page, vault = writable_note(opts)
+    original = page.read_bytes()
+    payload_bytes = sys.stdin.buffer.read() if opts.values == "-" else Path(opts.values).read_bytes()
+    try:
+        updated, changes, conflicts = plan_value_fill(
+            original.decode("utf-8"), opts.table_id, payload_bytes.decode("utf-8-sig"), overwrite=opts.overwrite,
+        )
+    except ValueError as exc:
+        raise FillError(str(exc)) from exc
+    result = {"tableId": opts.table_id, "changes": changes, "conflicts": conflicts, "applied": False}
+    if opts.apply and changes and not conflicts:
+        backup = save_note(page, vault, original, updated)
+        result.update(applied=True, backup=str(backup))
+    return result
+
+
+def excel_tables(opts: argparse.Namespace) -> dict[str, Any]:
+    text = Path(opts.page).read_bytes().decode("utf-8")
+    grids = read_grids(text)
+    if opts.cmd == "excel-tables":
+        return {"tables": [
+            {"id": table["id"], "row_count": len(table["rows"]), "columns": table["columns"]}
+            for table in grids.values()
+        ]}
+    table = grids.get(opts.table_id)
+    if table is None:
+        raise FillError(f"조회할 수 있는 Excel 표가 없습니다: {opts.table_id}")
+
+    rows = []
+    for row in table["rows"]:
+        cells = []
+        for cell in row["cells"]:
+            if cell is None:
+                cells.append(None)
+                continue
+            cells.append({
+                "displayText": cell["displayText"],
+                "value": cell["value"],
+                "rowSpan": int(cell.get("rowSpan", 1)),
+                "colSpan": int(cell.get("colSpan", 1)),
+            })
+        rows.append({"id": row["id"], "cells": cells})
+    return {"table": {"version": 1, "id": table["id"], "columns": table["columns"], "rows": rows}}
 
 
 # ---------- board mode (CLI only) ----------
@@ -368,6 +482,17 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--no-header", action="store_true")
     t = sub.add_parser("tables", help="list GFM tables in a note")
     t.add_argument("page")
+    t = sub.add_parser("excel-tables", help="list structured Excel tables in a note by ID")
+    t.add_argument("page")
+    x = sub.add_parser("excel-export", help="print a structured Excel table's value grid as JSON")
+    x.add_argument("page")
+    x.add_argument("--table-id", required=True)
+    f = sub.add_parser("excel-fill", help="fill structured Excel cells using explicit JSON values and IDs")
+    f.add_argument("page")
+    f.add_argument("--table-id", required=True)
+    f.add_argument("--values", required=True, help="UTF-8 JSON file or - for stdin")
+    f.add_argument("--overwrite", action="store_true", help="replace occupied cells too")
+    f.add_argument("--apply", action="store_true", help="write (default is a dry run)")
     for name in ("md", "board"):
         s = sub.add_parser(name)
         if name == "md":
@@ -392,10 +517,15 @@ def run(opts: argparse.Namespace) -> dict[str, Any]:
         return {"delimiter": raw["delimiter"], "header": raw["header"], "row_count": len(raw["rows"]),
                 "preview": raw["rows"][:5]}
     if opts.cmd == "tables":
-        lines = Path(opts.page).read_text(encoding="utf-8").splitlines(keepends=True)
+        with Path(opts.page).open(encoding="utf-8", newline="") as page:
+            lines = page.readlines()
         return {"tables": [{"table": n + 1, "line": t["start"] + 1, "header": [cell_text(h) for h in t["header"]],
                             "row_count": len(t["rows"]), "preview": [[cell_text(c) for c in r] for r in t["rows"][:3]]}
                            for n, t in enumerate(find_tables(lines))]}
+    if opts.cmd in ("excel-tables", "excel-export"):
+        return excel_tables(opts)
+    if opts.cmd == "excel-fill":
+        return fill_excel(opts)
     return fill_md(opts) if opts.cmd == "md" else fill_board(opts)
 
 
@@ -404,11 +534,13 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
     try:
-        result = run(build_parser().parse_args(argv))
-    except (FillError, OSError) as exc:
+        opts = build_parser().parse_args(argv)
+        result = run(opts)
+    except (FillError, OSError, UnicodeDecodeError) as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))
         return 1
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    # JSON-escape all characters in grid values, including isolated UTF-16 surrogates.
+    print(json.dumps(result, ensure_ascii=opts.cmd in ("excel-export", "excel-fill"), indent=2))
     return 0
 
 

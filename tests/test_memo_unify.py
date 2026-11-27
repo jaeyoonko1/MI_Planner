@@ -1,6 +1,9 @@
 """P2B-10: the issue memo and the issue page body are one text; images follow; diverged old data is merged safely."""
 import json
 import sqlite3
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -98,6 +101,70 @@ def test_externally_edited_file_wins_on_next_read(env) -> None:
     (tmp / "vault" / rel / "index.md").write_text("파일을 직접 고침", encoding="utf-8")
     assert c.get(f"/api/todos/{t['id']}").json()["note"] == "파일을 직접 고침"
     assert c.get("/api/todos", params={"q": "직접"}).json()["items"]
+
+
+def test_stale_page_save_preserves_cli_table_edit(env) -> None:
+    c, tmp = env
+    rel = c.post("/api/pages", json={"title": "테스트 표"}).json()["path"]
+    params = {"path": rel}
+    table = "| Lot | 값 |\r\n| --- | --- |\r\n| LOT-TEST-001 | 3 |\r\n"
+    c.put("/api/pages", params=params, json={"content": table}).raise_for_status()
+    revision = c.get("/api/pages", params=params).json()["content_revision"]
+    path = tmp / "vault" / rel / "index.md"
+    raw = tmp / "raw.tsv"
+    raw.write_text("lot\tvalue\nLOT-TEST-001\t4\n", encoding="utf-8")
+    script = Path(__file__).resolve().parents[1] / "skills/fill-table/scripts/fill_table.py"
+    applied = subprocess.run([
+        sys.executable, str(script), "--vault", str(tmp / "vault"), "md", str(path),
+        "--raw", str(raw), "--key", "Lot=lot", "--map", "값=value", "--overwrite", "--apply",
+    ], capture_output=True, encoding="utf-8", check=True, cwd=tmp, timeout=10)
+    assert json.loads(applied.stdout)["applied"]
+    current = table.replace(" | 3 |", " | 4 |")
+
+    result = c.put("/api/pages", params=params, json={"content": table + "초안", "content_revision": revision})
+    assert result.status_code == 409 and "error" in result.json()
+    assert path.read_bytes() == current.encode("utf-8")
+
+    fresh = c.get("/api/pages", params=params).json()
+    result = c.put("/api/pages", params=params, json={
+        "content": fresh["content"] + "초안", "content_revision": fresh["content_revision"],
+    }).raise_for_status().json()
+    assert result["content"] == current + "초안"
+    assert result["content_revision"] != fresh["content_revision"]
+
+
+def test_linked_page_and_memo_cannot_both_save_same_revision(env) -> None:
+    c, tmp = env
+    tid = issue(c, note="처음")["id"]
+    url = f"/api/todos/{tid}"
+    rel = expand(c, tid)
+    params = {"path": rel}
+    revision = c.get("/api/pages", params=params).json()["content_revision"]
+    assert c.get(url).json()["note_revision"] == revision
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        page = pool.submit(c.put, "/api/pages", params=params,
+                           json={"content": "페이지 편집", "content_revision": revision})
+        memo_edit = pool.submit(c.patch, url, json={"note": "메모 편집", "note_revision": revision})
+        page_result, memo_result = page.result(), memo_edit.result()
+    assert sorted([page_result.status_code, memo_result.status_code]) == [200, 409]
+    expected = "페이지 편집" if page_result.is_success else "메모 편집"
+    assert page_text(tmp / "vault", rel) == expected
+    with sqlite3.connect(tmp / "t.db") as db:
+        assert db.execute("SELECT note FROM tasks WHERE id = ?", (tid,)).fetchone() == (expected,)
+
+
+def test_standalone_memo_rejects_stale_clear_and_preserves_other_fields(env) -> None:
+    c, _ = env
+    url = f"/api/todos/{issue(c, note='처음')['id']}"
+    initial = c.get(url).json()["note_revision"]
+    changed = c.patch(url, json={"note": "새 메모", "note_revision": initial}).raise_for_status().json()
+    assert changed["note_revision"] != initial
+    stale = c.patch(url, json={"title": "오래된 제목", "note": None, "note_revision": initial})
+    assert stale.status_code == 409
+    assert c.get(url).json()["note"] == "새 메모"
+    assert c.get(url).json()["title"] == "이슈"
+    assert c.patch(url, json={"title": "새 제목"}).raise_for_status().json()["title"] == "새 제목"
 
 
 # ---- diverged old data (P2B-09 era: copied once, then independent) ---------------------------

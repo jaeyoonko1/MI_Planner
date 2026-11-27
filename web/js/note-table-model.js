@@ -249,8 +249,9 @@ export function sortTableRows(table, column, direction, read = cellText) {
   return true;
 }
 
-export function parseClipboardTable(text) {
+export function parseClipboardTable(text, maxCells = Infinity) {
   const grid = [[]];
+  let cellCount = 0;
   let value = "";
   let quoted = false;
   for (let index = 0; index < text.length; index++) {
@@ -263,6 +264,7 @@ export function parseClipboardTable(text) {
     } else if (char === '"' && !value && text.indexOf('"', index + 1) !== -1) {
       quoted = true;
     } else if (!quoted && /[\t\r\n]/.test(char)) {
+      if (++cellCount > maxCells) return null;
       grid.at(-1).push(value);
       value = "";
       if (char !== "\t") {
@@ -274,6 +276,7 @@ export function parseClipboardTable(text) {
       value += char;
     }
   }
+  if (cellCount >= maxCells) return null;
   grid.at(-1).push(value);
   return grid;
 }

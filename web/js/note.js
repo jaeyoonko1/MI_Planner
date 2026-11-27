@@ -44,7 +44,7 @@ async function req(method, url, body, raw) {
     keepalive: !raw,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `요청 실패 (${res.status})`), { status: res.status });
   return data;
 }
 
@@ -206,7 +206,9 @@ export function mountEditor(cfg) {
   };
   if (cfg.foldScope) getFolds(cfg.foldScope).then((s) => { folded = s; applyFolds(); });
 
-  const noteTables = bindNoteTables(ed, () => { applyFolds(); schedule(); });
+  const noteTables = bindNoteTables(ed, () => { applyFolds(); schedule(); }, {
+    documentMarkdown: cfg.documentMarkdown || (() => htmlToMd(ed)),
+  });
   noteTables.refresh();
 
   // ---- toolbar (note-format.js): block, list, character, size, color, highlight chips
@@ -283,7 +285,7 @@ export function mountEditor(cfg) {
     const bitmaps = text.trim() ? [] : imagesOf(clip); // read now: the clipboard is gone after the first await
     // Priority: sheet table (V-001) > document (V-007) > plain text > picture. Office and Excel also put a picture of what
     // was copied on the clipboard; text always wins over it, the picture is only the fallback when nothing else is there.
-    const plan = composing ? null : planPaste({ html, text });
+    const plan = composing ? null : planPaste({ html, text, keepSingleExcelCell: true });
     if (plan?.kind === "table") {
       noteTables.pasteBlock(plan.block, plan.via);
       return;
@@ -557,6 +559,12 @@ export function renderNote(host, page) {
   const fileUrl = (rel) => `/api/pages/file?path=${qs}&name=${encodeURIComponent(rel.replace(/^files\//, ""))}`;
   const ctl = mountNoteColumns(mountEditor, {
     content: page.content || "",
+    revision: page.content_revision,
+    draftKey: `page:${path}`,
+    loadLatest: async () => {
+      const fresh = await api.page(path);
+      return { content: fresh.content, revision: fresh.content_revision, layout: fresh.meta?.note_layout };
+    },
     pagePath: path,
     layout: page.meta?.note_layout,
     saveLayout: (layout) => req("PUT", `/api/pages/layout?path=${qs}`, layout),
@@ -564,9 +572,10 @@ export function renderNote(host, page) {
     // an issue page and the issue memo are one text: fold alike in both places
     foldScope: taskId != null ? `t:${taskId}` : `p:${path}`,
     upload: async (file, name) => (await req("POST", `/api/pages/files?path=${qs}&name=${encodeURIComponent(name)}`, file, true)).file,
-    save: async (md) => {
-      await req("PUT", `/api/pages?path=${qs}`, { content: md });
+    save: async (md, revision) => {
+      const saved = await req("PUT", `/api/pages?path=${qs}`, { content: md, content_revision: revision });
       if (taskId != null) hub.emit({ kind: "task", id: taskId, from: "page" });
+      return saved.content_revision;
     },
   });
   current = { flush: ctl.flush, destroy: ctl.destroy };
@@ -577,7 +586,7 @@ export function renderNote(host, page) {
       if (i.kind !== "task" || Number(i.id) !== Number(taskId) || i.from === "page" || ctl.isBusy()) return;
       try {
         const fresh = await api.page(path);
-        if (!ctl.isBusy() && fresh.content !== ctl.getMd()) ctl.setMd(fresh.content, fresh.meta?.note_layout);
+        ctl.syncFrom(fresh.content, fresh.content_revision, fresh.meta?.note_layout);
       } catch { /* page moved or gone: keep what is shown */ }
     });
   }

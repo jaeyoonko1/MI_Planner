@@ -2,6 +2,180 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-28 · Codex · V-012 차트 정의 편집 및 리뷰용 통합
+- 한 일: 최신 master를 기준으로 V-012 작업을 독립 리뷰 브랜치의 한 커밋으로 정리했다. 표 연결 차트의 ID를 유지하며 유형·원본 참조를 교체하고 다른 블록과 구분자를 보존한다.
+- 바뀐 파일: 이번 차트 편집은 `web/js/excel-chart-block.js`, `web/test/run_excel_chart_data.mjs`, SPEC·VOC·V012-EXCEL·WORKLOG·FLOW에 반영했다.
+- 검증: Python 3.11 전체 pytest 481건 통과(Starlette 테스트 클라이언트 의존성 경고 1건), Node 차트·표·붙여넣기 스모크 4개 통과. 격리 Edge에서 차트 정의 교체 후 노트 자동저장·새로고침을 확인했다. 앱을 별도 프로세스로 다시 열어 새 차트 종류와 현재 표의 원시 값 0.2를 확인했다.
+- 남은 위험 / 다음 행동: V-012는 진행 중이며 FLOW 완료값은 false다. 별도 Windows 세션에서 실제 Excel Ctrl+C/Ctrl+V 및 좁은 셀의 잘림·줄바꿈·자동 맞춤을 비교한다. Final 시안에 없는 리본 및 차트 배치와 추가 기능 호환 범위를 확인한 후 범위 편집·리본·차트 UI·수식·조건부 서식을 이어간다.
+
+## 2026-11-28 · Codex · V-012 Excel 셀 내용 지우기
+- 한 일: 노트 및 독립 이슈 메모에서 선택 셀의 내용 지우기를 Delete에 연결했다. 표시 문자열·원시 값·해당 글자 구간을 비우고 셀 서식·병합·크기·안정 ID를 보존한다. 모든 셀을 클릭 또는 방향키로 선택할 수 있고 표당 Tab 진입점은 하나다. 빈 셀에서 반복해도 실행 취소 항목을 만들지 않는다.
+- 바뀐 파일: web/js/note-excel.js, web/js/excel-table-block.js, web/js/mdconv.js, docs/V012-EXCEL.md, docs/VOC.md, docs/WORKLOG.md, project_flow.html.
+- 테스트: 전체 pytest 481건, 격리 Edge에서 가짜 노트 및 독립 이슈 메모의 퍼센트·병합 셀 클릭, Delete, 반복 Delete, Ctrl+Z/Y, 자동저장 및 새로고침 검증.
+- 다음에 할 것 / 막힌 것: 실제 Windows Excel 클립보드와 좁은 셀 서식을 별도 Windows 세션에서 대조한다. 새 리본과 차트 배치, 추가 기능 호환 범위를 확인한 뒤 범위 선택, 리본 하위 명령, 차트 UI, 수식·조건부 서식 및 재시작 수용 검증을 진행한다. V-012는 진행 중이며 FLOW done:false.
+
+## 2026-11-28 · Codex · V-012 표 연결 차트 데이터와 저장 정의
+- 한 일: 같은 노트 본문에서 표·행·열 ID와 머리글을 참조하는 차트 모델을 추가했다. 막대·선에 범주형 X, 산점도에 숫자 X를 제공한다. 확인된 원시 숫자를 사용하고, 빈 값과 참조 누락을 구분한다. 차트 정의는 별도 버전형 Markdown 펜스에 저장하며 표 값은 조회할 때 읽는다.
+- 바뀐 파일: web/js/{excel-chart-data,excel-chart-block,excel-table-block}.js, web/test/run_excel_chart_data.mjs, tests/test_lineeditor_js.py, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 481, Node 차트·표·문서 붙여넣기, Flow 4개 통과. 격리 Edge의 노트 셀 편집, 자동저장 및 새로고침에서 다른 단에 저장된 차트 정의가 보존됐다. 별도 앱 프로세스에서 페이지 API로 재열기 후 원시 값 0.125 → 0.2 재조회와 펜스 보존을 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태. 실제 Excel Ctrl+C/Ctrl+V와 좁은 셀 원본 대조는 격리된 Windows 클립보드 환경이 필요하다. 홈 리본과 차트 배치 및 Excel 추가 기능 대상 범위, 수식·조건부 서식, 차트 UI와 최종 수용 검증이 남았다.
+
+## 2026-11-28 · Codex · V-012 Excel 텍스트 회전 및 세로 쓰기 표시
+- 한 일: 셀 본문에 Excel의 ±45°·±90°와 같은 회전을 반영하고 글자를 돌리지 않고 아래로 쌓는 세로 쓰기를 표시한다. 각도 0과 지원 범위를 벗어난 각도는 별도 회전 없이 표시하고, 기존 숫자/문자 값과 각도 메타데이터는 유지한다.
+- 바뀐 파일: web/js/{paste-excel,mdconv}.js, web/css/note.css, web/test/mdconv.html, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480, Node 모델·붙여넣기, Edge 변환기 145/145. 별도 Excel 인스턴스로 만든 가짜 워크북의 웹 내보내기를 격리 노트·독립 이슈 메모에 합성 이벤트로 붙여넣어 방향·저장·재열기와 셀 편집 확인. Chromium 결과는 1536px 라이트 화면에서 확인했다.
+- 다음에 할 것 / 막힌 것: Excel 원본과 좁은 셀의 잘림·줄바꿈·자동 맞춤을 픽셀 수준에서 대조하고 실제 Ctrl+C/Ctrl+V를 별도 환경에서 확인한다. Final 시안에 없는 홈 리본·차트 배치 및 추가 기능 범위, 수식·조건부 서식·그래프 검증이 남았다.
+
+## 2026-11-28 · Codex · V-012 Excel 표에 탭 구분 범위 붙여넣기
+- 한 일: Excel HTML이 없고 클립보드에 탭 구분 범위가 있으면 선택 셀부터 표시 문자열을 채운다. 따옴표로 둘러싼 개행과 텍스트 기호, 대상 셀 서식·병합·ID를 유지한다. 셀의 원시 타입은 추정하지 않는다. 범위를 벗어나거나 병합에 값이 가려지거나 행마다 열 수가 다르면 어느 셀도 바뀌지 않는다.
+- 바뀐 파일: web/js/{excel-table-block,note-excel,note-table-model}.js, web/test/run_excel_table_block.mjs, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480, Node Excel 모델·GFM·붙여넣기·Flow, Edge 변환기 141/141. 격리 노트·독립 이슈 메모에서 합성 TSV, 문자 보존, 원시 값 비움, 범위 거절, Ctrl+Z/Y와 저장·재열기 확인.
+- 다음에 할 것 / 막힌 것: Office 방향 표시를 Excel 내보내기와 대조한다. 실제 Excel 클립보드, 리본·연결 그래프와 수용 검증은 남았다.
+
+## 2026-11-28 · Codex · V-012 Excel 범위 값만 붙여넣기
+- 한 일: 기존 표에서 원본 서식과 값만 붙여넣기를 같은 옵션 바에서 전환한다. 값만 선택하면 대상 셀·숫자 서식·병합을 유지하고 원본의 표시 문자열과 확인된 원시 값을 복사한다. 병합으로 값이 가려지면 값만 옵션을 제공하지 않는다. 나중에 편집한 셀을 이전 옵션이 덮어쓰지 않는다.
+- 바뀐 파일: web/js/{excel-table-block,note-excel,paste-chip}.js, web/test/run_excel_table_block.mjs, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480, Node Excel 저장 모델·표/문서 붙여넣기, Edge 변환기 141/141. 격리 Edge의 노트와 독립 이슈 메모에서 두 방식 전환, 서식·ID 보존, Ctrl+Z/Y, 서버 저장·새로고침, 병합 충돌 안내와 이후 편집 보존 확인.
+- 다음에 할 것 / 막힌 것: TSV 범위 처리와 Office 회전 표시, 실제 Excel 클립보드, 리본·연결 그래프와 수용 검증. V-012 진행 유지.
+
+## 2026-11-27 · Codex · V-012 기존 Excel 표의 범위 붙여넣기
+- 한 일: 선택 셀에서 Excel HTML 범위를 원본 셀 서식·값·병합으로 덮어쓴다. 표·행·열 ID 및 기존 행 높이·열 너비 설정을 유지한다. 경계 초과, 일부 병합만 덮는 범위, 한도로 잘린 범위를 거부한다. 범위 전체를 한 단계에서 되돌리고 다시 적용할 수 있다.
+- 바뀐 파일: web/js/{excel-table-block,note-excel}.js, web/test/run_excel_table_block.mjs, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480, Node Excel 저장 모델·표 및 문서 붙여넣기·Flow 4건, Edge 변환기 141/141. 격리 노트·독립 메모에서 합성 Excel HTML로 범위 저장·새로고침·되돌리기/다시 적용, 경계 거부, F2 붙여넣기 분리 확인.
+- 다음에 할 것 / 막힌 것: 표 안 값만 붙여넣기, Office 회전 표시, 실제 Excel 클립보드 및 리본·연결 그래프 검증. V-012 진행 유지.
+
+## 2026-11-25 · Codex · V-012 단일 Excel 셀 본문 붙여넣기
+- 한 일: 노트·이슈 메모에서 Excel로 확인한 단일 셀 HTML도 버전형 표에 저장한다. 일반 문서의 1셀 래퍼와 일지 붙여넣기는 기존 규칙을 쓴다. Excel 표의 선택 셀에서 붙인 경우 새 표가 본문에 생기지 않도록 차단하고 F2 안내를 표시한다.
+- 바뀐 파일: web/js/{note,note-excel,paste-doc,paste-html}.js, web/test/run_paste_doc.mjs, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480, Edge 변환기 141/141 및 격리 노트·메모 스모크. 한 셀에 저장한 12.5% 표시·원시 값 0.125·무늬·배경색, 다중 셀·GFM 동작, 선택 셀과 F2 입력란의 붙여넣기 이벤트 분리 확인. Node 문서·표 붙여넣기 및 Excel 저장 모델 통과.
+- 다음에 할 것 / 막힌 것: 선택한 셀에서 시작하는 Excel 표 안 범위 붙여넣기, 실제 Excel 클립보드와 Office 회전 표시부터 이어간다. V-012 진행 유지.
+
+## 2026-11-25 · Codex · V-012 Excel 셀 무늬 표시
+- 한 일: 저장에 사용되는 17종의 무늬를 노트·이슈 메모에서 CSS로 표시한다. 저장된 전경색과 배경색을 사용하며 색이나 무늬의 저장 형식은 그대로 유지한다.
+- 바뀐 파일: web/js/mdconv.js, web/test/mdconv.html, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480 통과, Edge 변환기 141/141. 17가지 무늬의 스타일이 구분되고, 이웃 단색 셀과 코드 펜스 원문이 보존됨을 확인했다. 가짜 Excel HTML의 무늬 붙여넣기·저장과 기존 Excel 붙여넣기·재열기 스모크도 통과했다.
+- 다음에 할 것 / 막힌 것: Excel과 픽셀 단위 무늬·배율 대조, Office 회전 표시와 표 안 범위 붙여넣기가 남았다. V-012 진행 유지.
+
+## 2026-11-25 · Codex · V-012 노트 본문의 Excel 서식 붙여넣기
+- 한 일: 상위 Excel 표 파서 결과를 버전형 블록으로 붙여넣고, 노트 전체(다른 단의 미지원 블록 포함)에서 새 ID의 충돌을 피한다. 붙여넣기 옵션으로 일반 텍스트 표를 선택했다가 같은 ID로 돌아갈 수 있다. 이후 수정한 표는 붙여넣기 옵션이 덮어쓰지 못한다. 모델 한도로 유효한 서식 블록을 만들 수 없으면 일반 표로 붙인 뒤 안내한다.
+- 바뀐 파일: web/js/note-table.js, web/js/paste-html.js, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: 격리 Edge에서 Excel이 만든 가짜 웹 내보내기의 병합·백분율·색상, 다른 단의 중복 ID 재시도, 서식 전환, 버튼·Ctrl+Z 되돌리기, 셀 편집 이후 이전 옵션 거부, 노트·독립 이슈 메모 저장·새로고침, 일반 TSV와 GFM 안 붙여넣기 확인. Node 표 붙여넣기·문서 붙여넣기·Excel 저장 모델과 pytest 전체 통과.
+- 다음에 할 것 / 막힌 것: V-012 진행. Excel 표 안 범위 붙여넣기를 병합·원시 타입·값/서식 옵션과 함께 검증한다. 실제 Excel 클립보드, Final 시안에 없는 리본·차트 배치 및 추가 기능 범위, 수식·조건부 서식·연결 그래프·재시작 전체 수용 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 저장된 Excel 표의 표시 값 편집
+- 한 일: 노트와 이슈 메모에서 방향키로 Excel 셀을 선택하고 F2·더블클릭으로 표시 값을 편집한다. Enter·포커스 이동으로 확정, Esc로 취소, Alt+Enter로 줄바꿈을 입력한다. 표 안의 Ctrl+Z/Y는 셀 편집을 되돌리거나 다시 실행한다. 표시 값을 수정하면 원시 값을 미확인으로 처리하며 표시 형식, 병합, 셀 서식과 이웃 원문은 보존한다. 실제 값이 바뀔 때만 기존 글자 구간을 지운다.
+- 바뀐 파일: web/js/note-excel.js, mdconv.js, note-table.js, note.js, note-columns.js, web/css/note.css, docs/V012-EXCEL.md, docs/VOC.md, project_flow.html
+- 테스트: pytest 480, Node Excel 저장 모델·GFM 표, 격리 Edge 변환기 139/139 및 노트·단독 이슈 메모에서 키보드·더블클릭·저장·재열기 확인. 병합 탐색, 개행, 취소, 무변경, 원시 값·표시 형식, 중복/미지원 표 원문 및 실행 취소의 바이트 단위 복원을 대조.
+- 다음에 할 것 / 막힌 것: V-012 진행. Excel 붙여넣기의 서식 보존 모델 연결과 표 안 붙여넣기 검증부터 진행한다. 실제 Excel 클립보드, 새 리본·차트 배치 및 추가 기능 범위 확인, 수식·조건부 서식·연결 그래프와 서버 재시작 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 저장된 Excel 표 표시
+- 한 일: 공용 노트 편집기가 검증된 버전형 표를 읽기 전용 그리드로 표시한다. 병합, 행·열 크기, 색·테두리·맞춤, 표시 문자열과 셀 내부 글자 구간을 반영한다. 단을 넘는 중복 ID는 버전과 관계없이 코드 펜스 표시로 돌아간다. 미지원·손상 표와 일반 GFM을 함께 열며 이웃 문단을 저장해도 펜스 원문을 유지한다.
+- 바뀐 파일: web/js/{excel-table-block,mdconv,note-columns}.js, web/css/note.css, web/test/mdconv.html, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
+- 테스트: pytest 480 통과(기존 Starlette 경고 1건), Node Excel 저장 모델·표 붙여넣기·GFM 모델 통과. 격리 Edge의 변환기 139/139와 가짜 노트·독립 이슈 메모 표시, 두 단의 중복·미지원 원문 보존, 페이지 자동저장·새로고침 통과. V-007 이후 남아 있던 안전 링크 기대값을 수정하고 비허용 URL 사례도 확인했다.
+- 다음에 할 것 / 막힌 것: 기존 표 쓰기·실행 취소에 Excel 셀 편집과 붙여넣기를 연결한다. 무늬·회전 표시, 새 리본·그래프 배치 및 추가 기능 범위, 실제 Excel 클립보드, 수식·조건부 서식과 전체 수용 검증이 남아 있다. FLOW 미완료 유지.
+
+## 2026-11-25 · Codex · V-012 Excel 표에 타입이 명시된 값 채우기
+- 한 일: `fill-table excel-fill`은 안정적인 표·행·열 ID와 JSON에 명시된 표시 문자열 및 원시 값을 사용한다. 기존 표시 형식·셀 전체 서식·병합을 유지하고, 문자가 변한 셀에서 이전 글자 구간을 제거한다. 미리보기에서 충돌을 보여 주고, 적용할 때 기존 vault 잠금과 원본 백업을 공유한다.
+- 바뀐 파일: app/excel_table_search.py, skills/fill-table/(SKILL.md, scripts/fill_table.py), tests/test_skill_brief_fill.py, docs/(SPEC, V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 480, fill-table 관련 13, Node Excel 저장 모델, 스킬 검사 통과. 실제 CLI 프로세스에서 UTF-8 표준 입력으로 가짜 노트에 저장한 값을 브라우저 JS 모델에서 다시 읽고 편집했다. 앱이 먼저 저장한 경우 백업이나 노트 교체 없이 CLI가 충돌을 반환함을 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. 노트와 이슈 메모의 Excel 표 표시·붙여넣기·편집 연결을 Final 시안에서 검토한다. 새 리본·차트 배치와 추가 기능 범위 확인, 실제 Excel 클립보드, 수식·조건부 서식·연결 그래프·재시작 수용 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 앱·fill-table 파일 교체 동시성
+- 한 일: 앱과 `fill-table md --apply`가 vault의 같은 파일 잠금을 잡은 상태에서 읽어 둔 원문을 비교하고, 임시 파일을 같은 디렉터리에서 교체한다. GFM 백업 이름을 매번 고유하게 만들어 같은 초의 연속 쓰기도 보존한다.
+- 바뀐 파일: app/(vault_content, vault, memo, routers/pages).py, skills/fill-table/scripts/fill_table.py, tests/(test_memo_unify, test_skill_brief_fill).py, docs/(SPEC, V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 478, 관련 pytest 57, Node 표 저장 모델·Flow 4건 및 격리 Edge 통과. 실제 CLI 프로세스의 GFM 쓰기 뒤 열린 페이지의 오래된 저장이 409를 반환하고, 앱 쓰기 뒤 잠금에서 나온 CLI가 쓰기와 백업을 건너뛰는 것을 가짜 vault에서 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. Excel 전용 표에 값을 쓰기 전에 raw 수치·문자 구분, 표시 문자열과 기존 표시 형식의 보존 계약을 검증한다. 앱과 fill-table 밖의 외부 편집기는 같은 잠금을 사용해야 동시 교체가 조정된다. 전용 표 붙여넣기·편집기 연동, Final 시안 밖 리본·차트 배치 확인, 실제 Excel 복사·붙여넣기와 수식·조건부 서식·연결 차트의 재시작 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 본문 자동저장 충돌 처리
+- 한 일: 페이지와 이슈 메모의 원문에 기반한 버전을 읽고 브라우저 자동저장에 보낸다. 가짜 vault에서 재현한 외부 수정 덮어쓰기와 동일 버전의 페이지·연결 메모 동시 저장은 409로 거부한다. 초안은 탭에 남고 복사한 뒤 최신 본문을 열 수 있다.
+- 바뀐 파일: app/(vault, memo, routers/pages, routers/tasks).py, web/js/(note, note-columns, inspector).js, tests/test_memo_unify.py, docs/(SPEC, V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 477, Node 표 저장 모델·문법 검사, 격리 Edge에서 페이지·연결 메모의 409, 탐색 후 초안 복원, 클립보드 대역을 통해 초안 복사 및 최신 본문으로 재저장을 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. CLI도 협력하는 파일 교체의 동시성 및 타입과 Excel 표시 형식을 보존하는 입력 계약을 확인한다. 전용 표의 붙여넣기·편집, Final 시안 밖 홈 리본과 차트 배치, 실제 Excel 복사·붙여넣기, 수식·조건부 서식·연결 차트·재시작 수용 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 표 ID 기반 값 내보내기
+- 한 일: `fill-table excel-tables`로 표 ID·열 ID·행 수를 조회하고 `excel-export --table-id`로 행·열 순서, 표시 문자열, 확인된 원시 값·타입, 병합 범위의 JSON을 출력한다. 검색과 같은 그리드 검사를 공유한다. 원본 노트를 읽기만 하며 기존 GFM 표 번호를 유지한다. 출력은 값 전달용이고 Excel 서식은 원문 블록에 남는다.
+- 바뀐 파일: app/excel_table_search.py, skills/fill-table/(SKILL.md, scripts/fill_table.py), tests/test_skill_brief_fill.py, docs/(SPEC, V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 474, Node 저장 모델과 스킬 검사 통과. 저장소 밖에서 실제 CLI를 실행해 JSON과 원문 보존을 확인했다. 가짜 노트에는 병합·줄바꿈·퍼센트·문자형 0 접두어, 깨진 펜스·미지원 버전·중복 ID 및 GFM 표 두 개가 섞여 있었고, `md --table 2`가 기존 대상만 수정했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. 가짜 vault에서 기존 GFM에 CLI가 쓴 값을 오래된 편집기 본문을 보낸 페이지 PUT이 덮어쓰는 문제를 재현했다. Excel 표 쓰기를 연결하기 전에 페이지·연결 이슈 메모의 변경 감지 및 저장 충돌 처리와 숫자·텍스트 타입·표시 형식을 유지하는 입력 계약을 검증한다. 붙여넣기·편집기의 쓰기 연결, 홈 리본·차트 배치와 추가 기능 범위, 격리된 실제 Excel 복사·붙여넣기와 하위 메뉴, 수식·조건부 서식·연결 차트·재시작 수용 검증이 남았다. V-014 완료본은 별도 브랜치, V-013은 적용 화면·불릿 모양 확인 대기, P 시리즈는 홀드다.
+
+## 2026-11-25 · Codex · V-012 표 표시 문자열 검색
+- 한 일: 통합 검색·이슈 목록·CLI가 Excel 표 후보의 셀 표시 문자열을 찾는다. 연결 이슈는 현재 vault 페이지를 읽고 독립 이슈는 저장 메모를 읽는다. 표 ID, 표시 형식, 원시 값은 검색에서 제외하고 지원하지 않는 버전·깨진 JSON·중복 ID의 원문을 보존한다. 별표·따옴표·이모지를 셀의 실제 문자로 검색한다.
+- 바뀐 파일: app/(excel_table_search, search, cli).py, app/(repositories, routers)/tasks.py, tests/test_search.py, docs/(SPEC, V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 473 및 Node 저장 모델 검사 통과. 가짜 DB/vault에서 페이지·연결 이슈·독립 이슈·CLI 검색, 외부 파일 수정과 오래된 DB 미러, 저장 원문, 일반 GFM, 지원하지 않는 블록 및 백링크 회귀를 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. 기존 GFM 번호를 유지하면서 안정적 ID로 Excel 표를 선택하는 fill-table 계약과 내보내기를 확인한 뒤 붙여넣기·편집기 저장을 연결한다. Final 시안 밖 홈 리본·차트 배치와 Excel 추가 기능 범위는 확인 대기다. 격리된 Windows Excel 복사/붙여넣기, 하위 메뉴, 수식·조건부 서식·표 연결 그래프와 재시작 수용 검증이 남았다. V-014 완료본은 별도 브랜치에 있고, V-013은 불릿 모양·적용 화면 확인 대기, P 시리즈는 홀드다.
+
+## 2026-11-25 · Codex · V-012 표 복사·행 재정렬·셀 값 편집
+- 한 일: 저장 후보에서 복사본에 새 표·행·열 ID를 부여하고 대상 노트의 ID 충돌을 검사한다. 셀 값 편집과 행 재정렬에서 ID·서식을 유지하고 세로 병합을 흩뜨리는 재정렬과 병합 내부 칸 직접 편집을 거부한다.
+- 바뀐 파일: web/js/excel-table-block.js, web/test/run_excel_table_block.mjs, docs/(V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 471. Node의 복사본 독립성·ID 재할당·지원/미지원 블록 충돌·병합 이동·편집·원문 교체 후 재파싱 통과. 가짜 DB/vault에서 통합 검색과 이슈 목록이 내부 ID·원시 숫자를 찾고 따옴표가 든 표시 문자열을 놓치는 현상을 재현했다.
+- 다음에 할 것 / 막힌 것: V-012 진행. 검증된 표시 문자열로 페이지/이슈 검색을 맞추고 이어서 fill-table·내보내기와 편집기 쓰기를 연결한다. Final 시안 밖 홈 리본·차트 배치와 Excel 추가 기능 범위는 확인이 필요하다. 격리 Windows에서 실제 Excel 복사/붙여넣기·하위 메뉴를 대조하고 수식·조건부 서식·차트의 최종 수용 검증을 마쳐야 한다. 원본 사용자 변경은 보존했다. V-014의 완성본은 별도 브랜치에 있으며, V-013은 불릿 모양과 적용 화면 확인 대기, P 시리즈는 홀드다.
+
+## 2026-11-25 · Codex · V-012 Excel 서식 저장 후보 변환
+- 한 일: Excel 파서 결과의 셀 서식·글자 구간·무늬·숫자 구분 기호·너비와 높이를 표 ID 기반의 저장 후보로 변환한다. 열 너비는 열 ID를 키로 저장하고, 잘못된 크기나 목록 외 서식은 거부한다.
+- 바뀐 파일: web/js/(excel-table-block, paste-excel).js, web/test/(run_excel_table_block, run_paste_table).mjs, docs/(V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 471, 격리 Edge의 원문 왕복, Windows Excel 가짜 웹 내보내기 4종과 합성 Excel 표의 추출 서식 전체 왕복.
+- 다음에 할 것 / 막힌 것: V-012 진행. 붙여넣기와 저장 후보의 쓰기 연결 전 복사 시 ID 재발급, 정렬·편집 시 ID와 병합의 동작, 페이지/이슈 검색·fill-table·내보내기를 확인한다. 홈 리본·차트 배치 및 Excel 추가 기능 범위 확인, 격리 Windows 클립보드에서 실제 Excel 복사/붙여넣기 검증, 편집·수식·조건부 서식·차트 수용 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 버전형 Excel 표 저장 후보
+- 한 일: 최상위 `mi-excel-table` 블록의 버전·표/행/열 ID·셀 값·병합 범위를 검증하고, 문서 전체에서 유일하게 조회된 표만 ID로 교체하는 모듈을 추가했다. 손상·미지원·중복 블록과 인접 GFM 원문을 보존한다.
+- 바뀐 파일: web/js/excel-table-block.js, web/test/run_excel_table_block.mjs, tests/test_lineeditor_js.py, docs/(V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 471, Node 블록·단·저장 후보 검사 통과. 격리 Edge에서 원문 블록 및 인접 문단 왕복, 가짜 DB/vault에서 페이지·이슈 양방향 저장과 독립 이슈의 페이지 승격·앱 재시작 통과.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태. 서식 필드와 Excel 파서 연결, 복사·정렬·검색·fill-table·차트의 계약을 검증한 뒤 편집기 쓰기 경로를 연결한다. Final 시안 밖 홈 리본·차트 배치와 Excel 추가 기능 범위 확인, 격리된 Windows 클립보드에서 실제 Ctrl+C/Ctrl+V 및 하위 메뉴 검증이 남았다. 수식·조건부 서식·차트 및 최종 수용 검증도 미완료다.
+
+## 2026-11-25 · Codex · V-012 노트 편집기와 fill-table의 표 경계
+- 한 일: 주석 속 예시 표, 제목·인용·목록, 편집할 수 없는 파이프 블록 때문에 CLI 표 번호가 달라지던 문제를 수정했다. 같은 가짜 노트에서 편집기와 CLI가 편집 가능한 GFM 표 두 개를 찾고 CLI가 두 번째 표만 수정하도록 검증했다.
+- 바뀐 파일: skills/fill-table/scripts/fill_table.py, tests/test_skill_brief_fill.py, docs/(V012-EXCEL, VOC, WORKLOG), project_flow.html.
+- 테스트: 전체 pytest 470 통과. Node 마크다운 블록 분리·표·단·Excel 표 및 문서 붙여넣기와 동일 재현 문서의 편집기 표 판별을 확인했다. CLI의 인접 블록과 백업 원문이 바이트 단위로 유지됐다.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태. 최상위 코드 펜스와 검증된 버전별 JSON, 문서 내 표 ID·행/열 ID, 지원하지 않는 블록 원문 보존을 저장 후보로 기록했다. 기존 GFM과 함께 여는 계약을 검토한 뒤 페이지·연결 이슈·독립 메모·검색에서 왕복한다. Final 시안에 없는 홈 리본·그래프 배치와 Excel 추가 기능 범위는 확인이 필요하다. 실제 Excel Ctrl+C/Ctrl+V와 하위 메뉴는 공유 클립보드와 분리된 환경에서 검증한다. 서식 편집·수식·조건부 서식·그래프·재시작 수용 검증은 미완료다. V-013은 모양·대상 화면 확인 대기, V-014는 별도 완료 브랜치, P 시리즈는 홀드다.
+
+## 2026-11-25 · Codex · V-012 저장 호환성
+- 한 일: `fill-table`이 코드 펜스 내부의 표를 GFM 목록·수정에서 제외하도록 보정했다. 여는 줄의 파이프, 더 짧은 구분자, 뒤에 문자가 있는 닫힘 후보를 처리한다. 원본 백업 및 편집하지 않은 본문 바이트를 지키고 수정 줄의 기존 줄 끝을 유지한다.
+- 바뀐 파일: skills/fill-table/scripts/fill_table.py, tests/test_skill_brief_fill.py, docs/(V012-EXCEL, VOC, WORKLOG), project_flow.html
+- 테스트: pytest 469 통과(기존 Starlette 경고 1건). Node 노트 표·단 및 붙여넣기 4종 통과. 격리 Edge에서 GFM 표 두 개와 펜스 한 개 구분, 펜스 내부 단 표식 무시, 인접 문단 편집·재열기 후 원문 일치를 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태. D-20/D-43을 유지하는 편집형 블록의 버전·검증·안정적 표 ID, 페이지와 이슈 메모의 저장·검색 계약을 확정한다. Final 시안의 리본·그래프 배치와 Excel 추가 기능 호환 범위 확인, 격리 Windows 클립보드에서 실제 Excel 복사 및 홈 리본 하위 메뉴 확인이 남아 있다. 수식·조건부 서식·그래프 및 서버 재시작 수용 테스트는 후속이다.
+
+## 2026-11-25 · Codex · V-012 Excel 텍스트 넘침과 실제 병합
+- 한 일: Excel의 `mso-ignore:colspan`은 표시용 너비 계산에만 반영한다. 긴 텍스트와 연속 빈 칸 때문에 뒤 열이 밀리던 경우의 위치를 유지하고, 실제 병합 범위만 메타데이터와 병합 수에 넣는다. 숨김 열의 일반 셀 값은 표에서 제외한다. 기존 GFM 변환을 사용한다.
+- 바뀐 파일: web/js/paste-html.js, web/test/(fixtures/excel-clipboard.html, run_paste_table.mjs), docs/(V012-EXCEL, VOC, WORKLOG).md, project_flow.html.
+- 테스트: 전체 pytest 467 및 최종 FLOW 검사 3 통과. Node 표·문서·GFM 검사, Windows Excel 가짜 내보내기 2종의 실제 병합·넘침·맞춤 확인, 격리 Edge 합성 붙여넣기·자동저장·새로고침 통과.
+- 다음에 할 것 / 막힌 것: V-012 진행. D-20/D-43과 편집 가능한 Excel 서식 및 표·차트 연결의 저장 계약을 검토한다. Final 시안 밖 리본·차트 배치와 추가 기능 범위를 확인하고, 격리된 Windows 클립보드에서 실제 Excel Ctrl+C/Ctrl+V 및 리본 하위 메뉴를 검증한다. 수식·조건부 서식·그래프 및 재시작 수용 검증이 남았다.
+
+## 2026-11-25 · Codex · V-012 Excel 숨김 행 병합과 무늬 채우기
+- 한 일: Excel HTML에서 숨김 행을 포함한 원본 좌표로 병합과 셀 위치를 계산한 뒤 보이는 행·열만 표에 넣는다. 숨김 행에서 시작해 일부가 보이는 병합은 첫 보이는 셀에 값과 서식을 둔다. 무늬 이름과 전경색을 `fillPattern`에 기록한다. 노트 저장은 기존 GFM을 사용한다.
+- 바뀐 파일: web/js/(paste-html, paste-excel).js, web/test/run_paste_table.mjs, docs/(V012-EXCEL, VOC, WORKLOG).md, project_flow.html.
+- 테스트: 전체 pytest 467 통과. Node 표·문서 붙여넣기와 GFM 표 구조 통과. 별도 Windows Excel 프로세스의 가짜 웹 내보내기로 숨김 행을 가로지르는 병합, 숨겨진 병합 시작 셀, 무늬 전경색을 확인했다. 격리 Edge에서 합성 붙여넣기·자동저장·새로고침 통과.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태 유지. 긴 문자열의 `mso-ignore:colspan`과 실제 병합을 비교한다. 실제 Excel Ctrl+C/Ctrl+V와 리본 하위 메뉴는 클립보드가 격리된 Windows에서 검증한다. 편집 가능한 서식과 차트의 저장 계약, Final 시안 밖 도구줄·차트 배치 및 추가 기능 범위 확인이 필요하다. V-014는 별도 브랜치에서 완료, V-013은 불릿 모양·적용 화면 확인 대기, P 시리즈는 홀드.
+
+## 2026-11-25 · Codex · V-012 Excel 숨김 열과 병합 범위
+- 한 일: Windows Excel 가짜 시트의 웹 내보내기에서 숨김 열의 값이 붙는 문제를 재현했다. Excel HTML에 선언된 숨김 열을 제외하고 보이는 열에 맞춰 너비, 셀 위치, 병합 범위를 계산한다. 일부만 보이는 병합 셀은 첫 보이는 칸에 값과 서식을 남긴다. 일반 HTML 표와 기존 GFM 저장 형식은 유지했다.
+- 바뀐 파일: web/js/(paste-excel, paste-html).js, web/test/run_paste_table.mjs, docs/(V012-EXCEL, VOC, WORKLOG).md, project_flow.html.
+- 테스트: 전체 pytest 467 통과, Node 표·문서 붙여넣기 및 GFM 표 구조 통과. Windows Excel 웹 내보내기에서 숨김 열·행 제외, 병합 범위와 테두리, 표시 값 확인. 격리 Edge에서 해당 HTML의 합성 paste, 자동저장과 새로고침을 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행 상태 유지. 같은 내보내기에서 확인한 `mso-pattern`과 세로 병합 안의 숨김 행을 검증한다. 실제 Excel Ctrl+C/Ctrl+V는 격리 클립보드가 필요하다. 서식 저장 계약과 Final 시안 밖의 리본·차트 배치, 추가 기능 범위를 확인한 뒤 기능 구현과 수용 검증을 이어간다. 원본 master의 사용자 변경은 보존했다. V-014는 별도 브랜치 완료, V-013은 불릿 모양·화면 확인 대기, P 시리즈는 홀드.
+
+## 2026-11-25 · Codex · V-012 Excel 맞춤 및 숫자 구분 기호
+- 한 일: 공통 CSS의 Excel 일반 맞춤과 셀의 HTML 맞춤 속성이 함께 있을 때 실제 맞춤 방향을 파서 결과에 남긴다. 표의 소수점·천 단위 구분 기호 선언도 보존한다. 명시적인 CSS 맞춤이 우선하며, 원시 값이 빠진 경우 표시 문자열을 숫자로 변환하지 않는다. 기존 GFM 저장 흐름을 유지했다.
+- 바뀐 파일: web/js/(paste-excel, paste-html).js, web/test/run_paste_table.mjs, docs/(V012-EXCEL, VOC, WORKLOG).md, project_flow.html.
+- 테스트: 전체 pytest 467 통과(기존 Starlette 경고 1건), Node 표·문서 붙여넣기와 GFM 표 구조 통과. 가짜 Excel 웹 내보내기의 12.5% 셀 오른쪽 맞춤과 구분 기호를 확인했다. 소수점이 쉼표인 합성 예와 명시적 CSS 맞춤 우선순위를 회귀 검사에 넣었다.
+- 다음에 할 것 / 막힌 것: V-012 진행 중. 공유 클립보드가 격리된 Windows에서 실제 Excel Ctrl+C/Ctrl+V와 홈 리본 하위 메뉴를 검증한다. 노트 저장 계약, Final 시안 밖 리본·차트 배치와 추가 기능 범위를 확인한 뒤 편집·차트·수식·조건부 서식·재시작 검증을 이어간다. 원본 master의 사용자 작업을 보존했다. V-014는 별도 완료 브랜치, V-013은 불릿 모양·대상 화면 확인 대기, P 시리즈는 홀드.
+
+## 2026-11-25 · Codex · V-012 Excel 셀 내부 혼합 서식 추출
+- 한 일: 원본 CLAUDE·AGENTS·VOC·FLOW·WORKLOG와 Git을 확인하고 V-012 격리 브랜치에서 진행했다. Excel HTML의 셀 내부 글자 구간별 색상·크기·글꼴·굵기·장식과 개행을 추출했다. 복합 글자 서식은 선택적 `richText`에 담고 기존 GFM 변환을 유지했다. 저장 형식의 편집기·fill-table 진입점을 인수인계에 정리했다.
+- 바뀐 파일: web/js/(paste-html, paste-excel).js, web/test/run_paste_table.mjs, docs/(V012-EXCEL, VOC, WORKLOG).md, project_flow.html.
+- 테스트: 전체 pytest 467 통과(기존 Starlette 경고 1건, 격리 Asia/Seoul TZif), Node 표·문서·GFM 표 구조 검사 통과. 별도 Windows Excel 프로세스에서 만든 가짜 웹 내보내기로 16pt Arial, 원본 색과 글자 구간, 겹밑줄과 취소선, 개행, 12.5% 표시를 확인했다. 격리 Edge에서 같은 HTML을 합성 paste 이벤트로 넣어 기존 GFM 저장과 새로고침을 확인했다.
+- 다음에 할 것 / 막힌 것: V-012 진행 중. Windows 공유 클립보드가 사용 중이라 실제 Ctrl+C/Ctrl+V와 형식 수집은 클립보드가 격리된 데스크톱에서 확인한다. 홈 리본 하위 메뉴 확인, 편집 가능 서식·표/차트 연결 저장 계약, Final 시안 밖 도구줄·차트 배치와 추가 기능 범위 결정, 수식·조건부 서식·저장 후 재시작 검증이 남았다. 원본 master와 사용자 작업 파일은 보존했다. V-013은 불릿 모양·대상 확인 대기, P 시리즈는 홀드.
+
+## 2026-11-25 · Codex · V-012 Excel 원본 범위 파싱
+- 한 일: 기존 Excel 표 붙여넣기 파서에서 원시 숫자·표시 문자열·다구간 표시 형식, 병합 시작 셀과 크기, 행·열 크기와 지원 서식 속성을 추출했다. 원시 숫자 없는 셀은 숫자를 추정하지 않는다. 기존 note/issue GFM 저장과 비Excel 붙여넣기는 같은 경로를 사용한다.
+- 바뀐 파일: web/js/paste-html.js, web/js/paste-excel.js, web/test/run_paste_table.mjs, docs/V012-EXCEL.md, docs/VOC.md, project_flow.html.
+- 테스트: 전체 pytest 467개, Node 표·문서 붙여넣기, 실제 Excel이 만든 가짜 웹 내보내기 데이터의 메타데이터, 격리 Edge의 자동저장·새로고침을 검증. Windows pytest는 격리 프로세스에 검증용 Asia/Seoul TZif를 지정했다.
+- 다음에 할 것 / 막힌 것: V-012 진행 중. 격리 Windows 세션에서 실제 Excel Ctrl+C/Ctrl+V 및 하위 메뉴부터 확인한다. 편집 가능한 서식과 표·차트 연결의 노트 저장 형식 변경, Final 시안 밖의 표 도구줄·차트 배치, 추가 기능 호환 범위를 협의해야 한다. 혼합 셀 내부 원본 서식, 수식과 조건부 서식, 저장·재시작 검증도 남음. 원본 작업 트리에는 사용자 문서와 데이터가 있어 이 구현은 `codex/v012-excel-fidelity-1125`에 기록한다. 이전 V-014 별도 브랜치와 원본의 V-013 요구를 통합할 때 보존한다.
+
+## 2026-11-25 · Codex · V-012 진행
+- 한 일: 원본의 현행 VOC·FLOW와 P 시리즈 홀드를 확인했다. `d4e4b5d` 기반 격리 브랜치에서 이전 구현 `585e682`를 이식해 좁은 열에서 잘린 Excel 셀 접미사를 복원했다. GFM 저장으로 보존되지 않는 서식, 저장 설계안, 첨부 홈 리본 명령별 대응 및 검증 절차를 정리했다. V-012는 미완료다.
+- 바뀐 파일: web/js/(paste-doc, paste-html).js, web/test/(run_paste_doc, run_paste_table).mjs, docs/(V012-EXCEL, WORKLOG).md
+- 테스트: 전체 pytest 467 통과(Flow 포함, 격리 환경에서 Asia/Seoul TZif 사용), Node 표·문서·줄 붙여넣기 통과. 가짜 Excel에서 내보낸 표의 전체 Lot 값·12.5% 표시·셀 내부 개행을 GFM 저장/읽기에서 확인했다. 격리 Edge에서 해당 표와 합성 단일 셀의 붙여넣기·자동저장·새로고침을 확인했다. 실제 시스템 클립보드와 활성 Office 세션은 사용하지 않았다.
+- 다음에 할 것 / 막힌 것: V-012 계속. 가짜 Windows Excel의 실제 Ctrl+C/Ctrl+V 및 하위 메뉴를 격리 환경에서 확인한다. 기존 GFM 외에 서식·병합·수치를 보존하는 구조화 블록, Final 시안에 없는 표 도구줄·그래프 배치, Excel 추가 기능 호환 범위는 검토가 필요하다. 원본 AGENTS·VOC·FLOW·WORKLOG 초안과 첨부 이미지는 원본에 유지했다.
+
 ## 2026-11-24 · Claude Code(Opus) · V-011
 - 한 일: Jira식 이슈 계층(D-48). 상위 수준(에픽 등)도 이슈: 마이그레이션 013(`issue_levels` + `tasks.level_id`, 추가만), `app/repositories/issue_levels.py`(수준 CRUD·순서·삭제(이슈는 한 수준 아래로, 휴지통 복원)·rank 규칙·분류 값→상위 이슈 가져오기), `/api/structure/levels*`. 구조 기본 보기 `issues`(이슈 계층): 히어로 '이슈 추가'(수준·상위 칩, 계속 추가), 헤더 행 = 이슈 제목 + 수준 배지 + 하위 완료 수, 끌어 놓기·Alt+→/←·상위 바꾸기 창, 하위가 있는 이슈 삭제는 하위 올리기/함께 삭제 + Ctrl+Z. 이슈 상세에 수준·상위 행(구조 즉시 반영). 분류 기준 보기의 그룹(분류 값)도 F2 이름 변경·Delete(값만/이슈까지, 되돌리기). 이슈 상세·목록에서 상위/하위가 있는 이슈 삭제도 구조 휴지통 경로(같은 ID·연결 복원). 분류 삭제 불가 원인: API는 정상, 구조가 분류 그룹 삭제를 막고 분류 관리는 사용 중이면 보관만 함.
 - 바뀐 파일: migrations/013_issue_levels.sql, app/repositories/(issue_levels.py 신규, structure.py, structure_trash.py, structure_copy.py, tasks.py), app/routers/(structure.py, tasks.py), web/js/(structissue.js 신규, structure.js, structmodel.js, structselect.js, structdelete.js, inspector.js, taskactions.js, api.js), web/css/structure.css, web/test/(run_issue_tree.mjs 신규, run_structure_undo.mjs), tests/(test_issue_hierarchy.py 신규, test_structure.py), docs/(VOC, DECISIONS, SPEC, DESIGN, WORKLOG), project_flow.html

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from app import db
+from app import db, excel_table_search
 
 STATUSES = ("todo", "doing", "done", "hold")
 FIELDS = (
@@ -190,6 +191,7 @@ def list_tasks(
     parent_task_id: int | None = None,
     top_level: bool = False,
     q: str | None = None,
+    search_body: Callable[[int, str], str] | None = None,
     field_filters: dict[str, list[str]] | None = None,
     ids: list[int] | None = None,
     planned_from: str | None = None,
@@ -254,7 +256,12 @@ def list_tasks(
     elif top_level:
         where.append("parent_task_id IS NULL")
     if q:
-        where.append("(title LIKE ? OR note LIKE ?)")
+        def project_note(task_id: int, note: str | None) -> str:
+            text = note or ""
+            return search_body(task_id, text) if search_body else excel_table_search.project(text)
+
+        conn.create_function("task_search_body", 2, project_note)
+        where.append("(title LIKE ? OR task_search_body(id, note) LIKE ?)")
         args += [f"%{q}%", f"%{q}%"]
     if field_filters:
         _field_filters(conn, field_filters, where, args)

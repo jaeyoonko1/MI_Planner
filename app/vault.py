@@ -4,9 +4,12 @@ import json
 import re
 import shutil
 from datetime import datetime
+from hashlib import sha256
 from pathlib import Path
 from threading import RLock
 from typing import Any
+
+from app.vault_content import content_write_lock, replace_content
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_VAULT_PATH = ROOT / "vault"
@@ -23,6 +26,15 @@ class VaultError(Exception):
     def __init__(self, message: str, status: int = 400) -> None:
         super().__init__(message)
         self.status = status
+
+
+def content_revision(content: str | None) -> str:
+    return sha256((content or "").encode("utf-8")).hexdigest()
+
+
+def check_content_revision(content: str | None, expected: str | None) -> None:
+    if expected is not None and content_revision(content) != expected:
+        raise VaultError("다른 곳에서 본문이 변경되어 저장할 수 없습니다.", 409)
 
 
 def _now() -> str:
@@ -44,7 +56,7 @@ class Vault:
     def __init__(self, root: Path = DEFAULT_VAULT_PATH) -> None:
         self.root = root
         self.trash = root / ".trash"
-        self._page_lock = RLock()
+        self.page_lock = RLock()
         root.mkdir(parents=True, exist_ok=True)
 
     # ---- path handling -------------------------------------------------
@@ -62,11 +74,11 @@ class Vault:
         return path.relative_to(self.root).as_posix()
 
     def _read_meta(self, page_dir: Path) -> dict[str, Any]:
-        with self._page_lock:
+        with self.page_lock:
             return json.loads((page_dir / META).read_text(encoding="utf-8"))
 
     def _write_meta(self, page_dir: Path, meta: dict[str, Any]) -> None:
-        with self._page_lock:
+        with self.page_lock:
             meta["updated"] = _now()
             (page_dir / META).write_text(
                 json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -111,7 +123,7 @@ class Vault:
         extra_meta adds keys (e.g. task_id for an issue page) to the very first _page.json write."""
         if page_type not in PAGE_TYPES:
             raise VaultError("알 수 없는 페이지 종류입니다.")
-        with self._page_lock:
+        with self.page_lock:
             parent_dir = self._dir(parent)
             folder = self._unique_dir(parent_dir, _safe_name(folder_name or title))
             folder.mkdir()
@@ -186,13 +198,17 @@ class Vault:
         content = content_file.read_bytes().decode("utf-8") if content_file.is_file() else ""
         return {"path": self._rel(page), "meta": meta, "content": content}
 
-    def write(self, rel: str, content: str) -> dict[str, Any]:
-        with self._page_lock:
+    def write(self, rel: str, content: str, expected: str | None = None) -> dict[str, Any]:
+        with self.page_lock, content_write_lock(self.root):
             page = self._dir(rel)
             meta = self._read_meta(page)
-            (page / _content_file(meta.get("type", "note"))).write_bytes(content.encode("utf-8"))
+            path = page / _content_file(meta.get("type", "note"))
+            if expected is not None:
+                current = path.read_bytes().decode("utf-8") if path.is_file() else ""
+                check_content_revision(current, expected)
+            replace_content(path, content.encode("utf-8"))
             self._write_meta(page, meta)
-            return self.read(rel)
+            return {"path": self._rel(page), "meta": meta, "content": content}
 
     # ---- attachments (pasted images) -------------------------------------
     @staticmethod
@@ -282,7 +298,7 @@ class Vault:
                     shutil.copy2(f, dest / f.name)
 
     def set_note_layout(self, rel: str, layout: dict[str, Any]) -> None:
-        with self._page_lock:
+        with self.page_lock:
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 바꿀 수 없습니다.")
@@ -294,7 +310,7 @@ class Vault:
 
     def set_meta(self, rel: str, **values: Any) -> None:
         """Add/replace keys in _page.json (used for the memo-unification stamp)."""
-        with self._page_lock:
+        with self.page_lock:
             page = self._dir(rel)
             meta = self._read_meta(page)
             meta.update(values)
@@ -302,7 +318,7 @@ class Vault:
 
     def update(self, rel: str, *, title: str | None = None, parent: str | None = None,
                order: int | None = None) -> dict[str, Any]:
-        with self._page_lock:
+        with self.page_lock:
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 바꿀 수 없습니다.")
@@ -326,7 +342,7 @@ class Vault:
             return self.read(self._rel(dest))
 
     def delete(self, rel: str, *, expected_meta: dict[str, Any] | None = None) -> str:
-        with self._page_lock:
+        with self.page_lock:
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 삭제할 수 없습니다.")
@@ -345,7 +361,7 @@ class Vault:
     def restore_page(self, trashed: str, original: str) -> str:
         """Move a trashed page folder back next to where it was (V-004). The parent falls back to the root when
         it is gone, and a taken name gets a ' (2)' suffix. Returns the new page path."""
-        with self._page_lock:
+        with self.page_lock:
             src = self._trashed(trashed)
             parts = [p for p in original.strip("/").split("/") if p]
             if not parts:

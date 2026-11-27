@@ -8,9 +8,12 @@ import {
   normalizeRange, parsePayload, pasteIntoRange, rangeToHtml, rangeToPayload, rangeToTsv, restoreRowOrder, tabTarget,
 } from "./note-table-range.js";
 import { blockSources, clipboardToTable, pasteNotes, tableBlockToSource } from "./paste-html.js";
+import { excelTableFromPaste, serializeExcelTable } from "./excel-table-block.js";
+import { mdToHtml, refreshExcelTableViews } from "./mdconv.js";
 import { hidePasteChip, showPasteChip } from "./paste-chip.js";
 import { toast } from "./toast.js";
 import { inMenu, pasteClipboard, registerContext } from "./contextmenu.js";
+import { mountNoteExcel } from "./note-excel.js";
 
 // Inside a table cell the innermost scope wins: these keys edit the table, not the note columns (V-008).
 export const TABLE_KEY_HELP = [
@@ -922,7 +925,7 @@ function mountTable(block, table, host) {
   render();
 }
 
-export function bindNoteTables(editor, changed) {
+export function bindNoteTables(editor, changed, excel) {
   const mounted = new WeakSet();
   const undoStack = [];
 
@@ -934,6 +937,11 @@ export function bindNoteTables(editor, changed) {
         mountTable(block, table, host);
         mounted.add(block);
       }
+    }
+    for (const block of editor.querySelectorAll(":scope > [data-excel-id][data-raw]")) {
+      if (mounted.has(block) || !block.querySelector(":scope > .note-excel-grid")) continue;
+      mountNoteExcel(block, { ...excel, changed });
+      mounted.add(block);
     }
   }
 
@@ -958,7 +966,7 @@ export function bindNoteTables(editor, changed) {
   }
 
   editor.addEventListener("input", event => {
-    if (event.target.closest?.("[data-k='table']")) return; // cell typing is the table's own history
+    if (event.target.closest?.("[data-k='table'], [data-excel-visible]")) return; // cell typing is the table's own history
     undoStack.forEach(entry => { entry.stale = true; });
   }, true);
   editor.addEventListener("keydown", event => {
@@ -969,7 +977,7 @@ export function bindNoteTables(editor, changed) {
     const undoKey = (k === "z" || event.code === "KeyZ") && !event.shiftKey;
     const redoKey = k === "y" || event.code === "KeyY" || ((k === "z" || event.code === "KeyZ") && event.shiftKey);
     if (!undoKey && !redoKey) return;
-    const history = event.target.closest?.("[data-k='table']")?._tableHistory;
+    const history = event.target.closest?.("[data-k='table'], [data-excel-visible]")?._tableHistory;
     if (history) {
       if (history.editing()) return; // inside a cell being edited the browser's own text undo applies
       if (undoKey ? history.canUndo() : history.canRedo()) {
@@ -1017,6 +1025,7 @@ export function bindNoteTables(editor, changed) {
     if (direction < 0) block.before(paragraph); else block.after(paragraph);
     placeCaret(paragraph, true);
     changed();
+    return paragraph;
   }
 
   // Remove a whole table block, keep an editable line to land on, and offer an undo that puts it back in place.
@@ -1069,7 +1078,9 @@ export function bindNoteTables(editor, changed) {
       const paragraph = element("div");
       paragraph.append(document.createElement("br"));
       block.after(paragraph);
+      return paragraph;
     }
+    return null;
   }
 
   function insert() {
@@ -1085,37 +1096,81 @@ export function bindNoteTables(editor, changed) {
     const eol = editor.dataset.eol || "\n";
     const top = caretTop();
     const replaced = top && emptyLine(top) ? top : null;
-    let format = true;
-    let current = makeBlock(tableBlockToSource(tableBlock, { format, eol }));
-    place(current, true);
-    refresh();
-    changed();
-    current.querySelector("textarea")?.focus();
+    const note = editor.closest(".note-column-stack") || editor;
+    let excelSource = null;
+    if (tableBlock.excel) {
+      const reservedIds = new Set([...note.querySelectorAll("[data-raw][data-excel-id]")]
+        .map(block => block.dataset.excelId));
+      let id;
+      do {
+        id = crypto.randomUUID();
+      } while (reservedIds.has(id));
+      const table = excelTableFromPaste(tableBlock, {
+        id,
+        rowIds: tableBlock.rows.map((_, index) => `r${index + 1}`),
+        columnIds: Array.from({ length: tableBlock.cols }, (_, index) => `c${index + 1}`),
+      });
+      excelSource = serializeExcelTable(table, eol);
+    }
+    const blockFor = format => {
+      if (format && excelSource) {
+        const template = document.createElement("template");
+        template.innerHTML = mdToHtml(excelSource);
+        const block = template.content.firstElementChild;
+        // New blocks use the surrounding document's separators.
+        ["data-gap", "data-i", "data-end"].forEach(name => block.removeAttribute(name));
+        return block;
+      }
+      return makeBlock(tableBlockToSource(tableBlock, { format, eol }));
+    };
+    let current = blockFor(true);
+    let pastedSource = current.dataset.src;
+    let trailing = place(current, true);
+    const finish = (focus) => {
+      refreshExcelTableViews(note);
+      refresh();
+      changed();
+      if (!focus) return;
+      const cell = current.querySelector("textarea");
+      if (cell) cell.focus();
+      else if (editable(current.nextElementSibling)) placeCaret(current.nextElementSibling, true);
+      else trailing = leave(current, 1);
+    };
+    finish(true);
+    const currentIsUnchanged = () => editor.isConnected && current.parentElement === editor
+      && current.dataset.src === pastedSource;
     const entry = remember(() => {
-      if (!editor.isConnected || !current.isConnected) return false;
+      if (!currentIsUnchanged()) return false;
       if (replaced) current.replaceWith(replaced); else current.remove();
+      if (trailing && emptyLine(trailing) && (replaced || editor.childElementCount > 1)) trailing.remove();
+      if (replaced) placeCaret(replaced, true);
+      refreshExcelTableViews(note);
       changed();
       return true;
     });
     const restyle = value => {
-      format = value;
-      const next = makeBlock(tableBlockToSource(tableBlock, { format, eol }));
+      if (entry.stale || !currentIsUnchanged()) {
+        hidePasteChip();
+        toast("붙여넣은 뒤 편집해서 방식을 바꿀 수 없어요.", { error: true });
+        return;
+      }
+      const next = blockFor(value);
       current.replaceWith(next);
       current = next;
-      refresh();
-      changed();
-      current.querySelector("textarea")?.focus();
+      pastedSource = next.dataset.src;
+      finish(!excelSource); // keep keyboard focus on the paste options when switching an Excel block
     };
     const size = tableBlock.rows.length + "행 × " + tableBlock.cols + "열";
+    const notes = pasteNotes(tableBlock, { preserveMerges: Boolean(excelSource) });
+    if (tableBlock.excel && !excelSource) notes.push("Excel 서식 전체를 저장할 수 없어 일반 표로 붙였어요.");
     showPasteChip({
-      message: (via === "html" ? "표로 붙여넣었어요 · " : "탭 구분 텍스트를 표로 붙여넣었어요 · ") + size,
-      notes: pasteNotes(tableBlock),
-      canFormat: tableBlock.hasFormat,
-      format,
+      message: (excelSource ? "Excel 표로 붙여넣었어요 · " : via === "html" ? "표로 붙여넣었어요 · " : "탭 구분 텍스트를 표로 붙여넣었어요 · ") + size,
+      notes,
+      canFormat: Boolean(excelSource) || tableBlock.hasFormat,
+      format: true,
       onFormat: restyle,
       onUndo: () => {
-        if (current.isConnected) { undoStack.splice(undoStack.indexOf(entry), 1); entry.run(); }
-        else toast("이미 표가 바뀌어서 되돌릴 수 없어요.", { error: true });
+        if (!undo(entry)) toast("붙여넣은 뒤 편집해서 되돌릴 수 없어요.", { error: true });
       },
     });
   }

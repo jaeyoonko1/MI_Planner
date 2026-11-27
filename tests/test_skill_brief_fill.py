@@ -2,6 +2,9 @@
 import importlib.util
 import json
 import re
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -9,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app import cli
 from app.main import create_app
+from app.vault_content import content_write_lock, replace_content
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -120,6 +124,127 @@ def test_fill_md_dry_run_then_apply(env, capsys):
     assert fill.find_tables(text.splitlines(keepends=True))[0]["rows"][0][2] == "x\\|y"
 
 
+@pytest.mark.parametrize("mode", ["md", "excel-fill"])
+def test_fill_checks_snapshot_after_waiting_for_app_writer(env, mode):
+    page = _page(env)
+    if mode == "md":
+        raw = env["tmp"] / "race.tsv"
+        raw.write_text("WF\tscan\n1\t12.5\n", encoding="utf-8")
+        options = ["--raw", str(raw), "--key", "Wafer=WF", "--map", "Scan(분)=scan"]
+    else:
+        table = {"id": "scan", "version": 1, "columns": ["rate"], "rows": [{"id": "r1", "cells": [None]}]}
+        page.write_text(f"```mi-excel-table\n{json.dumps(table)}\n```\n", encoding="utf-8")
+        values = env["tmp"] / "race.json"
+        values.write_text(json.dumps([
+            {"rowId": "r1", "columnId": "rate", "displayText": "12.5", "value": {"type": "number", "raw": "12.5"}},
+        ]), encoding="utf-8")
+        options = ["--table-id", "scan", "--values", str(values)]
+    reached_lock = env["tmp"] / "reached-lock"
+    # Signal exactly after the CLI has planned its edit, then use the normal OS lock.
+    run = """
+import runpy
+import sys
+from pathlib import Path
+marker, script, *args = sys.argv[1:]
+sys.path.insert(0, str(Path(script).resolve().parents[3]))
+from app import vault_content
+lock = vault_content.content_write_lock
+def tracked(vault):
+    Path(marker).touch()
+    return lock(vault)
+vault_content.content_write_lock = tracked
+sys.argv = [script, *args]
+runpy.run_path(script, run_name="__main__")
+"""
+    args = [
+        sys.executable, "-c", run, str(reached_lock), str(ROOT / "skills/fill-table/scripts/fill_table.py"),
+        "--vault", env["vault"], mode, str(page), *options, "--apply",
+    ]
+    app_edit = page.read_bytes() + b"\nApp saved this first.\n"
+    with content_write_lock(Path(env["vault"])):
+        child = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8")
+        try:
+            end = time.monotonic() + 5
+            while not reached_lock.exists() and child.poll() is None and time.monotonic() < end:
+                time.sleep(0.025)
+            assert reached_lock.exists()
+            assert child.poll() is None
+            replace_content(page, app_edit)
+        except BaseException:
+            child.kill()
+            child.communicate(timeout=5)
+            raise
+    try:
+        stdout, stderr = child.communicate(timeout=10)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.communicate()
+        raise
+    assert child.returncode == 1, stderr
+    assert "바뀌었습니다" in json.loads(stdout)["error"]
+    assert page.read_bytes() == app_edit
+    assert not (Path(env["vault"]) / ".backup" / "fill-table").exists()
+
+
+@pytest.mark.parametrize("marker", ["`", "~"])
+def test_fill_md_skips_fenced_tables_and_preserves_other_bytes(env, capsys, marker):
+    page = _page(env)
+    visible_table = "| Wafer | Scan |\r\n|---|---|\r\n| 01 |  |\r\n"
+    fence = marker * 4
+    # A pipe on an opener immediately after a GFM table does not make it a table row.
+    # A shorter run and a same-length run with trailing text do not close the block.
+    fenced = (f"{fence}future-table | version\r\n"
+              f"{marker * 3}\r\n"
+              f"{fence} example\r\n"
+              f"{visible_table}"
+              f"  {marker * 5}\t\r\n")
+    editable_table = visible_table.rstrip("\r\n")
+    source = (visible_table + fenced + "\n" + editable_table).encode("utf-8")
+    page.write_bytes(source)
+    raw = env["tmp"] / "raw.csv"
+    raw.write_text("Wafer,Scan\n01,12.5\n", encoding="utf-8")
+
+    code, out = script(fill, env, capsys, "tables", str(page))
+    assert code == 0
+    assert [(table["table"], table["line"]) for table in json.loads(out)["tables"]] == [(1, 1), (2, 12)]
+
+    code, out = script(fill, env, capsys, "md", str(page), "--table", "2",
+                       "--raw", str(raw), "--key", "Wafer", "--apply")
+    result = json.loads(out)
+    assert code == 0 and result["applied"]
+    assert Path(result["backup"]).read_bytes() == source
+    assert page.read_bytes() == (visible_table + fenced + "\n"
+                                 + editable_table.replace("| 01 |  |", "| 01 | 12.5 |")).encode("utf-8")
+
+
+def test_fill_md_lists_only_tables_editable_in_notes(env, capsys):
+    page = _page(env)
+    header = "| Wafer | Scan |\r\n|---|---|\r\n"
+    first = header + "| 01 |  |\r\n"
+    examples = ("# 제목 | 설명\r\n---|---\r\n"
+                "> 인용 | 설명\r\n---|---\r\n"
+                "- 목록 | 설명\r\n---|---\r\n"
+                "<!-- 예시\r\n" + first + "-->\r\n"
+                "|\r\n|\r\n\r\n"
+                "| 안내 문구 |\r\n" + first + "\r\n")
+    second = header + "| 02 |  |\r\n"
+    source = (first + examples + second + "<!-- 열리지 않는 표 예시\r\n" + first).encode("utf-8")
+    page.write_bytes(source)
+    raw = env["tmp"] / "raw.csv"
+    raw.write_text("Wafer,Scan\n02,12.5\n", encoding="utf-8")
+
+    code, out = script(fill, env, capsys, "tables", str(page))
+    assert code == 0
+    assert [(table["table"], table["row_count"]) for table in json.loads(out)["tables"]] == [(1, 1), (2, 1)]
+
+    code, out = script(fill, env, capsys, "md", str(page), "--table", "2",
+                       "--raw", str(raw), "--key", "Wafer", "--apply")
+    result = json.loads(out)
+    assert code == 0 and result["applied"]
+    assert Path(result["backup"]).read_bytes() == source
+    assert page.read_bytes() == source.replace(b"| 02 |  |", b"| 02 | 12.5 |")
+
+
 def test_fill_md_add_missing_and_errors(env, capsys):
     page = _page(env)
     raw = env["tmp"] / "raw.csv"
@@ -134,6 +259,62 @@ def test_fill_md_add_missing_and_errors(env, capsys):
     outside.write_text(TABLE, encoding="utf-8")
     code, out = script(fill, env, capsys, "md", str(outside), "--raw", str(raw), "--key", "Wafer")
     assert code == 1 and "vault" in json.loads(out)["error"]
+
+
+def test_excel_export_by_id_preserves_value_types_and_gfm_numbers(env, capsys):
+    page = _page(env)
+    text = {"displayText": "01 | 한글😀\n다음 줄", "value": {"type": "text", "raw": "01"}}
+    percent = {"displayText": "12.50%", "value": {"type": "number", "raw": "0.125"},
+               "numberFormat": "0.00%", "colSpan": 2}
+    literal = {"displayText": "=1+2", "value": None}
+
+    def fence(table):
+        return "```mi-excel-table\r\n" + json.dumps(table) + "\r\n```\r\n"
+
+    table = {"version": 1, "id": "scan-1", "columns": ["wafer", "scan", "notes"], "rows": [
+        {"id": "r-2", "cells": [text, percent, None]},
+        {"id": "r-1", "cells": [None, literal, None]},
+    ]}
+    source = (TABLE + fence({"id": "future", "version": 2}) + fence(table)
+              + fence({**table, "id": "collision"}) + fence({"id": "collision", "version": 2})
+              + fence({**table, "id": "damaged", "rows": [{"id": "r", "cells": [percent, literal, None]}]})
+              + "```mi-excel-table\n{invalid JSON\n```\n" + TABLE.rstrip()).encode("utf-8")
+    page.write_bytes(source)
+
+    code, out = script(fill, env, capsys, "excel-tables", str(page))
+    assert code == 0 and json.loads(out) == {"tables": [
+        {"id": "scan-1", "row_count": 2, "columns": ["wafer", "scan", "notes"]},
+    ]}
+    code, out = script(fill, env, capsys, "excel-export", str(page), "--table-id", "scan-1")
+    assert code == 0
+    exported = json.loads(out)["table"]
+    assert exported == {
+        "version": 1, "id": "scan-1", "columns": table["columns"],
+        "rows": [
+            {"id": "r-2", "cells": [
+                {**text, "rowSpan": 1, "colSpan": 1},
+                {"displayText": "12.50%", "value": percent["value"], "rowSpan": 1, "colSpan": 2},
+                None,
+            ]},
+            {"id": "r-1", "cells": [None, {**literal, "rowSpan": 1, "colSpan": 1}, None]},
+        ],
+    }
+    for table_id in ("future", "collision", "damaged", "missing"):
+        code, out = script(fill, env, capsys, "excel-export", str(page), "--table-id", table_id)
+        assert code == 1 and table_id in json.loads(out)["error"]
+
+    code, out = script(fill, env, capsys, "tables", str(page))
+    assert code == 0 and [t["table"] for t in json.loads(out)["tables"]] == [1, 2]
+    assert page.read_bytes() == source
+    raw = env["tmp"] / "raw.csv"
+    raw.write_text("Wafer,Scan(분)\n01,12.5\n", encoding="utf-8")
+    code, out = script(fill, env, capsys, "md", str(page), "--table", "2",
+                       "--raw", str(raw), "--key", "Wafer", "--apply")
+    result = json.loads(out)
+    assert code == 0 and result["applied"]
+    assert Path(result["backup"]).read_bytes() == source
+    before, _, after = source.rpartition(b"| 01 |  |")
+    assert page.read_bytes() == before + b"| 01 | 12.5 |" + after
 
 
 def test_fill_board_uses_cli_and_validates(env, capsys):
@@ -158,6 +339,76 @@ def test_fill_board_uses_cli_and_validates(env, capsys):
     assert a01["02"]["values"] == {"repeatability": "ng"}
     code, out = script(fill, env, capsys, "board", eid, "--raw", str(raw), "--match", "wafer=WF", "--map", "nope=scan")
     assert code == 1 and "nope" in json.loads(out)["error"]
+
+
+def test_excel_fill_keeps_explicit_types_styles_and_neighbor_bytes(env, capsys):
+    page = _page(env)
+    formatted = {"displayText": "", "value": None, "numberFormat": "0.00%",
+                 "styles": {"background-color": "#123456"}}
+    merge = {"displayText": "LOT-TEST", "value": None, "colSpan": 2,
+             "richText": [[{"text": "LOT-TEST", "styles": {"color": "#123456"}}]]}
+    table = {"version": 1, "id": "scan", "columns": ["lot", "rate", "note"],
+             "rows": [{"id": "r1", "cells": [None, formatted, None]},
+                      {"id": "r2", "cells": [merge, None, None]}],
+             "numberSeparators": {"decimal": ",", "thousands": "."}}
+    before = b"Example\n<!-- column -->\r\n~~~~mi-excel-table\r\n"
+    after = b"\r\n~~~~\n<!-- row -->\r\n" + TABLE.rstrip().encode("utf-8")
+    source = before + json.dumps(table).encode("utf-8") + after
+    page.write_bytes(source)
+    values = env["tmp"] / "cells.json"
+    edits = [
+        {"rowId": "r1", "columnId": "lot", "displayText": "001",
+         "value": {"type": "text", "raw": "001"}},
+        {"rowId": "r1", "columnId": "rate", "displayText": "12,50%",
+         "value": {"type": "number", "raw": "0.125"}},
+        {"rowId": "r1", "columnId": "note", "displayText": "1,234", "value": None},
+        {"rowId": "r2", "columnId": "lot", "displayText": "LOT-TEST-001", "value": None},
+    ]
+    args = ("excel-fill", str(page), "--table-id", "scan", "--values", str(values))
+    values.write_text(json.dumps(edits), encoding="utf-8-sig")
+
+    code, out = script(fill, env, capsys, *args, "--apply")
+    blocked = json.loads(out)
+    assert code == 0 and not blocked["applied"] and len(blocked["conflicts"]) == 1
+    assert [item["action"] for item in blocked["changes"]] == ["fill"] * 3
+    assert blocked["changes"][1]["numberFormat"] == "0.00%"
+    assert page.read_bytes() == source
+    assert not (Path(env["vault"]) / ".backup").exists()
+
+    code, out = script(fill, env, capsys, *args, "--overwrite")
+    assert code == 0 and not json.loads(out)["applied"] and page.read_bytes() == source
+    code, out = script(fill, env, capsys, *args, "--overwrite", "--apply")
+    result = json.loads(out)
+    assert code == 0 and result["applied"] and Path(result["backup"]).read_bytes() == source
+    updated = page.read_bytes()
+    assert updated.startswith(before) and updated.endswith(after)
+    stored = json.loads(updated[len(before):-len(after)])
+    assert stored["numberSeparators"] == table["numberSeparators"]
+    assert stored["rows"][0]["cells"] == [
+        {"displayText": "001", "value": {"type": "text", "raw": "001"}},
+        {**formatted, "displayText": "12,50%", "value": {"type": "number", "raw": "0.125"}},
+        {"displayText": "1,234", "value": None},
+    ]
+    assert stored["rows"][1]["cells"] == [
+        {"displayText": "LOT-TEST-001", "value": None, "colSpan": 2}, None, None,
+    ]
+    code, out = script(fill, env, capsys, *args, "--apply")
+    assert code == 0 and json.loads(out) == {"tableId": "scan", "changes": [], "conflicts": [], "applied": False}
+
+    invalid_edits = [
+        {**edits[1], "value": {"type": "number", "raw": "0,125"}},
+        {**edits[1], "value": 0.125},
+        {**edits[1], "value": {"type": "number", "raw": "9e999"}},
+        {**edits[1], "rowId": "unknown"},
+        {**edits[1], "rowId": "r2"},
+        edits[0],
+    ]
+    for invalid in invalid_edits:
+        values.write_text(json.dumps([edits[0], invalid]), encoding="utf-8")
+        code, out = script(fill, env, capsys, *args, "--overwrite", "--apply")
+        assert code == 1 and "error" in json.loads(out)
+        assert page.read_bytes() == updated
+    assert list(Path(result["backup"]).parent.iterdir()) == [Path(result["backup"])]
 
 
 def test_skill_files_stay_offline_and_fake():

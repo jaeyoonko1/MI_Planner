@@ -1,7 +1,10 @@
+import json
+import sqlite3
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.cli import run
 from app.main import create_app
 
 
@@ -67,3 +70,86 @@ def test_backlinks_resolve_title_or_full_path_and_skip_literal_examples(tmp_path
         assert sources(duplicated_title) == {real}
         assert sources(second) == set()
         assert client.get("/api/search/backlinks", params={"path": "없는 곳"}).status_code == 404
+
+
+def _excel_table(table_id: str, display: str, *, version: int = 1, **cell: object) -> str:
+    payload = {
+        "version": version, "id": table_id, "columns": ["excel-column-meta"],
+        "rows": [{"id": "excel-row-meta", "cells": [{
+            "displayText": display, "value": {"type": "number", "raw": "987654321.0123"},
+            "numberFormat": "excel-format-meta", **cell,
+        }]}],
+    }
+    return "```mi-excel-table\n" + json.dumps(payload, ensure_ascii=False) + "\n```"
+
+
+def test_excel_display_search_uses_live_page_and_preserves_stored_memos(tmp_path: Path) -> None:
+    vault, db_path = tmp_path / "vault", tmp_path / "db.sqlite"
+    display = '가짜 "측정값" *표시* 😀 12.5%'
+    plain_table = _excel_table("page-block-meta", display)
+    linked_table = _excel_table("linked-block-meta", display)
+    standalone_table = _excel_table("standalone-block-meta", display)
+    with TestClient(create_app(db_path, vault)) as client:
+        plain_path = _page(client, "별도 문서", "앞 문단\n" + plain_table + "\n뒤 문단")
+        task = client.post("/api/todos", json={"title": "Linked", "note": "stale-mirror-only"}).json()
+        linked = client.post(f"/api/todos/{task['id']}/page", json={}).json()["path"]
+        live_path = vault / linked / "index.md"
+        live = linked_table.replace("\n", "\r\n").encode()
+        live_path.write_bytes(live)
+        solo = client.post("/api/todos", json={"title": "Standalone", "note": standalone_table}).json()
+
+        ids = {task["id"], solo["id"]}
+        results = client.get("/api/search", params={"q": display}).json()
+        assert {item["path"] for item in results["pages"]} == {plain_path, linked}
+        assert {item["id"] for item in results["tasks"]} == ids
+        assert all(display in item["snippet"] for item in results["pages"] + results["tasks"])
+        assert all("block-meta" not in item["snippet"] for item in results["pages"] + results["tasks"])
+        assert {item["id"] for item in client.get("/api/todos", params={"q": display}).json()["items"]} == ids
+        assert [item["id"] for item in client.get("/api/todos", params={"q": display, "ids": solo["id"]}).json()["items"]] == [solo["id"]]
+
+        for hidden in ("mi-excel-table", "block-meta", "excel-row-meta", "excel-format-meta", "987654321.0123", "stale-mirror-only"):
+            assert client.get("/api/search", params={"q": hidden}).json() == {"pages": [], "tasks": []}
+            assert client.get("/api/todos", params={"q": hidden}).json()["items"] == []
+        assert client.get("/api/search", params={"q": "뒤 문단"}).json()["pages"][0]["path"] == plain_path
+        assert {item["id"] for item in run([
+            "--db", str(db_path), "--vault", str(vault), "task", "list", "--q", display,
+        ])["items"]} == ids
+        assert live_path.read_bytes() == live
+        with sqlite3.connect(db_path) as conn:
+            assert dict(conn.execute("SELECT id, note FROM tasks")) == {
+                task["id"]: "stale-mirror-only", solo["id"]: standalone_table,
+            }
+
+
+def test_excel_search_skips_invalid_unsupported_and_ambiguous_tables(tmp_path: Path) -> None:
+    malformed = "```mi-excel-table\ninvalid-json-token\n```"
+    unclosed = "```mi-excel-table\nunfinished-token"
+    target = "링크 대상"
+    visible = _excel_table("valid", f"merged anchor [[{target}]]").replace("`", "~")
+    cases = [
+        visible,
+        _excel_table("duplicate", "duplicated-display"),
+        _excel_table("duplicate", "future-duplicate-display", version=2),
+        _excel_table("future", "future-display", version=2),
+        _excel_table("invalid-grid", "invalid-span-display", rowSpan=2),
+        malformed,
+        "<!--\n" + _excel_table("valid", "comment-example") + "\n-->",
+        "````md\n" + _excel_table("valid", "fence-example") + "\n````",
+        "| GFM 열 |\n| --- |\n| ordinary-gfm |",
+        unclosed,
+    ]
+    body = "\n\n".join(cases)
+    with TestClient(create_app(tmp_path / "db.sqlite", tmp_path / "vault")) as client:
+        path = _page(client, "표 자료", body)
+        target_path = _page(client, target)
+        task = client.post("/api/todos", json={"title": "표 메모", "note": body}).json()
+        for marker in ("duplicated-display", "future-duplicate-display", "future-display",
+                       "invalid-span-display", "invalid-json-token", "unfinished-token"):
+            assert client.get("/api/search", params={"q": marker}).json() == {"pages": [], "tasks": []}
+            assert client.get("/api/todos", params={"q": marker}).json()["items"] == []
+        for marker in ("merged anchor", "ordinary-gfm"):
+            result = client.get("/api/search", params={"q": marker}).json()
+            assert [item["path"] for item in result["pages"]] == [path]
+            assert [item["id"] for item in result["tasks"]] == [task["id"]]
+            assert [item["id"] for item in client.get("/api/todos", params={"q": marker}).json()["items"]] == [task["id"]]
+        assert client.get("/api/search/backlinks", params={"path": target_path}).json() == {"pages": []}

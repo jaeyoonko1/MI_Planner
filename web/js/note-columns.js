@@ -6,8 +6,16 @@ import {
   resizePair, rowIndexOf, rowsOf, splitColumns, widthsAfterDelete, widthsAfterInsert,
 } from "./note-column-layout.js";
 import { TABLE_KEY_HELP } from "./note-table.js";
+import { refreshExcelTableViews } from "./mdconv.js";
 import { toast } from "./toast.js";
 import { registerContext } from "./contextmenu.js";
+
+const conflictedDrafts = new Map();
+window.addEventListener("beforeunload", (event) => {
+  if (!conflictedDrafts.size) return;
+  event.preventDefault();
+  event.returnValue = "";
+});
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ICONS = {
@@ -59,7 +67,8 @@ const cloneLayout = (layout) => ({ mode: layout.mode, rows: layout.rows.map((row
 
 // The surfaces share a single save queue, so typing in different columns always saves the complete note.
 export function mountNoteColumns(mountEditor, cfg) {
-  const { compact, content = "", save, saveLayout } = cfg;
+  const { compact, content = "", draftKey, save, saveLayout } = cfg;
+  const recoveredDraft = conflictedDrafts.get(draftKey);
   const root = element("div", compact ? "rich compact note-layout" : "note-layout");
   const tools = element("div", "note-layout-tools");
   const format = element("div", "note-format-host");
@@ -67,22 +76,38 @@ export function mountNoteColumns(mountEditor, cfg) {
   const stack = element("div", "note-column-stack");
   const status = element("span", "jstatus note-layout-status");
   status.setAttribute("role", "status");
-  const retry = chip("다시 저장", () => {
+  const retry = chip("다시 저장", async () => {
+    if (conflict) {
+      try {
+        const draft = getMd();
+        await navigator.clipboard.writeText(draft);
+        const latest = await cfg.loadLatest();
+        if (disposed || !conflict || draft !== getMd()) return;
+        conflictedDrafts.delete(draftKey);
+        setMd(latest.content, latest.revision, latest.layout);
+        updateStatus("초안을 복사하고 최신 본문을 불러왔어요");
+      } catch (error) {
+        toast(`초안을 복사하거나 본문을 불러오지 못했어요 · ${error.message}`, { error: true });
+      }
+      return;
+    }
     if (documentError) saveDocument().catch(() => {});
     if (layoutError) persistLayout();
   });
   retry.hidden = true;
   viewport.append(stack);
   root.append(tools, format, viewport);
-  let source = splitColumns(content);
+  let source = splitColumns(recoveredDraft ?? content);
   let layout = layoutFor(cfg.layout, rowsOf(source.separators).map((row) => row.length));
   let currentColumn = 0;
   let last = content;
+  let revision = cfg.revision;
   let documentChain = Promise.resolve();
   let layoutChain = Promise.resolve();
   let pending = 0;
   let lastLayout = null;
-  let documentError = false;
+  let conflict = recoveredDraft !== undefined;
+  let documentError = conflict;
   let layoutError = false;
   let columns = []; // [{editor, initial, cell, tools, scope}] in file order, aligned with source.parts
   let scopeCount = 0; // fold scopes: the first columns keep their old per-position scopes, new ones get new numbers
@@ -90,9 +115,11 @@ export function mountNoteColumns(mountEditor, cfg) {
   const undoStack = [];
 
   function updateStatus(message, bad = false) {
-    status.textContent = documentError ? "본문 저장 실패" : layoutError ? "배치 저장 실패" : message;
+    status.textContent = conflict ? "다른 곳에서 본문이 변경됐어요 · 초안은 아직 저장되지 않았어요"
+      : documentError ? "본문 저장 실패" : layoutError ? "배치 저장 실패" : message;
     status.classList.toggle("error", documentError || layoutError || bad);
     retry.hidden = !(documentError || layoutError);
+    retry.textContent = conflict ? "초안 복사 후 최신 본문 열기" : "다시 저장";
   }
 
   function presentSource() {
@@ -111,16 +138,26 @@ export function mountNoteColumns(mountEditor, cfg) {
 
   function saveDocument() {
     const md = getMd();
+    refreshExcelTableViews(stack);
+    if (conflict) {
+      conflictedDrafts.set(draftKey, md);
+      return documentChain;
+    }
     if (!pending && md === last) return documentChain;
     pending++;
     updateStatus("저장 중…");
     const result = documentChain.then(async () => {
-      if (md !== last) await save(md);
+      if (conflict) return;
+      if (md !== last) revision = await save(md, revision);
       last = md;
       documentError = false;
       updateStatus(md === getMd() ? "저장됨" : "편집 중…");
     }).catch(error => {
       documentError = true;
+      if (error.status === 409 && draftKey && cfg.loadLatest) {
+        conflict = true;
+        conflictedDrafts.set(draftKey, getMd());
+      }
       updateStatus("");
       throw error;
     }).finally(() => { pending--; });
@@ -513,6 +550,7 @@ export function mountNoteColumns(mountEditor, cfg) {
       shared: true,
       report: updateStatus,
       content: markdown,
+      documentMarkdown: getMd,
       label: scope ? `본문 ${scope + 1}단` : cfg.label || "본문",
       foldScope: scope && cfg.foldScope ? `${cfg.foldScope}:column:${scope + 1}` : cfg.foldScope,
       save: saveDocument,
@@ -553,6 +591,7 @@ export function mountNoteColumns(mountEditor, cfg) {
       el.replaceChildren(...children);
     });
     stack.replaceChildren(...grids.map(({ el }) => el));
+    refreshExcelTableViews(stack);
     paint();
   }
 
@@ -570,22 +609,29 @@ export function mountNoteColumns(mountEditor, cfg) {
     activate(0);
   }
 
-  function setMd(md, meta) {
+  function setMd(md, nextRevision, meta) {
     rebuild(md, meta);
     last = md;
+    revision = nextRevision;
+    conflict = false;
+    documentError = false;
     undoStack.length = 0;
   }
 
   columns = source.parts.map((part) => makeColumn(part));
   arrange();
   activate(0);
+  updateStatus("");
 
   const isBusy = () => pending > 0 || columns.some(({ editor }) => editor.isBusy());
   return {
     el: root,
     getMd,
-    setMd,
-    syncFrom(md) { if (!isBusy() && getMd() !== md) setMd(md); },
+    syncFrom(md, nextRevision, meta) {
+      if (isBusy() || conflict || getMd() !== last || !nextRevision) return;
+      if (md !== last) setMd(md, nextRevision, meta);
+      else revision = nextRevision;
+    },
     isBusy,
     contains: node => root.contains(node),
     focus: () => columns[currentColumn].editor.focus(),

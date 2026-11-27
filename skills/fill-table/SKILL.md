@@ -7,7 +7,7 @@ description: raw data(CSV·TSV·엑셀에서 복사한 글)로 노트의 표(vau
 도우미: `python skills/fill-table/scripts/fill_table.py`(표준 라이브러리, 기본은 미리보기만). 평가 현황판은 CLI `eval set-cell`로만 쓴다.
 
 ## 언제 쓰나
-- 노트 페이지(`vault/<경로>/index.md`) 안의 표 → **md 모드**
+- 노트 페이지(`vault/<경로>/index.md`) 안의 GFM 표 → **md 모드**
 - 평가 현황판의 값 항목(스캔 시간·디펙 모수·OK/NG 등)이나 칸 메모 → **board 모드**
 - MI 정보 표(Plan/Step)·RCP는 대상이 아니다. MI 정보 표는 결과를 TSV로 만들어 주고 화면에서 붙여넣게 안내한다. RCP는 쓰지 않는다(D-11).
 
@@ -45,6 +45,23 @@ raw에만 있는 행: 03 → 표 아래에 추가할까요?
 적용할까요? (빈 칸만 / 덮어쓰기 포함)
 ```
 적용 후: 바뀐 칸 수, 백업 파일 경로(md), 실패한 칸(board).
+
+## 구조화 Excel 표 값 조회 및 채우기
+
+- `… fill_table.py excel-tables "vault/<경로>/index.md"` → 표 ID·열 ID·행 수.
+- `… fill_table.py excel-export "vault/<경로>/index.md" --table-id TABLE_ID` → 표·행·열 ID, 셀 표시 문자열, 확인한 원시 값과 타입, 병합 범위의 JSON을 표준 출력으로 내보낸다.
+- 두 명령은 노트를 읽기만 한다. JSON은 값 전달용이며 서식 데이터는 포함하지 않는다. 값의 타입을 확인하지 못한 칸은 `value: null`로 표시한다. 빈 칸과 병합 영역의 앵커 이외 칸도 `null`로 남긴다. ID가 중복되거나 지원 버전의 그리드가 유효하지 않은 표는 선택할 수 없다.
+- `tables`의 번호와 `md --table`은 기존 GFM 표에 적용한다.
+- `… fill_table.py excel-fill "vault/<경로>/index.md" --table-id TABLE_ID --values data/tmp/cells.json`으로 변경을 미리 본다. 행 ID와 열 ID는 `excel-export`에서 읽는다. 입력 파일은 아래 형태의 UTF-8 JSON 배열이다. 원시 값 타입을 모르면 `value: null`을 명시한다. 숫자 원시 문자열에는 소수점으로 점을 쓰며 실제 셀에 보여 줄 문자열은 별도로 제공한다.
+
+```json
+[
+  {"rowId": "r1", "columnId": "lot", "displayText": "001", "value": {"type": "text", "raw": "001"}},
+  {"rowId": "r1", "columnId": "rate", "displayText": "12,50%", "value": {"type": "number", "raw": "0.125"}}
+]
+```
+
+- 유효한 대상에 승인 후 `--apply`를 붙인다. 다른 값이 들어 있는 셀이 하나라도 있으면 이번 입력 전체가 대기하며, 승인받은 경우 `--overwrite`를 사용한다. 병합 셀은 병합의 첫 칸을 지정한다. 셀 전체 서식과 표시 형식은 보존하고 표시 문자열이 바뀌면 이전 문자열의 부분 서식은 제거한다. 기존 잠금과 원본 백업을 사용한다.
 
 ## 하지 말 것
 - 미리보기와 사용자 승인 없이 `--apply` 하지 않는다. 값을 계산·보정·반올림하지 않는다(요청이 있을 때만, 그때도 미리보기에 표시).

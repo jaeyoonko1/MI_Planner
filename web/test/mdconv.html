@@ -3,7 +3,8 @@
 <!-- Open http://127.0.0.1:8765/test/mdconv.html — every line should start with PASS. -->
 <pre id="out">running…</pre>
 <script type="module">
-import { mdToHtml, htmlToMd, loadInto } from "/js/mdconv.js";
+import { mdToHtml, htmlToMd, loadInto, refreshExcelTableViews } from "/js/mdconv.js";
+import { serializeExcelTable } from "/js/excel-table-block.js";
 import { runNoteLineAction } from "/js/note-lines.js";
 import { bindNoteTables } from "/js/note-table.js";
 import { mountFormatBar } from "/js/note-format.js";
@@ -20,6 +21,51 @@ const rw = (md) => {
 const res = [];
 const ok = (cond, name, info = "") => res.push(`${cond ? "PASS" : "FAIL"} ${name}${cond ? "" : "\n  " + info}`);
 const show = (v) => JSON.stringify(v);
+
+{
+  const label = 'LOT-TEST-001 <img src="example">';
+  const source = {
+    version: 1, id: "range-1", columns: ["lot", "value"], columnWidths: { lot: "80pt" },
+    rows: [
+      { id: "first", height: "32", cells: [
+        { displayText: label, value: null, rowSpan: 2, styles: { color: "#112233", "font-family": '"A and B"' },
+          richText: [[{ text: label, styles: { "font-weight": "bold" } }]] },
+        { displayText: "12.5%", value: { type: "number", raw: "0.125" } },
+      ] },
+      { id: "second", cells: [null, null] },
+    ],
+  };
+  const fence = serializeExcelTable(source, "\r\n");
+  const file = "앞 문단\n\r\n" + fence + "\n\n뒤 문단";
+  const editor = load(file);
+  const grid = editor.querySelector(".note-excel-grid");
+  const cell = grid?.rows[0].cells[0];
+  ok(grid && !grid.hidden && cell.rowSpan === 2 && grid.rows[1].cells.length === 1, "Excel view: merge and independent blank cell");
+  ok(cell?.textContent === label && !editor.querySelector("img") && cell.querySelector("span")?.style.fontWeight === "bold"
+     && cell.style.fontFamily.includes("A and B"),
+     "Excel view: formatted cell text is escaped");
+  ok(grid?.querySelector("col").style.width === "80pt" && grid.rows[0].style.height === "32px"
+     && grid.rows[0].cells[1].style.textAlign === "right", "Excel view: dimensions and General numeric alignment");
+  ok(htmlToMd(editor) === file && rt(rt(file)) === file, "Excel view: mixed EOL round trip");
+  editor.firstElementChild.textContent = "수정한 문단";
+  ok(htmlToMd(editor).includes(fence) && rt(htmlToMd(editor)) === htmlToMd(editor), "Excel view: editing an adjacent paragraph preserves the fence");
+
+  const unsupported = fence.replace('"version": 1', '"version": 2');
+  const broken = "```mi-excel-table\n{broken\n```";
+  const sameColumn = fence + "\n\n" + unsupported + "\n\n" + broken;
+  ok(!load(sameColumn).querySelector(".note-excel-grid:not([hidden])") && rt(rt(sameColumn)) === sameColumn,
+     "Excel view: unsupported duplicates and malformed blocks stay raw");
+
+  const documentRoot = document.createElement("div");
+  const left = load(fence), right = load(unsupported);
+  documentRoot.append(left, right);
+  refreshExcelTableViews(documentRoot);
+  ok(left.querySelector(".note-excel-grid").hidden && !left.querySelector("pre").hidden &&
+     htmlToMd(left) === fence && htmlToMd(right) === unsupported, "Excel view: duplicate IDs across columns remain raw");
+  right.remove();
+  refreshExcelTableViews(documentRoot);
+  ok(!left.querySelector(".note-excel-grid").hidden && left.querySelector("pre").hidden, "Excel view: remaining table renders after duplicate removal");
+}
 
 // ---- canonical files: original == 1st save == 2nd save, both untouched and fully rewritten
 const canon = {
@@ -91,6 +137,35 @@ for (const name of ["code fence", "table", "quote", "html comment"]) {
   ok(htmlToMd(d) === md, `raw blocks survive an unrelated edit: ${name}`, show(htmlToMd(d)));
 }
 
+// ---- validated worksheet fills layer on top of the stored background color.
+{
+  const patterns = [
+    "gray-0625", "gray-125", "gray-25", "gray-50", "gray-75",
+    "horz-stripe", "vert-stripe", "diag-stripe", "reverse-diag-stripe", "diag-cross", "thick-diag-cross",
+    "thin-horz-stripe", "thin-vert-stripe", "thin-diag-stripe", "thin-reverse-diag-stripe",
+    "thin-horz-cross", "thin-diag-cross",
+  ];
+  const source = {
+    version: 1, id: "fills", columns: ["a", "b"],
+    rows: patterns.map((pattern, i) => ({
+      id: "r" + i,
+      cells: [
+        { displayText: pattern, value: null, fillPattern: { pattern, foreground: "#b52" }, styles: { "background-color": "#fed" } },
+        { displayText: "Solid", value: null, styles: { "background-color": "#fed" } },
+      ],
+    })),
+  };
+  const fenced = serializeExcelTable(source);
+  const editor = load(fenced);
+  const rows = [...editor.querySelector(".note-excel-grid").rows];
+  const gradients = rows.map(({ cells }) => [cells[0].style.backgroundImage, cells[0].style.backgroundSize].join(" "));
+  ok(rows.every(({ cells }) => cells[0].style.backgroundImage.includes("gradient(")
+    && cells[0].style.backgroundColor === cells[1].style.backgroundColor && !cells[1].style.backgroundImage),
+  "Excel view: every validated fill paints over the base color while adjacent solid cells stay solid");
+  ok(new Set(gradients).size === patterns.length && htmlToMd(editor) === fenced,
+    "Excel view: saved patterns appear distinct without rewriting the raw block");
+}
+
 // ---- editing one thing changes only that thing
 {
   const md = "# 제목\n\n```\n# 코드\n\n- 목록 아님\n```\n\n- 상위\n  - 하위\n- [*] 별표\n\n> 인용\n\n\n마지막\n";
@@ -127,11 +202,11 @@ for (const name of ["code fence", "table", "quote", "html comment"]) {
   ok(tb.querySelectorAll(".raw table th").length === 2 && tb.querySelectorAll(".raw table td").length === 2, "table is shown as a table", tb.innerHTML);
 }
 
-// ---- security and cleanup (unchanged behaviour)
+// ---- security and cleanup
 const d = document.createElement("div");
-d.innerHTML = '<div><span style="color:#123456;font-size:20px">x</span><font face="a">y</font><a href="http://e.com">z</a></div>';
+d.innerHTML = '<div><span style="color:#123456;font-size:20px">x</span><font face="a">y</font><a href="http://e.com">z</a><a href="javascript:void(0)">w</a></div>';
 const dropped = htmlToMd(d);
-ok(dropped === "xyz\n", "disallowed style/tags dropped", show(dropped));
+ok(dropped === "xy[z](http://e.com)w\n", "disallowed styling and unsafe URLs are dropped, safe links are retained", show(dropped));
 const h = mdToHtml('<scr' + 'ipt>alert(1)</scr' + 'ipt> <img src=x onerror=1> <span style="color:red;x:y">q</span>');
 const probe = document.createElement("div");
 probe.innerHTML = h;
@@ -248,6 +323,29 @@ ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")]
   ok(bar.querySelector(".nb-switch").getAttribute("aria-checked") === "false", "shortcut: toolbar switch shows the off state");
   editorKeys.set(was);
   host.remove();
+}
+{
+  const rotation = (angle) => ({ "mso-rotate": String(angle) });
+  const styles = [rotation(-90), rotation(-45), rotation(0), rotation(45), rotation(90),
+    { "layout-flow": "vertical-ideographic" }, rotation(180), { "writing-mode": "vertical-lr" }];
+  const fence = serializeExcelTable({
+    id: "orientations", version: 1, columns: styles.map((_, index) => `c${index}`),
+    rows: [{ id: "r1", cells: styles.map(style => ({
+      displayText: "<X>&", value: null, styles: style, width: "100px", height: "100px",
+    })) }],
+  });
+  const editor = load(fence);
+  const cells = [...editor.querySelectorAll(".note-excel-grid td")];
+  const directions = cells.map(cell => cell.querySelector(".note-excel-oriented")?.style);
+  ok(directions[1]?.transform === "rotate(45deg)" && directions[3]?.transform === "rotate(-45deg)",
+    "Excel view: positive and negative angles point opposite ways");
+  ok(directions[0]?.writingMode === "vertical-rl" && directions[0]?.textOrientation === "sideways"
+    && !directions[0]?.rotate && directions[4]?.rotate === "180deg" && directions[5]?.textOrientation === "upright",
+    "Excel view: 90-degree directions and stacked characters are distinct");
+  ok(!directions[2] && !directions[6] && !directions[7] && cells[7]?.style.writingMode === "vertical-lr",
+    "Excel view: zero and out-of-range angles fall back while standard direction survives");
+  ok(cells.every(cell => cell.textContent === "<X>&") && htmlToMd(editor) === fence,
+    "Excel view: orientation preserves escaped text and the original fence");
 }
 const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");

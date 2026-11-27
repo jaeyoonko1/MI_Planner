@@ -139,7 +139,8 @@ def _board_view(conn, eval_id: int, full: bool) -> dict[str, Any]:
 def _task(conn, args: argparse.Namespace) -> Any:
     if args.cmd == "list":
         found = tk.list_tasks(conn, status=args.status, requester=args.requester, due_within=args.due_within,
-                              overdue=args.overdue, eval_id=args.eval_id, q=args.q, open_only=args.open)
+                              overdue=args.overdue, eval_id=args.eval_id, q=args.q, open_only=args.open,
+                              search_body=search.task_list_body(Vault(args.vault)) if args.q else None)
         return {"total": len(found), "items": found[:max(0, args.limit)]}
     if args.cmd == "show":
         return tk.get(conn, args.id)

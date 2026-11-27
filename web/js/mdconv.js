@@ -18,6 +18,7 @@
 
 import { IMG_ATTR_RE, imgCssWidth, imgSuffix, parseImgAttr } from "./memocore.js";
 import { listTree, segment } from "./mdblocks.js";
+import { inspectExcelTableBlock } from "./excel-table-block.js";
 import { STEP } from "./lineeditor-core.js";
 import { cellText, parseNoteTable } from "./note-table-model.js";
 
@@ -100,15 +101,147 @@ function listHtml(nodes, inl, forceType) {
   return out;
 }
 
-// Read-only look of a block the editor does not understand. The text is kept in data-src, never re-derived.
+const excelLength = (value) => !value || /[a-z]$/i.test(value) ? value : `${value}px`;
+
+function excelStyle(styles) {
+  const declarations = Object.entries(styles).filter(([, value]) => value != null);
+  return declarations.length ? ` style="${escAttr(declarations.map(([name, value]) => `${name}:${value}`).join(";"))}"` : "";
+}
+
+const excelStripes = {
+  "horz-stripe": [2, 0],
+  "vert-stripe": [2, 90],
+  "diag-stripe": [2, 45],
+  "reverse-diag-stripe": [2, 135],
+  "diag-cross": [1.5, 45, 135],
+  "thick-diag-cross": [2, 45, 135],
+  "thin-horz-stripe": [1, 0],
+  "thin-vert-stripe": [1, 90],
+  "thin-diag-stripe": [1, 45],
+  "thin-reverse-diag-stripe": [1, 135],
+  "thin-horz-cross": [1, 0, 90],
+  "thin-diag-cross": [1, 45, 135],
+};
+
+function excelFillStyles(fill) {
+  if (!fill) return {};
+  const { pattern, foreground } = fill; // already validated by inspectExcelTableBlock
+  if (Object.hasOwn(excelStripes, pattern)) {
+    const [width, ...angles] = excelStripes[pattern];
+    const layers = angles.map(angle =>
+      `repeating-linear-gradient(${angle}deg, ${foreground} 0 ${width}px, transparent 0 4px)`);
+    return { "background-image": layers.join(", ") };
+  }
+  if (pattern === "gray-50") {
+    return {
+      "background-image": `conic-gradient(${foreground} 25%, transparent 0 50%, ${foreground} 0 75%, transparent 0)`,
+      "background-size": "2px 2px",
+    };
+  }
+  const dotSize = { "gray-0625": "4px 4px", "gray-125": "4px 2px", "gray-25": "2px 2px", "gray-75": "2px 2px" };
+  const colors = pattern === "gray-75" ? [foreground, "transparent"] : ["transparent", foreground];
+  return {
+    "background-image": `conic-gradient(at 1px 1px, ${colors[0]} 270deg, ${colors[1]} 0)`,
+    "background-size": dotSize[pattern],
+  };
+}
+
+function excelCellText(displayText, richText) {
+  if (richText) {
+    return richText.map((line) => line.map((run) => {
+      const decoration = run.styles["text-underline-style"] === "double" ? { "text-decoration-style": "double" } : {};
+      return `<span${excelStyle({ ...run.styles, ...decoration })}>${esc(run.text)}</span>`;
+    }).join("")).join("<br>");
+  }
+  return esc(displayText).replace(/\r\n?|\n/g, "<br>");
+}
+
+function orientExcelText(html, rotation, layout) {
+  const angle = Number(rotation);
+  let orientation;
+  if (layout?.toLowerCase() === "vertical-ideographic") {
+    orientation = { "writing-mode": "vertical-rl", "text-orientation": "upright" };
+  } else if (Math.abs(angle) === 90) {
+    orientation = { "writing-mode": "vertical-rl", "text-orientation": "sideways", rotate: angle > 0 ? "180deg" : null };
+  } else if (angle && Math.abs(angle) < 90) {
+    // Positive Excel angles ascend as the text advances.
+    orientation = { transform: `rotate(${-angle}deg)` };
+  }
+  return orientation ? `<span class="note-excel-oriented"${excelStyle(orientation)}>${html}</span>` : html;
+}
+
+function excelGridHtml(table) {
+  const width = table.columns.length;
+  const covered = new Uint8Array(table.rows.length * width);
+  const columns = table.columns.map((id) => `<col${excelStyle({ width: excelLength(table.columnWidths?.[id]) })}>`).join("");
+  const rows = table.rows.map((row, y) => {
+    const cells = row.cells.map((cell, x) => {
+      if (covered[y * width + x]) return "";
+      const location = `tabindex="-1" data-excel-row="${row.id}" data-excel-column="${table.columns[x]}" data-excel-x="${x}"`;
+      if (!cell) return `<td ${location}></td>`;
+      const { rowSpan = 1, colSpan = 1, styles = {} } = cell;
+      for (let r = y; r < y + rowSpan; r++) {
+        for (let c = x; c < x + colSpan; c++) covered[r * width + c] = 1;
+      }
+      const dimensions = { width: excelLength(cell.width), height: excelLength(cell.height) };
+      const alignment = /^(?:general)?$/i.test(styles["text-align"] ?? "") && cell.value?.type === "number"
+        ? { "text-align": "right" } : {};
+      const { displayText, richText } = cell;
+      const runs = richText?.map((line) => line.map((run) => run.text).join("")).join("\n") === displayText
+        ? richText : null;
+      const { "mso-rotate": rotation, "layout-flow": layout, ...renderedStyles } = styles;
+      const cellStyles = { ...renderedStyles, ...alignment, ...excelFillStyles(cell.fillPattern) };
+      if (runs) {
+        // A decoration on the cell would also paint runs that explicitly clear it.
+        delete cellStyles["text-decoration"];
+        delete cellStyles["text-decoration-line"];
+      } else if (styles["text-underline-style"] === "double") {
+        cellStyles["text-decoration-style"] = "double";
+      }
+      const text = orientExcelText(excelCellText(displayText, runs), rotation, layout);
+      return `<td ${location} rowspan="${rowSpan}" colspan="${colSpan}"${excelStyle({ ...dimensions, ...cellStyles })}>${text}</td>`;
+    }).join("");
+    return `<tr${excelStyle({ height: excelLength(row.height) })}>${cells}</tr>`;
+  }).join("");
+  return `<table class="note-excel-grid" aria-label="Excel 표" hidden><colgroup>${columns}</colgroup><tbody>${rows}</tbody></table>`;
+}
+
+/** A column renders independently, but ID uniqueness is checked across the mounted document. */
+export function refreshExcelTableViews(root) {
+  const blocks = root.querySelectorAll("[data-excel-id][data-raw]");
+  const ids = new Map();
+  for (const block of blocks) {
+    const id = block.dataset.excelId;
+    ids.set(id, ids.has(id) ? null : block);
+  }
+  for (const block of blocks) {
+    const table = block.querySelector(":scope > .note-excel-grid");
+    if (!table) continue;
+    const unique = ids.get(block.dataset.excelId) === block;
+    table.hidden = !unique;
+    block.querySelector(":scope > pre").hidden = unique;
+    block.toggleAttribute("data-excel-visible", unique);
+    block.title = unique && block._tableHistory
+      ? "셀 편집 · F2 또는 더블클릭 | 셀 내용 지우기 · Delete"
+      : "앱이 편집하지 않는 블록이에요. 파일에는 원문 그대로 남아요.";
+  }
+}
+
+// Read-only blocks are displayed from parsed data and always serialized from data-src.
 function rawHtml(b, at) {
   const lines = b.src.split(/\r\n?|\n/);
   let inner;
+  let excelId = "";
   if (b.kind === "code") {
     const lang = (/^ {0,3}(?:`{3,}|~{3,})\s*(\S*)/.exec(lines[0]) || [])[1] || "";
     const body = lines.slice(1);
     if (body.length && /^ {0,3}(?:`{3,}|~{3,})\s*$/.test(body[body.length - 1])) body.pop();
     inner = `<pre>${lang ? `<span class="rb-tag">${esc(lang)}</span>` : ""}<code>${esc(body.join("\n"))}</code></pre>`;
+    const excel = inspectExcelTableBlock(b);
+    if (excel) {
+      excelId = ` data-excel-id="${escAttr(excel.id)}"`;
+      if (excel.table) inner += excelGridHtml(excel.table);
+    }
   } else if (b.kind === "table") {
     const table = parseNoteTable(b.src);
     if (table) {
@@ -128,7 +261,7 @@ function rawHtml(b, at) {
   } else {
     inner = `<code class="rb-plain">${esc(b.src)}</code>`;
   }
-  return `<div class="raw"${at} data-raw="1" data-k="${b.kind}" contenteditable="false" title="앱이 편집하지 않는 블록이에요. 파일에는 원문 그대로 남아요.">${inner}</div>`;
+  return `<div class="raw"${at}${excelId} data-raw="1" data-k="${b.kind}" contenteditable="false" title="앱이 편집하지 않는 블록이에요. 파일에는 원문 그대로 남아요.">${inner}</div>`;
 }
 
 export function mdToHtml(md, fileUrl = (f) => f) {
@@ -160,6 +293,7 @@ export function mdToHtml(md, fileUrl = (f) => f) {
 /** Fills `root` from markdown and records, per block, what it serializes to now (the "untouched" test on save). */
 export function loadInto(root, md, fileUrl) {
   root.innerHTML = mdToHtml(md, fileUrl);
+  refreshExcelTableViews(root);
   root.dataset.eol = md.match(/\r\n|\r|\n/)?.[0] || "\n";
   for (const n of root.children) {
     if (!n.hasAttribute("data-src") || n.hasAttribute("data-raw")) continue;

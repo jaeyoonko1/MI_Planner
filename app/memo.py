@@ -16,7 +16,7 @@ from typing import Any
 
 from app import placement
 from app.repositories import tasks as repo
-from app.vault import Vault, VaultError
+from app.vault import Vault, VaultError, check_content_revision, content_revision
 
 FLAG = "memo_unified"
 BACKUP = "memo_before_merge"
@@ -58,7 +58,7 @@ def adopt(conn: sqlite3.Connection, vault: Vault, task: dict[str, Any], page_rel
     if merged:
         extra[BACKUP] = task.get("note")  # the old memo, verbatim, in the human-readable meta file
     if text != page["content"]:
-        vault.write(page_rel, text)
+        vault.write(page_rel, text, content_revision(page["content"]))
     vault.set_meta(page_rel, **extra)
     _mirror(conn, task["id"], text)
     return merged
@@ -69,7 +69,7 @@ def read(conn: sqlite3.Connection, vault: Vault, task_id: int) -> dict[str, Any]
     task = repo.get(conn, task_id)
     rel = placement.existing_page(vault, task)
     if not rel:
-        return task
+        return {**task, "note_revision": content_revision(task.get("note"))}
     merged = adopt(conn, vault, task, rel)
     content = vault.read(rel)["content"]
     if (task.get("note") or "") != content and (content.strip() or task.get("note")):
@@ -78,17 +78,20 @@ def read(conn: sqlite3.Connection, vault: Vault, task_id: int) -> dict[str, Any]
         conn.execute("UPDATE tasks SET page_path = ? WHERE id = ?", (rel, task_id))
         conn.commit()
     task = repo.get(conn, task_id)
-    return {**task, "note": content if content.strip() else None, "memo_merged": merged}
+    return {**task, "note": content if content.strip() else None, "memo_merged": merged,
+            "note_revision": content_revision(content)}
 
 
-def write_note(conn: sqlite3.Connection, vault: Vault, before: dict[str, Any], note: str | None) -> None:
+def write_note(conn: sqlite3.Connection, vault: Vault, before: dict[str, Any], note: str | None,
+               expected: str | None = None) -> None:
     """A PATCH of `note` (call BEFORE repo.update, with the task as it was): the text goes into the page body
     when the issue has a page. An un-unified pair is merged first so the old texts survive in the meta backup."""
     rel = placement.existing_page(vault, before)
     if not rel:
+        check_content_revision(before.get("note"), expected)
         return
     adopt(conn, vault, before, rel)
-    vault.write(rel, note or "")
+    vault.write(rel, note or "", expected)
 
 
 def before_page_write(conn: sqlite3.Connection, vault: Vault, rel: str) -> int | None:

@@ -4,8 +4,9 @@ import re
 import sqlite3
 import unicodedata
 from html.parser import HTMLParser
-from typing import Iterator
+from typing import Callable, Iterator
 
+from app import excel_table_search
 from app.inline_format import strip_inline
 from app.repositories import tasks
 from app.vault import Vault, VaultError
@@ -54,14 +55,36 @@ class _HtmlText(HTMLParser):
 _FORMAT_HINT = re.compile(r"[*~<\\]")
 
 
+def _markdown_plain(text: str) -> str:
+    # Inline formatting (V-003) must not split a word the user searches for.
+    return "\n".join(strip_inline(line) if _FORMAT_HINT.search(line) else line for line in text.split("\n"))
+
+
 def _plain(text: str, kind: str) -> str:
-    if kind != "html":  # inline formatting (V-003) must not split a word the user searches for
-        lines = text.split("\n")
-        return "\n".join(strip_inline(ln) if _FORMAT_HINT.search(ln) else ln for ln in lines)
+    if kind != "html":
+        return excel_table_search.project(text, _markdown_plain)
     parser = _HtmlText()
     parser.feed(text)
     parser.close()
     return " ".join(parser.parts)
+
+
+def task_list_body(vault: Vault) -> Callable[[int, str], str]:
+    """Read linked pages on demand. Opening the filtered list does not refresh the DB mirror."""
+    linked = {
+        page["task_id"]: (page["path"], page["type"])
+        for page in _pages(vault.tree()) if page["task_id"] is not None
+    }
+
+    def body(task_id: int, note: str) -> str:
+        if task_id in linked:
+            path, kind = linked[task_id]
+            note = _body(vault, path)
+            if kind == "html":
+                return _plain(note, kind)
+        return excel_table_search.project(note)
+
+    return body
 
 
 def _match(title: str, detail: str, body: str, query: str) -> tuple[int, str] | None:
@@ -108,7 +131,10 @@ def search(vault: Vault, conn: sqlite3.Connection, query: str, limit: int) -> di
     task_hits: list[tuple[int, dict]] = []
     for task in tasks.list_tasks(conn):
         tid, title = task["id"], task["title"]
-        path, body = linked.get(tid, (None, task.get("note") or ""))
+        if tid in linked:
+            path, body = linked[tid]
+        else:
+            path, body = None, excel_table_search.project(task.get("note") or "")
         match = _match(title, f"#{tid} {path or ''}", body, query)
         if match:
             score, snippet = match

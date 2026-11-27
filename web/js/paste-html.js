@@ -13,6 +13,7 @@
 
 import { BASE_PX, COLORS, HLS, SIZES, markdownUrl } from "./mdconv.js";
 import { cellSource, parseClipboardTable } from "./note-table-model.js";
+import { excelCellMetadata, excelColumnLayout, excelNumberSeparators, excelRowHeights, excelTextStyles, sameExcelTextStyles } from "./paste-excel.js";
 
 // ---------------------------------------------------------------- limits --
 export const PASTE_LIMITS = { cells: 10000, rows: 1000, cols: 60 };
@@ -123,11 +124,13 @@ export const textOf = (node) => node.text ?? (node.children || []).map(textOf).j
 // ---------------------------------------------------------------- CSS --
 function parseDeclarations(css) {
   const out = {};
-  for (const part of css.split(";")) {
+  // Excel format strings can contain quoted section separators and escaped semicolons.
+  const declarations = css.match(/(?:\\[\s\S]|"(?:(?:\\[\s\S])|[^"\\])*"|'(?:(?:\\[\s\S])|[^'\\])*'|[^;"'\\])+/g) || [];
+  for (const part of declarations) {
     const at = part.indexOf(":");
     if (at < 0) continue;
     const name = part.slice(0, at).trim().toLowerCase();
-    const value = part.slice(at + 1).replace(/!important/i, "").trim();
+    const value = part.slice(at + 1).replace(/\s*!important\s*$/i, "").trim();
     if (name) out[name] = value;
   }
   return out;
@@ -337,7 +340,8 @@ export function collectRuns(node, ctx, rules, out = [], state = { pre: false }) 
     }
     if (["style", "script", "head", "xml", "o:p", "img", "col", "input", "meta", "link", "title", "object", "iframe", "svg", "canvas", "template", "noscript"].includes(child.tag)) continue;
     const css = styleOf(child, rules);
-    if (/^none$/i.test(css.display || "") || /mso-hide:\s*all/i.test(child.attrs.style || "")) continue;
+    if (/^none$/i.test(css.display || "") && (child !== state.excelOverflow || !out.some((run) => run.text?.trim()))) continue;
+    if (/mso-hide:\s*all/i.test(child.attrs.style || "")) continue;
     if (/mso-list:\s*ignore/i.test(child.attrs.style || "")) continue; // Word's own bullet / number text
     if (child.tag === "span" && /mso-tab-count/i.test(child.attrs.style || "")) { // a typed tab: collapsed to one space
       out.push({ text: " ", ...ctx });
@@ -345,6 +349,7 @@ export function collectRuns(node, ctx, rules, out = [], state = { pre: false }) 
     }
     const pre = state.pre || /^pre/.test(css["white-space"] || "") || child.tag === "pre";
     const nextCtx = applyStyle(ctx, child, rules);
+    if (ctx.excelStyles) nextCtx.excelStyles = excelTextStyles(child, css, ctx.excelStyles);
     if (BLOCK_TAGS.test(child.tag) && out.length && !out[out.length - 1].br) out.push({ br: true });
     collectRuns(child, nextCtx, rules, out, { pre, image: state.image });
     if (BLOCK_TAGS.test(child.tag) && out.length && !out[out.length - 1].br) out.push({ br: true });
@@ -357,7 +362,7 @@ const sameStyle = (a, b) => a.b === b.b && a.i === b.i && a.u === b.u && a.s ===
 const isMark = (run) => run.image || run.tag; // document runs that are not text: kept apart, never trimmed or merged
 
 /** Trim line edges, drop empty lines at the ends, merge neighbours with the same style. Returns an array of lines. */
-export function runsToLines(runs) {
+export function runsToLines(runs, stylesMatch = sameStyle) {
   const lines = [[]];
   for (const run of runs) {
     if (run.br) { lines.push([]); continue; }
@@ -367,7 +372,7 @@ export function runsToLines(runs) {
     const prev = line[line.length - 1];
     if (prev && !isMark(prev) && prev.text.endsWith(" ")) text = text.replace(/^ +/, ""); // a browser collapses "a " + " b"
     if (!text) continue;
-    if (prev && !isMark(prev) && sameStyle(prev, run)) prev.text += text;
+    if (prev && !isMark(prev) && stylesMatch(prev, run)) prev.text += text;
     else line.push({ ...run, text });
   }
   const textOf = (run) => (isMark(run) ? "x" : run.text);
@@ -474,60 +479,122 @@ const alignOf = (css) => {
   return a === "center" ? "center" : a === "right" || a === "end" ? "right" : a === "left" ? "left" : "";
 };
 
+export function excelOverflowOf(cell) {
+  // Excel's HTML export uses a plain hidden span for the clipped tail of a visible cell value.
+  const tail = cell.children.findLast((child) => child.text === undefined || child.text.trim());
+  if (tail?.tag !== "span" || Object.keys(tail.attrs).length !== 1) return null;
+  if (!/^\s*display\s*:\s*none\s*;?\s*$/i.test(tail.attrs.style || "")) return null;
+  if (!tail.children.length || tail.children.some((child) => child.text === undefined)) return null;
+  return tail;
+}
+
 /**
  * <table> node -> grid block. Merged cells are expanded: a horizontal merge leaves blank cells, a vertical merge
  * repeats the value (so a sort keeps the group label). Returns the block model used by `tableBlockToSource`.
  */
-export function tableFromNode(tableNode, rules, limits = PASTE_LIMITS) {
-  const rowNodes = rowsOfTable(tableNode).filter((row) => !/^none$/i.test(styleOf(row, rules).display || ""));
+export function tableFromNode(tableNode, rules, limits = PASTE_LIMITS, excel = false) {
+  const isVisible = (node) => !/^none$/i.test(styleOf(node, rules).display || "");
+  const sourceRows = rowsOfTable(tableNode);
+  const rowNodes = excel ? sourceRows : sourceRows.filter(isVisible);
+  const visibleRows = rowNodes.flatMap((row, index) => !excel || isVisible(row) ? [index] : []);
+  const keptRows = visibleRows.slice(0, limits.rows);
+  const lastKeptRow = keptRows.at(-1) ?? -1;
   const grid = [];
-  const occupied = []; // occupied[r][c] = { from: [r0,c0] }
+  const occupied = []; // occupied[r][c] points to the original cell
   let totalCols = 0;
   let merged = 0;
-  const maxRows = Math.min(rowNodes.length, limits.rows);
   rowNodes.forEach((rowNode, r) => {
+    const rowVisible = !excel || isVisible(rowNode);
     let c = 0;
-    const cells = (rowNode.children || []).filter((n) => CELL.has(n.tag) && !/^none$/i.test(styleOf(n, rules).display || ""));
+    const cells = rowNode.children.filter((node) => CELL.has(node.tag) && isVisible(node));
     for (const cellNode of cells) {
       while (occupied[r]?.[c]) c++;
-      const colspan = toInt(cellNode.attrs.colspan);
+      const css = styleOf(cellNode, rules);
+      const layoutColspan = toInt(cellNode.attrs.colspan);
+      // Excel uses layout-only colspans for overflowing text and runs of empty cells.
+      const layoutOnly = excel && /(?:^|\s)colspan(?:\s|$)/i.test(css["mso-ignore"] ?? "");
+      const colspan = layoutOnly ? 1 : layoutColspan;
       const rowspan = toInt(cellNode.attrs.rowspan);
       if (colspan > 1 || rowspan > 1) merged++;
-      if (r < maxRows) {
+      if (r <= lastKeptRow && (rowVisible || rowspan > 1)) {
         const origin = { r, c, colspan, rowspan, node: cellNode };
-        const css = styleOf(cellNode, rules);
         const ctx = applyStyle(baseStyle(), cellNode, rules);
-        const lines = runsToLines(collectRuns(cellNode, ctx, rules));
-        origin.lines = lines;
+        if (excel) ctx.excelStyles = excelTextStyles(cellNode, css);
+        const excelOverflow = excel ? excelOverflowOf(cellNode) : null;
+        const runs = collectRuns(cellNode, ctx, rules, [], { excelOverflow });
+        origin.lines = runsToLines(runs);
+        if (excel && runs.some((run) => !run.br && !sameExcelTextStyles(run.excelStyles, ctx.excelStyles))) {
+          origin.richText = runsToLines(runs, (a, b) => sameExcelTextStyles(a.excelStyles, b.excelStyles))
+            .map((line) => line.map(({ text, excelStyles }) => ({ text, styles: excelStyles })));
+        }
         origin.align = alignOf(css);
-        for (let dr = 0; dr < rowspan && r + dr < maxRows; dr++) {
+        for (let dr = 0; dr < rowspan && r + dr <= lastKeptRow; dr++) {
           for (let dc = 0; dc < colspan; dc++) {
-            (occupied[r + dr] ||= [])[c + dc] = { from: origin, dr, dc };
+            (occupied[r + dr] ||= [])[c + dc] = origin;
           }
         }
       }
-      c += colspan;
+      c += layoutColspan;
     }
-    totalCols = Math.max(totalCols, c);
+    if (rowVisible) totalCols = Math.max(totalCols, c, occupied[r]?.length ?? 0);
   });
-  const cols = Math.min(totalCols, limits.cols);
-  for (let r = 0; r < maxRows; r++) {
+  // Excel rowspans count hidden rows, and hidden columns still contain ordinary cells.
+  // Lay out merges in source coordinates, then project both axes into the note grid.
+  const excelColumns = excel ? excelColumnLayout(tableNode, totalCols, (node) => styleOf(node, rules), toInt) : [];
+  const visibleColumns = [];
+  let visibleCount = 0;
+  for (let sourceCol = 0; sourceCol < totalCols; sourceCol++) {
+    if (excelColumns[sourceCol]?.hidden) continue;
+    visibleCount++;
+    if (visibleColumns.length < limits.cols) visibleColumns.push(sourceCol);
+  }
+  const cols = visibleColumns.length;
+  for (const [r, sourceRow] of keptRows.entries()) {
     const row = [];
     for (let c = 0; c < cols; c++) {
-      const slot = occupied[r]?.[c];
-      if (!slot) { row.push({ md: "", plain: "", align: "" }); continue; }
-      const { from, dr, dc } = slot;
-      if (dc) { row.push({ md: "", plain: "", align: from.align }); continue; } // horizontal merge: blank
+      const from = occupied[sourceRow]?.[visibleColumns[c]];
+      if (!from) { row.push({ md: "", plain: "", align: "" }); continue; }
+      if (c > 0 && visibleColumns[c - 1] >= from.c) {
+        row.push({ md: "", plain: "", align: from.align });
+        continue;
+      }
       row.push({
         md: runsToMarkdown(from.lines, true),
         plain: runsToMarkdown(from.lines, false),
         align: from.align,
-        repeated: dr > 0,
+        repeated: r > 0 && keptRows[r - 1] >= from.r,
       });
     }
     grid.push(row);
   }
-  return finishBlock(grid, { merged, totalRows: rowNodes.length, totalCols });
+  const block = finishBlock(grid, { merged: excel ? 0 : merged, totalRows: visibleRows.length, totalCols: visibleCount });
+  if (excel) {
+    const columnWidths = visibleColumns.map((sourceCol) => excelColumns[sourceCol]?.width ?? null);
+    const rowHeights = excelRowHeights(keptRows.slice(0, block.rows.length).map((r) => rowNodes[r]), (node) => styleOf(node, rules));
+    const cells = [];
+    for (let r = 0; r < block.rows.length; r++) {
+      const sourceRow = keptRows[r];
+      for (let c = 0; c < cols; c++) {
+        const from = occupied[sourceRow]?.[visibleColumns[c]];
+        if (!from || (r > 0 && keptRows[r - 1] >= from.r) || (c > 0 && visibleColumns[c - 1] >= from.c)) continue;
+        let colSpan = 1;
+        while (c + colSpan < cols && visibleColumns[c + colSpan] < from.c + from.colspan) colSpan++;
+        let rowSpan = 1;
+        while (r + rowSpan < block.rows.length && keptRows[r + rowSpan] < from.r + from.rowspan) rowSpan++;
+        if (rowSpan > 1 || colSpan > 1) block.merged++;
+        const displayText = from.lines.map((line) => line.map((run) => run.text).join("")).join("\n");
+        cells.push({
+          row: r, col: c,
+          ...(from.richText ? { richText: from.richText } : {}),
+          ...excelCellMetadata(
+            from.node.attrs, styleOf(from.node, rules), displayText, rowSpan, colSpan,
+          ),
+        });
+      }
+    }
+    block.excel = { columnWidths, rowHeights, numberSeparators: excelNumberSeparators(styleOf(tableNode, rules)), cells };
+  }
+  return block;
 }
 
 function finishBlock(grid, info) {
@@ -593,19 +660,34 @@ export function hasContentOutsideTables(root) {
   return visit(root);
 }
 
-registerBlockParser("table", (doc) => {
+export function isExcelHtml({ root, rules }) {
+  const html = root.children.find((node) => node.tag === "html");
+  if (html?.attrs["xmlns:x"]?.toLowerCase() === "urn:schemas-microsoft-com:office:excel") return true;
+  const head = (html || root).children.find((node) => node.tag === "head");
+  if (head?.children.some((node) => node.tag === "meta" && (
+    (/^progid$/i.test(node.attrs.name || "") && /^excel\.sheet(?:\.\d+)?$/i.test(node.attrs.content || "")) ||
+    (/^generator$/i.test(node.attrs.name || "") && /^microsoft excel(?:\s|$)/i.test(node.attrs.content || ""))
+  ))) return true;
+  // An exported table fragment can keep the worksheet CSS but omit the document header.
+  return rules.some(({ tag, decl }) => tag === "br" && decl["mso-data-placement"] === "same-cell")
+    && rules.some(({ tag, decl }) => tag === "td" && decl["mso-number-format"]);
+}
+
+registerBlockParser("table", (doc, { keepSingleExcelCell = false } = {}) => {
   const table = [...walk(doc.root)].find((node) => node.tag === "table");
   if (!table || hasContentOutsideTables(doc.root)) return null;
-  // one single cell is a copied value (Excel) or a layout wrapper (Outlook), not a table: the document parser takes it
-  return [...walk(table)].filter((node) => CELL.has(node.tag)).length > 1 ? tableFromNode(table, doc.rules) : null;
+  const excel = isExcelHtml(doc);
+  // Only note body paste opts in. Document wrappers and other consumers keep their inline path.
+  if (!(excel && keepSingleExcelCell) && [...walk(table)].filter((node) => CELL.has(node.tag)).length < 2) return null;
+  return tableFromNode(table, doc.rules, PASTE_LIMITS, excel);
 });
 
 /** Parse clipboard HTML once, then ask every registered block parser. */
-export function htmlToBlocks(html) {
+export function htmlToBlocks(html, options) {
   const doc = parseHtml(html);
   doc.rules = parseStyleSheet(doc.styles);
   for (const { parse } of blockParsers) {
-    const block = parse(doc);
+    const block = parse(doc, options);
     if (block) return block;
   }
   return null;
@@ -643,9 +725,9 @@ export function clipboardToTable({ html = "", text = "" }) {
 }
 
 /** One-line description of what was lost, for the paste toast. */
-export function pasteNotes(block) {
+export function pasteNotes(block, { preserveMerges = false } = {}) {
   const notes = [];
-  if (block.merged) notes.push("병합 셀 " + block.merged + "개를 풀었어요 (가로는 빈 칸, 세로는 값 반복)");
+  if (block.merged && !preserveMerges) notes.push("병합 셀 " + block.merged + "개를 풀었어요 (가로는 빈 칸, 세로는 값 반복)");
   if (block.truncated) {
     const t = block.truncated;
     notes.push(t.rows + "행 × " + t.cols + "열 중 앞 " + t.keptRows + "행 × " + t.keptCols + "열만 붙였어요 (한도 "

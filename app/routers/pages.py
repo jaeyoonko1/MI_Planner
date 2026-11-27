@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
 from app import db, memo, placement
-from app.vault import Vault
+from app.vault import Vault, content_revision
 
 router = APIRouter(prefix="/api/pages")
 
@@ -35,6 +35,7 @@ class PageRestore(BaseModel):
 
 class PageContent(BaseModel):
     content: str
+    content_revision: str | None = None
 
 
 Percent = Annotated[int, Field(strict=True, gt=0, le=100)]
@@ -72,26 +73,27 @@ def tree(request: Request) -> dict:
 @router.get("")
 def read_page(request: Request, path: str) -> dict:
     vault = _vault(request)
-    page = vault.read(path)
-    if page["meta"].get("task_id") is not None and not page["meta"].get(memo.FLAG):
-        _relink(request, lambda c: memo.before_page_write(c, vault, path))  # unify an old diverged pair first
+    with vault.page_lock:
         page = vault.read(path)
-    return page
+        if page["meta"].get("task_id") is not None and not page["meta"].get(memo.FLAG):
+            _relink(request, lambda c: memo.before_page_write(c, vault, path))
+            page = vault.read(path)
+    return {**page, "content_revision": content_revision(page["content"])}
 
 
 @router.put("")
 def write_page(request: Request, path: str, body: PageContent) -> dict:
     vault = _vault(request)
-    holder: list[int | None] = [None]
-
-    def prepare(conn) -> None:
-        holder[0] = memo.before_page_write(conn, vault, path)
-
-    _relink(request, prepare)
-    page = vault.write(path, body.content)
-    if holder[0] is not None:  # issue page: keep the issue's mirrored memo identical
-        _relink(request, lambda c: memo.after_page_write(c, holder[0], body.content))
-    return page
+    with vault.page_lock:
+        conn = db.connect(request.app.state.db_path)
+        try:
+            tid = memo.before_page_write(conn, vault, path)
+            page = vault.write(path, body.content, body.content_revision)
+            if tid is not None:
+                memo.after_page_write(conn, tid, body.content)
+        finally:
+            conn.close()
+    return {**page, "content_revision": content_revision(page["content"])}
 
 
 @router.put("/layout")
