@@ -2,9 +2,9 @@
 
 > 🔒 **이 문서는 비공개 GitHub 저장소 안에서만 볼 수 있습니다.** GitHub Pages에 공개하지 않습니다.
 
-**최종 갱신:** 2026. 11. 24. 23:55 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [d4e4b5d](https://github.com/jaeyoonko1/MI_Planner/commit/d4e4b5d8a20b0fb84eb7ea4e1892f4c157b98d43)
+**최종 갱신:** 2026. 11. 28. 03:42 (KST)　·　**원본 FLOW:** 2026-11-24　·　**커밋:** [8b57fc2](https://github.com/jaeyoonko1/MI_Planner/commit/8b57fc20f49e1f6cc878b6fd6dae6bb5297ebf3b)
 
-**최신 작업:** Merge remote-tracking branch 'origin/master'
+**최신 작업:** [WS-01] VOC 커밋 해시 규칙 갱신: 신규 해시는 리뷰 기록에만
 
 ## 전체 진행률
 
