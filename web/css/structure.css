@@ -9,6 +9,9 @@
 .tabsw { margin-bottom: 4px; }
 
 .insp-identity, .insp-ancestors { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.insp-ancestors { flex-basis: 100%; min-width: 0; }
+.insp .insp-ancestors button.chip-link { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.insp-class-heading { margin: 10px 0 3px; }
 .insp-identity { margin-bottom: 6px; }
 .insp-identity .k { margin: 0; }
 .insp-head-level { max-height: min(155px, 27vh); overflow: auto; padding: 2px 2px 7px; }
@@ -49,14 +52,31 @@
 .stools .tbtn { gap: 6px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); }
 .stools .tbtn:hover:not(:disabled) { background: var(--hover); filter: none; }
 .stools .tbtn[hidden] { display: none; }
+.stools .tbtn[aria-pressed="true"] { background: var(--sel-bg); border-color: var(--blue); }
+.branch-filter { display: flex; align-items: center; gap: 10px; padding: 6px var(--px); border-bottom: 1px solid var(--line); background: var(--sel-bg); }
+.branch-filter[hidden] { display: none; }
+.branch-path { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.branch-filter .tbtn { flex: none; }
+@media (max-width: 1279px) { .branch-filter .tbtn { order: -1; } }
 .slive { font-size: 11.5px; color: var(--warn-fg); }
 .slive:empty { display: none; }
 .sinfo { font: 11px var(--mono); color: var(--dim); }
 .sview { container-type: inline-size; --cols: minmax(0, 1fr) 118px 84px 88px 104px; }
 .sview.noprod { --cols: minmax(0, 1fr) 118px 92px 104px; }
+/* At narrow table widths the path uses the original product column width. */
+.sview.issue-hierarchy { --cols: minmax(0, 1fr) 118px clamp(84px, calc(65cqi - 363px), 220px) 88px 104px; }
 .shead, .srow { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 8px; padding: 0 var(--px); }
 @container (max-width: 640px) { .shead, .srow { --cols: minmax(0, 1fr) 112px 88px 96px; } .sview .h-prod, .sview .c-prod { display: none; } }
+@container (max-width: 745px) {
+  .issue-hierarchy .path-prefix { display: none; }
+  .issue-hierarchy .srow .c1 { gap: 6px; padding-left: min(calc(var(--d, 0) * 16px), 64px); }
+  .issue-hierarchy .srow .lvname { max-width: 64px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+@container (max-width: 640px) {
+  .issue-hierarchy .shead, .issue-hierarchy .srow { --cols: minmax(0, 1fr) 96px 72px 92px; }
+}
 .shead { height: 30px; border-bottom: 1px solid var(--line); font-size: 10.5px; font-weight: 650; letter-spacing: .08em; color: var(--dim); background: var(--panel); }
+.issue-hierarchy .h-prod { word-break: keep-all; }
 .sview .srows { max-height: 62vh; overflow: auto; overscroll-behavior: contain; }
 .srow { position: relative; min-height: calc(var(--row-h) - 2px); border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); font-size: 12.5px; cursor: default; outline: none; transition: background .12s; }
 .srow:hover { background: var(--row-hover); }
@@ -85,6 +105,11 @@
 .srow.issue.done .stitle { color: var(--dim); text-decoration: line-through; }
 .sedit { flex: 1; min-width: 0; height: 24px; padding: 0 6px; border: 1px solid var(--sel-bd); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; font-weight: 520; }
 .c-tx { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.issue-path-value { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.issue-path-value > span, .issue-product-value { overflow: hidden; text-overflow: ellipsis; }
+.issue-path-value .path-parent { flex-shrink: 0; max-width: 100%; }
+.issue-path-value .path-prefix { min-width: 0; }
+.issue-product-value { display: block; color: var(--dim); font-size: 11px; }
 .srow.dragging { opacity: .45; }
 .srow.drop-in { box-shadow: inset 0 0 0 1.5px var(--cyan); background: color-mix(in srgb, var(--cyan) 9%, transparent); }
 .srow.drop-before::before, .srow.drop-after::after { content: ""; position: absolute; left: var(--px); right: var(--px); height: 2px; border-radius: 2px; background: var(--cyan); pointer-events: none; }

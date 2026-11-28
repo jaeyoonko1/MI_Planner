@@ -55,6 +55,18 @@ export function prune(sel, valid) {
   return { ids, anchor: valid.has(sel.anchor) ? sel.anchor : active, active };
 }
 
+export function selectionAfterBranchClear(sel, visible, fallbackIds) {
+  const valid = new Set(visible);
+  const next = prune(sel, valid);
+  if (next.ids.size) {
+    const active = next.ids.has(next.active) ? next.active : [...next.ids].at(-1);
+    return { ...next, active };
+  }
+  const fallback = fallbackIds.find((id) => valid.has(id)) ?? visible[0] ?? "";
+  if (sel.ids.size) return single(fallback);
+  return { ...next, active: next.active || fallback };
+}
+
 // Where the selection should land after rows disappear: the next surviving visible row, else the previous one.
 export function neighbourAfterRemoval(vis, removed) {
   const first = vis.findIndex((x) => removed.has(x));

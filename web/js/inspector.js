@@ -6,7 +6,7 @@ import { mountNoteColumns } from "./note-columns.js";
 import { classRows, toggleMulti } from "./inspector-fields.js";
 import { openPageSheet } from "./pagedialog.js";
 import { levelChips, levelGlyph, openParentSheet } from "./structissue.js";
-import { rankOf } from "./structmodel.js";
+import { issueAncestorPath, issuePathLabel, missingIssueParentLabel, rankOf } from "./structmodel.js";
 import { toast } from "./toast.js";
 import { editableOf, registerContext } from "./contextmenu.js";
 import { deleteTaskUndoable, taskGroups } from "./taskactions.js";
@@ -203,14 +203,19 @@ async function refresh(reloadFields = false) {
     return;
   }
   const active = document.activeElement;
-  if (panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName)) { stalePaint = true; return; }
-  if (active === title && title.textContent.trim() !== title.dataset.savedTitle) { stalePaint = true; return; }
-  if (memo?.ctl.contains(document.activeElement)) {
-    // keep the focused cell, but take the newest revision/text when nothing is unsaved, and show the new level now
+  const typing = panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName)
+    || active === title && title.textContent.trim() !== title.dataset.savedTitle;
+  const memoFocused = memo?.ctl.contains(active);
+  if (typing || memoFocused) {
+    // Keep the focused editor while refreshing the derived path.
     const task = hub.task(openId);
-    memo.ctl.syncFrom(task?.note || "", task?.note_revision);
-    const toggle = panel.querySelector('[data-fk="level"]');
-    if (toggle && task) labelLevelToggle(toggle, levels.find((l) => l.id === task.level_id));
+    const trail = panel.querySelector(".insp-ancestors");
+    if (trail && task) fillParentTrail(trail, task);
+    if (memoFocused) {
+      memo.ctl.syncFrom(task?.note || "", task?.note_revision);
+      const toggle = panel.querySelector('[data-fk="level"]');
+      if (toggle && task) labelLevelToggle(toggle, levels.find((l) => l.id === task.level_id));
+    }
     stalePaint = true;
     return;
   }
@@ -291,7 +296,7 @@ function levelPicker(t) {
       await context?.levelsChanged(next);
       if (ticket !== revision) return;
       levels = next;
-      const fresh = await api.getTodo(t.id);
+      const [fresh, all] = await Promise.all([api.getTodo(t.id), context ? null : api.todos({})]);
       if (ticket !== revision) return;
       hub.putTask(fresh);
       setCurrent(fresh.level_id);
@@ -299,7 +304,9 @@ function levelPicker(t) {
         if (other !== picker) other.replaceWith(levelPicker(fresh));
       }
       labelLevelToggle(panel.querySelector(".insp-level-toggle"), levels.find((l) => l.id === fresh.level_id));
-      if (context) related = context.tasks();
+      related = context ? context.tasks() : all.items;
+      const trail = panel.querySelector(".insp-ancestors");
+      if (trail) fillParentTrail(trail, fresh);
       panel.querySelector(".insp-order-warnings")?.replaceChildren(...hierarchyWarnings(fresh));
     },
   });
@@ -311,39 +318,42 @@ function labelLevelToggle(toggle, level) {
   toggle.setAttribute("aria-label", `수준 변경 · ${level?.label ?? ""}`);
 }
 
-function issueLink(t) {
-  return drawerButton(`#${t.id} ${t.title}`, () => {
+function issueLink(t, level) {
+  return drawerButton(issuePathLabel(t, level), () => {
     if (structure) structure.openRelated(t.id);
     else openInspector(t.id);
   }, "chip-link");
 }
 
+function fillParentTrail(trail, t) {
+  trail.replaceChildren();
+  if (t.parent_task_id == null) {
+    trail.append(el("span", "chip-note", "최상위"));
+    return;
+  }
+  const { ancestors, missingParentId } = issueAncestorPath(t, new Map(related.map((issue) => [issue.id, issue])));
+  if (missingParentId != null) trail.append(el("span", "chip-note warn", missingIssueParentLabel(missingParentId)));
+  for (const issue of ancestors) {
+    if (trail.childElementCount) {
+      const sep = el("span", "chip-note", "›");
+      sep.setAttribute("aria-hidden", "true");
+      trail.append(sep);
+    }
+    trail.append(issueLink(issue, levels.find((l) => l.id === issue.level_id)));
+  }
+}
+
 function parentRow(t) {
-  const parts = [];
-  if (t.parent_task_id != null) {
-    const byId = new Map(related.map((issue) => [issue.id, issue]));
-    const ancestors = [];
-    const seen = new Set([t.id]);
-    for (let p = byId.get(t.parent_task_id); p && !seen.has(p.id); p = byId.get(p.parent_task_id)) {
-      ancestors.unshift(p);
-      seen.add(p.id);
-    }
-    const trail = el("div", "insp-ancestors");
-    for (const issue of ancestors) {
-      if (trail.childElementCount) trail.append(el("span", "chip-note", "›"));
-      trail.append(issueLink(issue));
-    }
-    if (!ancestors.length) trail.append(issueLink({ id: t.parent_task_id, title: "" }));
-    parts.push(trail);
-  } else parts.push(el("span", "chip-note", "최상위"));
+  const trail = el("div", "insp-ancestors");
+  fillParentTrail(trail, t);
   const change = drawerButton("바꾸기…", () =>
     openParentSheet({ task: t, tasks: related, levels, onPick: (pid) => changeHierarchy(t, { parent_task_id: pid }) }));
   change.dataset.fk = "parent";
-  parts.push(change);
+  const parts = [trail, change];
   if (t.parent_task_id != null) {
     parts.push(drawerButton("최상위로", () => changeHierarchy(t, { parent_task_id: null })));
   }
-  return row("상위", "hier", ...parts);
+  return row("상위 경로", "hier", ...parts);
 }
 
 function hierarchyWarnings(t) {
@@ -487,7 +497,10 @@ function paint() {
       chipRow([[null, "없음"], ...who.map((w) => [w, w])], t.requester ?? null, (v) => write({ requester: v })), reqInput),
   );
   props.append(pageRow(t));
-  for (const r of classRows(fields, t.props)) props.append(classRow(r));
+  const classes = classRows(fields, t.props);
+  if (classes.length) {
+    props.append(el("h4", "sec-h insp-class-heading", "저장 분류"), ...classes.map(classRow));
+  }
 
   const memoWrap = el("div", "memo-wrap");
   const memoHead = el("div", "memo-h");

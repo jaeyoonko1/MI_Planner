@@ -2,6 +2,13 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-28 · Codex · V-015 이슈 배치에 따른 상위 경로
+- 한 일: 업무구조 이슈 계층과 공유 상세에서 실제 부모 링크를 따라 상위 경로를 표시한다. 구조의 행 도구줄·컨텍스트 메뉴에서 조상 이슈 ID로 하위 가지를 좁힐 수 있다. 기준 이슈까지의 경로와 기존 접기 상태를 유지하고, 제품 분류·상세의 저장 분류는 출처를 표시한다. 스키마·API·페이지 위치 규칙 변경은 없다.
+- 바뀐 파일: `web/js/{structure,structmodel,structselect,structissue,inspector}.js`, `web/css/structure.css`, `web/test/{run_issue_tree,run_structure_undo}.mjs`, `docs/{DESIGN,SPEC,VOC,WORKLOG}.md`, `project_flow.html`.
+- 검증: 격리 Python 3.11 전체 pytest 489건 통과(Starlette 폐기 예정 경고 1건), Node `web/test/run_*.mjs` 30개 및 private flow 4건 통과. Chromium 변환 페이지의 집계는 `PASS summary: 163/163`이다. 임시 DB·vault로 이슈 생성, 같은 제목 가지 필터, 접기·해제·키보드 조작, 하위 트리 이동·되돌리기/다시 적용·재로드, 조상 제목/수준 이름 변경, 저장 분류·기존 필터·일지·페이지 보존 및 순환 거부를 확인했다. 오늘·할일·연결 페이지의 공유 상세 진입도 확인했다.
+- 독립 리뷰 반영: 필터 해제 직후 보이는 선택에 포커스를 맞추고, 접힌 선택은 보이는 기준 행 또는 조상으로 선택·포커스·상세를 함께 옮긴다. 합성 Chromium에서 실제 Delete로 단일·복수 선택, 접힌 행, 명시적 선택 해제, 기준 행 삭제와 되돌리기를 확인했다. 1024/1280/1440/1680px에서 상세 개폐를 확인했고, 1440px 상세 열림 시 합성 제목 영역은 8px에서 83px로 늘었다. 누락된 상위 번호를 표와 상세에 표시한다. 삭제 직후 상세가 남는 기준 동작은 범위 밖으로 기록했다.
+- 이동은 상세의 상위 선택과 Chromium의 합성 HTML5 드롭 이벤트로 확인했다. Orca 포인터 명령으로는 네이티브 드래그가 발생하지 않았다. 실제 데이터·한글 IME·대량 트리 성능 계측은 미실행이다.
+
 ## 2026-11-28 · Claude Code · V-012·V-014 최신 master 통합
 - 한 일: 최신 master(`6033dd3`) 위에 V-012 리뷰 커밋(`codex/v012-review-1128`)과 V-014 네 커밋을 합친 뒤(백업 `289d36d`), V-012 최종 누적 후보 `codex/v012-column-resize-1128`(`a58e858`)의 review 대비 순변경(범위 선택·복사·잘라내기·채우기·Delete·되돌리기, 한 열 텍스트 붙여넣기, 줄바꿈·축소 맞춤·맞춤별 넘침, 자동 맞춤, 열 너비 드래그)을 추가했다. 이전 후속 브랜치는 모두 이 후보에 포함된 누적 체인이다. VOC·FLOW·WORKLOG는 양쪽 기록을 보존했고 CLI `--level` 안내는 `docs/AGENT_TASKS.md`에 있다. V-014 구현 SHA는 VOC에 쓰지 않는다.
 - 바뀐 파일: V-012·V-014 각 기능 파일과 `app/routers/tasks.py`, `web/js/inspector.js`, `docs/{VOC,WORKLOG,AGENT_TASKS}.md`, `project_flow.html`.

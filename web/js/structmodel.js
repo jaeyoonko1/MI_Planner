@@ -88,6 +88,25 @@ export function buildFreeTree(free, tasks, levelByKey) {
 // (rank > 0) sort before plain issues, then by id (creation order). `items` = all descendants (for done counts).
 export const rankOf = (task, levels) => levels.find((l) => l.id === task?.level_id)?.rank ?? 0;
 
+export function issueAncestorPath(task, byId) {
+  const ancestors = [];
+  const seen = new Set([task.id]);
+  let parentId = task.parent_task_id;
+  for (let p = byId.get(parentId); p && !seen.has(p.id); p = byId.get(parentId)) {
+    ancestors.push(p);
+    seen.add(p.id);
+    parentId = p.parent_task_id;
+  }
+  const missingParentId = parentId != null && !byId.has(parentId) ? parentId : null;
+  return { ancestors: ancestors.reverse(), missingParentId };
+}
+
+export const missingIssueParentLabel = (id) => `상위 #${id} 없음`;
+
+export function issuePathLabel(task, level) {
+  return [level?.label, `#${task.id}${task.title ? ` ${task.title}` : ""}`].filter(Boolean).join(" · ");
+}
+
 export function buildIssueTree(tasks, levels) {
   const byLevel = new Map((levels ?? []).map((l) => [l.id, l]));
   const ids = new Set(tasks.map((t) => t.id));
@@ -121,12 +140,23 @@ export function flatten(nodes, out = []) {
   return out;
 }
 
-// Visible rows given the folded ids. Each carries its depth.
-export function visibleRows(nodes, folded, depth = 0, out = []) {
-  for (const n of nodes) {
-    out.push({ node: n, depth });
-    if (n.children?.length && !folded.has(n.id)) visibleRows(n.children, folded, depth + 1, out);
-  }
+export function issueBranch(node) {
+  const context = new Set();
+  for (let p = node.parent; p; p = p.parent) context.add(p.id);
+  return { node, context, ids: new Set([...context, node.id, ...node.items.map((t) => `i${t.id}`)]) };
+}
+
+// A filtered branch retains the real depth and keeps the ancestors leading to it open.
+export function visibleRows(nodes, folded, branch = null) {
+  const out = [];
+  const walk = (list, depth) => {
+    for (const n of list) {
+      if (branch && !branch.ids.has(n.id)) continue;
+      out.push({ node: n, depth });
+      if (n.children?.length && (!folded.has(n.id) || branch?.context.has(n.id))) walk(n.children, depth + 1);
+    }
+  };
+  walk(nodes, 0);
   return out;
 }
 

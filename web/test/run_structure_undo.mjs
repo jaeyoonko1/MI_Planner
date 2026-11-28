@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createUndoStack } from "../js/structundo.js";
-import { click, deleteItems, emptySelection, isTypingTarget, moveTo, neighbourAfterRemoval, prune, selectAll, single, toggleActive } from "../js/structselect.js";
+import { click, deleteItems, emptySelection, isTypingTarget, moveTo, neighbourAfterRemoval, prune, selectAll, selectionAfterBranchClear, single, toggleActive } from "../js/structselect.js";
 
 // ---- undo stack ----
 const s = createUndoStack(3);
@@ -59,6 +59,20 @@ assert.equal(selectAll(sel, vis).ids.size, 5);
 assert.deepEqual([...prune(selectAll(sel, vis), new Set(["i1", "i3"])).ids], ["i1", "i3"]);
 assert.equal(click(emptySelection(), "i2", { shift: true }, vis).active, "i2");
 assert.equal(moveTo(single("i1"), "", {}, vis).active, "i1");
+
+// Clearing the branch filter must keep focus on a visible selection, including the Delete target.
+const rootRows = ["i1", "i3", "i5", "i6"];
+const branchTrail = ["i3", "i1"];
+assert.deepEqual(selectionAfterBranchClear(single("i6"), rootRows, branchTrail), single("i6"));
+assert.deepEqual(selectionAfterBranchClear(single("i6"), ["i1", "i3"], branchTrail), single("i3"));
+assert.deepEqual(selectionAfterBranchClear(single("i6"), ["i1"], branchTrail), single("i1"));
+const multiple = click(single("i5"), "i6", { ctrl: true }, rootRows);
+assert.deepEqual(selectionAfterBranchClear(multiple, rootRows, branchTrail), multiple);
+assert.deepEqual(selectionAfterBranchClear(multiple, ["i1", "i3", "i5"], branchTrail), single("i5"));
+const deselected = toggleActive(single("i6"));
+assert.deepEqual(selectionAfterBranchClear(deselected, ["i1", "i3"], branchTrail),
+  { ids: new Set(), anchor: "", active: "i3" });
+assert.deepEqual(selectionAfterBranchClear(single("i6"), [], branchTrail), emptySelection());
 
 // ---- after removal ----
 assert.equal(neighbourAfterRemoval(vis, new Set(["i1", "i2"])), "g2");

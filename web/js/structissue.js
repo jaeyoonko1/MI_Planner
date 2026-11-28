@@ -6,6 +6,7 @@ import { api } from "./api.js";
 import { registerContext } from "./contextmenu.js";
 import { COLORS, SHAPES, colorName, issueIcon, levelIcon, shapeName } from "./levels.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
+import { issueAncestorPath, issuePathLabel, missingIssueParentLabel } from "./structmodel.js";
 import { toast } from "./toast.js";
 import { el, svg } from "./ui.js";
 
@@ -201,7 +202,12 @@ export function openAddIssueSheet({
   const picker = levelChips({
     levels, current: level,
     onPick: (id) => { level = id; },
-    onChanged: async (next, selected) => { levels = next; level = selected; await onLevelsChanged?.(next); },
+    onChanged: async (next, selected) => {
+      levels = next;
+      level = selected;
+      repaintParent();
+      await onLevelsChanged?.(next);
+    },
   });
   const positions = el("div", "issue-add-position");
   const repaintParent = (focus = false) => {
@@ -221,12 +227,11 @@ export function openAddIssueSheet({
       if (!path.childElementCount) path.append(el("span", "hint", mode === "free" ? "최상위" : "분류 값 미지정"));
       positions.append(field(mode === "free" ? "그룹" : "분류 값", path));
     }
-    const parentPath = [];
     const byId = new Map(tasks.map((t) => [t.id, t]));
-    for (let t = byId.get(parent); t && byId.has(t.id); t = byId.get(t.parent_task_id)) {
-      parentPath.unshift(`#${t.id} ${t.title}`);
-      byId.delete(t.id);
-    }
+    const { ancestors, missingParentId } = issueAncestorPath({ parent_task_id: parent }, byId);
+    const parentPath = ancestors.map((t) =>
+      issuePathLabel(t, mode === "issues" ? levels.find((l) => l.id === t.level_id) : null));
+    if (missingParentId != null) parentPath.unshift(missingIssueParentLabel(missingParentId));
     const controls = el("div", "chips");
     const chooseParent = button(parent == null ? "상위 이슈 지정…" : "다른 상위…", "sm", () =>
       openParentSheet({
