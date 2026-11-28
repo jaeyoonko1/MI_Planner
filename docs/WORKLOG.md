@@ -2,6 +2,12 @@
 
 > 새 항목은 **맨 위**에 추가. 형식은 AGENTS.md 6장 참고.
 
+## 2026-11-28 · Claude Code · V-012·V-014 최신 master 통합
+- 한 일: 최신 master(`6033dd3`) 위에 V-012 리뷰 커밋(`codex/v012-review-1128`)과 V-014 네 커밋을 순서대로 합쳤다. V-014는 VOC당 커밋 하나로 합쳤다. `tasks` 라우터 import, 상세창 새로고침과 메모 동기화를 함께 맞췄고 VOC·FLOW·WORKLOG는 양쪽 기록을 모두 보존했다. CLI `--level` 안내는 분리된 `docs/AGENT_TASKS.md`로 옮겼다.
+- 바뀐 파일: V-012·V-014 각 기능 파일과 `app/routers/tasks.py`, `web/js/inspector.js`, `docs/{VOC,WORKLOG,AGENT_TASKS}.md`, `project_flow.html`.
+- 테스트: Python 3.11 격리 환경에서 전체 pytest 482건 통과(014 이관은 합성 DB 테스트 포함, `tzdata` 설치 필요), `web/test/run_*.mjs` 30개 통과, 합성 임시 DB·vault 기동과 정적 자산·할일 생성 스모크 통과. 실제 DB는 열지 않았다.
+- 남은 위험 / 다음 행동: 통합 상태의 브라우저 화면 확인은 하지 못했다. V-012와 V-014는 진행 상태이며 FLOW done:false다. 실제 Excel 클립보드·홈 리본·차트 UI는 미완료다. `codex/v012-*-1128` 후속 브랜치(범위 선택·잘라내기·열 너비·자동 맞춤)는 이번에 포함하지 않았다.
+
 ## 2026-11-28 · Codex · V-012 차트 정의 편집 및 리뷰용 통합
 - 한 일: 최신 master를 기준으로 V-012 작업을 독립 리뷰 브랜치의 한 커밋으로 정리했다. 표 연결 차트의 ID를 유지하며 유형·원본 참조를 교체하고 다른 블록과 구분자를 보존한다.
 - 바뀐 파일: 이번 차트 편집은 `web/js/excel-chart-block.js`, `web/test/run_excel_chart_data.mjs`, SPEC·VOC·V012-EXCEL·WORKLOG·FLOW에 반영했다.
@@ -43,6 +49,24 @@
 - 바뀐 파일: web/js/{excel-table-block,note-excel}.js, web/test/run_excel_table_block.mjs, docs/{V012-EXCEL,VOC,WORKLOG}.md, project_flow.html.
 - 테스트: pytest 480, Node Excel 저장 모델·표 및 문서 붙여넣기·Flow 4건, Edge 변환기 141/141. 격리 노트·독립 메모에서 합성 Excel HTML로 범위 저장·새로고침·되돌리기/다시 적용, 경계 거부, F2 붙여넣기 분리 확인.
 - 다음에 할 것 / 막힌 것: 표 안 값만 붙여넣기, Office 회전 표시, 실제 Excel 클립보드 및 리본·연결 그래프 검증. V-012 진행 유지.
+
+## 2026-11-25 · Codex · V-014 세션 C
+- 한 일: 구조의 행 한 번 클릭·방향키 탐색·Enter 제목 편집·Esc 복귀, 번호 옆 공용 수준 칩, 상위 경로와 하위 이슈 탐색·추가, 역순 안내, 다중 선택 요약 및 분류 값·자유 그룹 카드. 수준·상위 변경에 구조 실행 취소·다시 적용을 연결했다. V-014 A·B·C 및 FLOW 완료를 기록했다.
+- 바뀐 파일: web/js/(inspector, structure, structissue, api).js, web/css/structure.css, app/(repositories/structure_free, routers/structure).py, DESIGN·SPEC·VOC·WORKLOG·FLOW.
+- 테스트: 전체 pytest 468 passed. Node 이슈 트리·구조 실행 취소·상세 분류 통과. 격리 Edge 1280px 다크·1024px 라이트에서 세 보기의 추가, 행 선택·제목·수준·상위·하위, 실행 취소·다시 적용, 분류/그룹 이름, 새로고침 후 이슈 및 연결 보존 확인. 스모크는 작업 사본 상위의 `verify-v014-b-edge.mjs`, `verify-v014-c-edge.mjs`.
+- 다음에 할 것 / 막힌 것: 원본 master의 미커밋 V-013·V-012·AGENTS·FLOW 및 데이터를 보존했다. 사용자 변경을 포함하는 통합 작업이 남아 있다. V-013은 불릿 모양·적용 화면 확인 대기. 그동안 진행할 수 있는 V-012는 별도 브랜치 `codex/v012-excel-fidelity-1125`의 `d929bab`부터 실제 Excel 클립보드와 서식 저장 모델을 검증한다.
+
+## 2026-11-25 · Codex · V-014 세션 B
+- 한 일: 구조 세 보기에서 제목·수준·상위·위치를 고르는 공통 추가 시트 적용. 분류 값 가져오기·제외, 자유 배치 그룹/행 앞뒤 배치, Ctrl+Enter·Shift+Enter, 수준 생성·이름 변경·순서·기본값·삭제·복원과 분류 보기 안내를 연결했다. 자유 배치 이슈 생성과 배치는 한 SQLite 트랜잭션으로 저장한다.
+- 바뀐 파일: 할일·자유 배치 저장소와 라우터, 구조·수준 시트·우클릭 메뉴, 구조 CSS, 구조 API 회귀 테스트, DESIGN·SPEC·VOC·FLOW.
+- 테스트: 전체 pytest 468 통과. Node 이슈 트리 통과. 격리 Edge에서 세 보기의 에픽·이슈 추가, 분류 값 적용과 제거, 자유 배치 앞뒤와 상위 연결, 칩 생성·이름·순서·기본·삭제·복원, 단축키 켬/끔, 1280 다크·1024 라이트 확인.
+- 다음에 할 것 / 막힌 것: 세션 C에서 행 한 번 클릭·상세창 번호 옆 공용 수준 칩·상하위 편집·구조 실행 취소를 이어서 구현하고, 수용 기준 전체를 확인한 후에 V-014를 완료 처리한다. 원본 master의 사용자 변경과 V-013·V-012 기록을 보존한 상태에서 통합을 검토한다.
+
+## 2026-11-25 · Codex · V-014 세션 A
+- 한 일: 마이그레이션 014로 기존 NULL을 실제 기본 수준으로 이관. 수준과 상위 연결을 독립적으로 수정하고, 순환은 계속 거부한다. 수준 삭제 시 인접 수준으로 이동하고 같은 ID로 복원한다. CLI `task add/set --level 이름`, 기존 이슈 계층·상세창 호환, 구조 표 역순 표시, 상세창의 모든 이슈 삭제에 동일 ID 복원 적용.
+- 바뀐 파일: migrations/014_issue_level_unify.sql, app/의 이슈 수준·할일·휴지통·CLI, web/js/의 구조·수준 시트·상세·이슈 삭제, 관련 테스트 및 SPEC·DECISIONS(D-49)·DESIGN·VOC·FLOW.
+- 테스트: 전체 pytest 467 통과, Node 이슈 트리 모델 통과. 가짜 DB·vault의 Edge에서 상세 수준 변경 → 하위 역순 표시 → 일지 본문 유지 → 새로고침 → 삭제·되돌리기로 같은 ID와 상하위 연결 복원 확인.
+- 다음에 할 것 / 막힌 것: V-014 진행 중이고 FLOW done:false. 다음 세션은 B(세 보기 공통 추가·수준 칩·단축키), 이후 C(행 한 번 클릭·상세창 맨 위 수준 선택·상위/하위·구조 실행 취소). VOC의 사용자 확정 설계로 진행한다. 원본 master의 사용자 문서와 데이터는 보존했다. 통합 전에 원본 VOC·FLOW의 V-013·V-012 및 사용자 변경을 대조해 보존한다.
 
 ## 2026-11-25 · Codex · V-012 단일 Excel 셀 본문 붙여넣기
 - 한 일: 노트·이슈 메모에서 Excel로 확인한 단일 셀 HTML도 버전형 표에 저장한다. 일반 문서의 1셀 래퍼와 일지 붙여넣기는 기존 규칙을 쓴다. Excel 표의 선택 셀에서 붙인 경우 새 표가 본문에 생기지 않도록 차단하고 F2 안내를 표시한다.

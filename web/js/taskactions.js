@@ -15,33 +15,23 @@ export async function writeTask(id, data) {
   }
 }
 
-// Delete with the inspector's undo: the toast re-creates the task from its snapshot.
+// Restore the same issue ID and links through the shared structure trash.
 export async function deleteTaskUndoable(id, after) {
-  const snapshot = { ...hub.task(id) };
   try {
-    // V-011: an upper-level issue or one with sub-issues goes through the structure trash, so undo brings back the
-    // same id with its children's links (children move up to its parent meanwhile, nothing is lost)
     const items = [{ kind: "issue", id: Number(id) }];
-    const impact = snapshot.level_id != null ? { subtasks: 1 } : await api.structureDeletePreview({ items, children: "move_up" });
-    if (impact.subtasks) {
-      const res = await api.structureDelete({ items, children: "move_up" });
-      hub.applyDays(res.journal_days);
-      hub.emit({ kind: "task", id });
-      after?.();
-      toast(`#${snapshot.id} 삭제했어요 · 하위 이슈는 한 단계 위로 올라갔어요`, {
-        ms: 8000,
-        action: { label: "되돌리기", run: async () => { const r = await api.structureRestore(res.trash_id); hub.applyDays(r.journal_days); hub.emit({ kind: "task", id }); } },
-      });
-      return;
-    }
-    await hub.deleteTask(id);
+    const res = await api.structureDelete({ items, children: "move_up" });
+    hub.applyDays(res.journal_days);
+    hub.emit({ kind: "task", id });
     after?.();
-    toast(`#${snapshot.id} 삭제했어요`, {
+    const detail = res.impact?.subtasks ? " · 하위 이슈는 한 단계 위로 올라갔어요" : "";
+    toast(`#${id} 삭제했어요${detail}`, {
+      ms: 8000,
       action: {
         label: "되돌리기",
         run: async () => {
-          const { id: _id, created_at, updated_at, props, ...rest } = snapshot;
-          await hub.createTask(Object.fromEntries(Object.entries(rest).filter(([, v]) => v != null && v !== "")));
+          const restored = await api.structureRestore(res.trash_id);
+          hub.applyDays(restored.journal_days);
+          hub.emit({ kind: "task", id });
         },
       },
     });

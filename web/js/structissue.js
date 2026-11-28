@@ -2,16 +2,14 @@
 //  - "이슈 추가": one sheet for every level (에픽 … 이슈) and every view mode (hierarchy / classification / free layout)
 //  - "이슈 계층 편집": rename, shape, color, order, add, delete levels + bring classification values in as issues
 //  - "상위 바꾸기": pick a parent issue (buttons + search, D-12)
-// The leaf level "이슈" is implicit (level_id null) and always the lowest.
 import { api } from "./api.js";
+import { registerContext } from "./contextmenu.js";
 import { COLORS, SHAPES, colorName, issueIcon, levelIcon, shapeName } from "./levels.js";
 import { button, confirmSheet, openSheet } from "./sheet.js";
 import { toast } from "./toast.js";
 import { el, svg } from "./ui.js";
 
-export const LEAF_LABEL = "이슈";
-const rank = (levels, id) => (id == null ? 0 : levels.find((l) => l.id === id)?.rank ?? 0);
-export const levelLabel = (levels, id) => (id == null ? LEAF_LABEL : levels.find((l) => l.id === id)?.label ?? LEAF_LABEL);
+const rank = (levels, id) => levels.find((l) => l.id === id)?.rank ?? 0;
 export function levelGlyph(level, cls = "i") { return level ? levelIcon(level, cls) : issueIcon(cls); }
 
 function chips(label, items, current, onPick) {
@@ -40,81 +38,244 @@ function field(label, ...content) {
   return r;
 }
 
+// The chip group owns level administration. Callers own the issue's selected level.
+export function levelChips({ levels, current, onPick, onChanged, label = "이슈 수준" }) {
+  const wrap = el("div", "level-picker");
+  const options = el("div", "chips");
+  options.setAttribute("role", "group");
+  options.setAttribute("aria-label", label);
+  const status = el("div", "level-status");
+  status.setAttribute("role", "status");
+  wrap.append(options, status);
+  let busy = false;
+
+  const report = (message, error = false) => {
+    status.replaceChildren(el("span", error ? "ferr" : "hint", message));
+  };
+  const change = async (op, message, { select, focus } = {}) => {
+    if (busy) return false;
+    busy = true;
+    report("");
+    try {
+      const result = await op();
+      levels = await api.structureLevels();
+      if (select) current = result.id;
+      if (!levels.some((l) => l.id === current)) current = levels.find((l) => l.is_default)?.id;
+      paint(focus ?? current);
+      report(message);
+      await onChanged?.(levels, current, (value) => {
+        if (value === current) return;
+        current = value;
+        const active = options.contains(document.activeElement);
+        paint(active ? value : undefined);
+      });
+      return result;
+    } catch (e) {
+      report(e.message, true);
+      return false;
+    } finally {
+      busy = false;
+    }
+  };
+  function editName(chip, item) {
+    if (busy || options.querySelector("input")) return;
+    const form = el("form", "level-name-edit");
+    const input = el("input", "pg-path");
+    input.maxLength = 30;
+    input.value = item?.label ?? "";
+    input.placeholder = "수준 이름";
+    input.setAttribute("aria-label", item ? "수준 이름 바꾸기" : "새 수준 이름");
+    const cancel = () => { form.replaceWith(chip); chip.focus(); };
+    const save = button("저장", "sm", null);
+    save.type = "submit";
+    form.append(input, save, button("취소", "sm quiet", cancel));
+    chip.replaceWith(form);
+    form.addEventListener("keydown", (e) => {
+      if (e.isComposing || input.disabled) return;
+      if (e.key === "Enter" && e.target === input) {
+        e.preventDefault();
+        form.requestSubmit();
+        return;
+      }
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      cancel();
+    });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const value = input.value.trim();
+      if (!value) { input.focus(); return; }
+      if (value === item?.label) { cancel(); return; }
+      const index = levels.findIndex((l) => l.id === current);
+      input.disabled = true;
+      const ok = await change(
+        () => item ? api.patchLevel(item.id, { label: value }) : api.addLevel({ label: value, index: Math.max(0, index) }),
+        item ? "수준 이름을 바꿨어요." : "새 수준을 만들었어요.",
+        { select: !item, focus: item?.id },
+      );
+      if (!ok && input.isConnected) { input.disabled = false; input.focus(); }
+    });
+    input.focus();
+    input.select();
+  }
+
+  async function remove(item, index) {
+    const target = levels[index + 1] ?? levels[index - 1];
+    if (busy || !target) return;
+    const ok = await confirmSheet({
+      title: `수준 ‘${item.label}’ 삭제`,
+      content: [el("p", "", `이슈 ${item.used_by}개는 ‘${target.label}’ 수준으로 옮겨요.`)],
+      confirmLabel: "삭제", danger: true,
+    });
+    if (!ok) return;
+    const removed = await change(() => api.deleteLevel(item.id), `‘${item.label}’ 수준을 지웠어요.`);
+    if (!removed) return;
+    const undo = button("되돌리기", "sm", () =>
+      change(() => api.structureRestore(removed.trash_id), "수준을 되돌렸어요.", { focus: item.id }));
+    status.append(undo);
+    undo.focus();
+  }
+
+  function paint(focusId) {
+    options.replaceChildren();
+    levels.forEach((item, index) => {
+      const chip = el("button", "chip");
+      chip.type = "button";
+      chip.dataset.levelId = item.id;
+      chip.append(levelGlyph(item, "i s"), el("span", "", item.label));
+      if (item.is_default) {
+        const star = el("span", "level-star", "★");
+        star.setAttribute("aria-label", "기본 수준");
+        chip.append(star);
+      }
+      chip.setAttribute("aria-pressed", String(item.id === current));
+      chip.title = "수준 선택 · 우클릭 또는 Shift+F10으로 관리";
+      chip.addEventListener("click", () => {
+        if (busy) return;
+        current = item.id;
+        for (const b of options.querySelectorAll("[aria-pressed]")) b.setAttribute("aria-pressed", String(b === chip));
+        onPick(item.id);
+      });
+      const move = (offset) => {
+        const ids = levels.map((l) => l.id);
+        [ids[index], ids[index + offset]] = [ids[index + offset], ids[index]];
+        return change(() => api.orderLevels(ids), "수준 순서를 바꿨어요.", { focus: item.id });
+      };
+      registerContext(chip, () => [[
+        { label: "이름 바꾸기", icon: "edit", run: () => editName(chip, item) },
+        { label: "위로", icon: "arrow-up", disabled: index === 0 && "맨 위 수준이에요", run: () => move(-1) },
+        { label: "아래로", icon: "arrow-down", disabled: index === levels.length - 1 && "맨 아래 수준이에요", run: () => move(1) },
+        { label: "기본 수준으로", checked: item.is_default, disabled: item.is_default && "이미 기본 수준이에요", run: () => change(() => api.patchLevel(item.id, { is_default: true }), "기본 수준을 바꿨어요.", { focus: item.id }) },
+        { label: "삭제…", icon: "trash", danger: true, disabled: levels.length === 1 && "마지막 수준은 삭제할 수 없어요", run: () => remove(item, index) },
+      ]]);
+      options.append(chip);
+      if (item.id === focusId) chip.focus();
+    });
+    const add = button("+ 새 수준", "sm", () => editName(add));
+    add.classList.add("chip");
+    options.append(add);
+  }
+  paint();
+  return wrap;
+}
+
 // ---- 이슈 추가 ------------------------------------------------------------------------------------
-// mode "issues": parents = [context issue and its ancestors]; "fields"/"free": `place` says where it lands.
-// submit({ title, level_id, parent_task_id }) -> created task. Returns nothing; the caller repaints.
-export function openAddIssueSheet({ mode, levels, parents = [], place = "", initialParent = null, initialLevel, submit }) {
-  const s = openSheet({
-    title: "이슈 추가",
-    sub: mode === "issues" ? "에픽 같은 상위 이슈도, 그 아래의 이슈도 여기서 바로 만들어요." : place || "분류 없이 최상위에 추가해요.",
-  });
+export function openAddIssueSheet({
+  mode, levels, tasks, initialParent = null, asChild = false, location = [], props = {}, onLevelsChanged, onClose, submit,
+}) {
+  const s = openSheet({ title: "이슈 추가", onClose });
   let parent = initialParent;
-  const parentRank = () => (parent == null ? Infinity : rank(levels, parents.find((p) => p.id === parent)?.level_id));
-  // default: the top level at the top; under a parent, the level just below it (Jira: epic -> its issues)
-  const top = () => (parent == null ? levels[0]?.id ?? null : levels.find((l) => l.rank < parentRank())?.id ?? null);
-  let level = initialLevel !== undefined ? initialLevel : top();
+  let level = levels.find((l) => l.is_default)?.id ?? null;
+  if (asChild && parent != null) {
+    const parentRank = rank(levels, tasks.find((t) => t.id === parent)?.level_id);
+    level = levels.find((l) => l.rank < parentRank)?.id ?? level;
+  }
+  const values = { ...props };
   let again = false;
   const input = el("input", "pg-title");
   input.type = "text";
   input.maxLength = 200;
-  input.placeholder = "제목 — 예: 프로젝트, 스터디, LOT-TEST-001 리뷰";
+  input.placeholder = "제목";
   input.setAttribute("aria-label", "이슈 제목");
-  const rows = el("div", "pg-values");
+  const picker = levelChips({
+    levels, current: level,
+    onPick: (id) => { level = id; },
+    onChanged: async (next, selected) => { levels = next; level = selected; await onLevelsChanged?.(next); },
+  });
+  const positions = el("div", "issue-add-position");
+  const repaintParent = (focus = false) => {
+    positions.replaceChildren();
+    if (mode !== "issues") {
+      const path = el("div", "chips");
+      if (mode === "fields") {
+        for (const { key, label } of location) {
+          if (!Object.hasOwn(values, key)) continue;
+          const chip = button(`${label} 빼기`, "sm", () => { delete values[key]; repaintParent(); });
+          chip.classList.add("chip");
+          path.append(chip);
+        }
+      } else {
+        for (const label of location) path.append(el("span", "lvchip", label));
+      }
+      if (!path.childElementCount) path.append(el("span", "hint", mode === "free" ? "최상위" : "분류 값 미지정"));
+      positions.append(field(mode === "free" ? "그룹" : "분류 값", path));
+    }
+    const parentPath = [];
+    const byId = new Map(tasks.map((t) => [t.id, t]));
+    for (let t = byId.get(parent); t && byId.has(t.id); t = byId.get(t.parent_task_id)) {
+      parentPath.unshift(`#${t.id} ${t.title}`);
+      byId.delete(t.id);
+    }
+    const controls = el("div", "chips");
+    const chooseParent = button(parent == null ? "상위 이슈 지정…" : "다른 상위…", "sm", () =>
+      openParentSheet({
+        task: { id: null, parent_task_id: parent }, tasks, levels,
+        onPick: (id) => { parent = id; repaintParent(true); },
+      }));
+    if (parentPath.length || mode === "issues") controls.append(el("span", "lvchip", parentPath.join(" › ") || "최상위"));
+    controls.append(chooseParent);
+    if (parent != null) controls.append(button("최상위", "sm quiet", () => { parent = null; repaintParent(true); }));
+    positions.append(field("상위", controls));
+    if (mode !== "issues" && parent != null) positions.append(field("", el("span", "hint", "상하위 연결은 이슈 계층 보기에서 보여요.")));
+    if (focus) chooseParent.focus();
+  };
+  repaintParent();
+  const more = el("button", "chip", "계속 추가");
+  more.type = "button";
+  more.setAttribute("aria-pressed", "false");
+  more.addEventListener("click", () => { again = !again; more.setAttribute("aria-pressed", String(again)); });
   const err = el("p", "ferr");
   err.setAttribute("role", "alert");
   const made = el("p", "hint");
   made.setAttribute("aria-live", "polite");
+  const rows = el("div", "pg-values");
+  rows.append(field("수준", picker), positions, field("", more));
 
-  const paint = () => {
-    rows.replaceChildren();
-    if (mode === "issues") {
-      const pr = parentRank();
-      const lvItems = [...levels, null].map((l) => ({
-        value: l ? l.id : null, label: l ? l.label : LEAF_LABEL, icon: levelGlyph(l, "i s"),
-        disabled: l && l.rank > pr ? "상위 이슈보다 높은 수준은 그 아래에 만들 수 없어요" : "",
-      }));
-      rows.append(field("수준", chips("이슈 수준", lvItems, level, (v) => { level = v; paint(); })));
-      const pItems = [{ value: null, label: "최상위" }, ...parents.map((p) => ({
-        value: p.id, label: `#${p.id} ${p.title}`, icon: levelGlyph(levels.find((l) => l.id === p.level_id), "i s"),
-      }))];
-      rows.append(field("상위", chips("상위 이슈", pItems, parent, (v) => {
-        parent = v;
-        level = top();
-        paint();
-      })));
-    }
-    const more = el("button", "chip", "계속 추가");
-    more.type = "button";
-    more.title = "만든 뒤 창을 닫지 않고 다음 이슈를 이어서 입력해요";
-    more.setAttribute("aria-pressed", String(again));
-    more.addEventListener("click", () => { again = !again; more.setAttribute("aria-pressed", String(again)); });
-    rows.append(field("", more));
-  };
-  paint();
   const ok = button("추가", "pri", null);
-  // Submissions run one after another; with "계속 추가" the box clears at once so the next title can be typed
-  // while the previous one is still being saved (a fast typist never merges two titles).
   let chain = Promise.resolve();
   let pending = 0;
   const go = () => {
     const title = input.value.trim();
     if (!title) { if (!pending) { err.textContent = "제목을 입력하세요."; input.focus(); } return; }
-    const spec = { title, level_id: mode === "issues" ? level : null, parent_task_id: mode === "issues" ? parent : null };
+    if (ok.disabled) return;
+    const spec = { title, level_id: level, parent_task_id: parent, props: { ...values } };
+    const keepOpen = again;
     err.textContent = "";
-    if (again) input.value = "";
-    else ok.disabled = true;
+    input.value = "";
+    ok.disabled = !keepOpen;
     pending++;
     chain = chain.then(async () => {
       try {
         const t = await submit(spec);
-        if (again) made.textContent = `#${t.id} ‘${t.title}’를 만들었어요. 다음 제목을 입력하세요.`;
+        if (keepOpen) made.textContent = `#${t.id} ‘${t.title}’를 만들었어요.`;
         else s.close();
       } catch (e) {
-        err.textContent = `‘${spec.title}’ · ${e.message}`;
-        if (!input.value) input.value = spec.title;
+        err.textContent = `‘${title}’ · ${e.message}`;
+        if (!input.value) input.value = title;
       } finally {
         pending--;
-        ok.disabled = false;
+        if (!pending) ok.disabled = false;
       }
     });
   };
@@ -126,7 +287,7 @@ export function openAddIssueSheet({ mode, levels, parents = [], place = "", init
 }
 
 // ---- 상위 바꾸기 ------------------------------------------------------------------------------------
-// Candidates: not itself, not inside its own subtree, and not a lower level than the issue (rank rule).
+// Only the issue itself and its descendants are excluded.
 export function parentCandidates(task, tasks, levels) {
   const kids = new Map();
   for (const t of tasks) {
@@ -137,15 +298,15 @@ export function parentCandidates(task, tasks, levels) {
   const banned = new Set([task.id]);
   const stack = [task.id];
   while (stack.length) for (const c of kids.get(stack.pop()) || []) if (!banned.has(c)) { banned.add(c); stack.push(c); }
-  const mine = rank(levels, task.level_id);
   const hasKids = new Set(kids.keys());
   return tasks
-    .filter((t) => !banned.has(t.id) && rank(levels, t.level_id) >= mine)
+    .filter((t) => !banned.has(t.id))
     .sort((a, b) => rank(levels, b.level_id) - rank(levels, a.level_id) || Number(hasKids.has(b.id)) - Number(hasKids.has(a.id)) || a.id - b.id);
 }
 
 export function openParentSheet({ task, tasks, levels, onPick }) {
-  const s = openSheet({ title: `#${task.id} 상위 이슈`, sub: "고른 이슈의 하위로 옮겨요. 하위 이슈도 함께 따라가요." });
+  const s = openSheet({ title: task.id == null ? "상위 이슈 지정" : `#${task.id} 상위 이슈`,
+    sub: task.id == null ? "새 이슈의 상위를 골라요." : "고른 이슈의 하위로 옮겨요. 하위 이슈도 함께 따라가요." });
   const all = parentCandidates(task, tasks, levels);
   const q = el("input", "pg-path");
   q.type = "search";
@@ -174,7 +335,7 @@ export function openParentSheet({ task, tasks, levels, onPick }) {
       add(`#${t.id} ${t.title}${lv ? ` · ${lv.label}` : ""}`, t.id, levelGlyph(lv), task.parent_task_id === t.id);
     }
     if (hits.length > 60) list.append(el("p", "hint", `${hits.length - 60}개 더 있어요. 검색으로 좁혀 보세요.`));
-    if (!hits.length && k) list.append(el("p", "hint", "맞는 이슈가 없어요. 더 낮은 수준의 이슈 아래로는 옮길 수 없어요."));
+    if (!hits.length && k) list.append(el("p", "hint", "맞는 이슈가 없어요."));
   };
   q.addEventListener("input", paint);
   paint();
@@ -240,10 +401,10 @@ export function openLevelSheet({ onChanged }) {
     down.disabled = i === levels.length - 1;
     down.addEventListener("click", () => move(1));
     const del = button("삭제", "sm quiet danger", async () => {
-      const below = levels[i + 1]?.label ?? LEAF_LABEL;
+      const target = levels[i + 1] ?? levels[i - 1];
       const ok = await confirmSheet({
         title: `수준 ‘${l.label}’ 삭제`,
-        content: [el("p", "", l.used_by ? `이 수준의 이슈 ${l.used_by}개는 지우지 않고 ‘${below}’ 수준으로 바뀌어요. 상위·하위 연결은 그대로예요.` : "이 수준을 쓰는 이슈가 없어요.")],
+        content: [el("p", "", l.used_by ? `이 수준의 이슈 ${l.used_by}개는 지우지 않고 ‘${target.label}’ 수준으로 바뀌어요. 상위·하위 연결은 그대로예요.` : "이 수준을 쓰는 이슈가 없어요.")],
         confirmLabel: "삭제", danger: true,
       });
       if (!ok) return;
@@ -253,8 +414,10 @@ export function openLevelSheet({ onChanged }) {
       } catch (er) { fail(er); }
     });
     del.setAttribute("aria-label", `${l.label} 수준 삭제`);
+    del.disabled = levels.length === 1;
     const grow = el("span", "grow");
     grow.append(name);
+    if (l.is_default) grow.append(el("small", "hint", "기본 수준"));
     li.append(shape, grow, used, up, down, del);
     return li;
   }
@@ -269,7 +432,7 @@ export function openLevelSheet({ onChanged }) {
   const where = el("div", "chips");
   where.setAttribute("role", "group");
   where.setAttribute("aria-label", "새 수준 위치");
-  const whereChips = [["top", "맨 위"], ["bottom", "이슈 바로 위"]].map(([k, label]) => {
+  const whereChips = [["top", "맨 위"], ["bottom", "맨 아래"]].map(([k, label]) => {
     const b = el("button", "chip", label);
     b.type = "button";
     b.setAttribute("aria-pressed", String(k === at));
@@ -305,7 +468,12 @@ export function openLevelSheet({ onChanged }) {
       const n = f.options.filter((o) => !o.archived).length;
       body.replaceChildren(
         field("분류", chips("가져올 분류", usable.map((x) => ({ value: x.key, label: x.label })), key, (v) => { key = v; paint(); })),
-        field("수준", chips("만들 수준", levels.map((l) => ({ value: l.id, label: l.label, icon: levelIcon(l, "i s") })), lid, (v) => { lid = v; paint(); })),
+        field("수준", levelChips({ levels, current: lid, label: "만들 수준", onPick: (v) => { lid = v; }, onChanged: async (next, selected) => {
+          levels = next;
+          lid = selected;
+          list.replaceChildren(...levels.map(rowFor));
+          await onChanged?.();
+        } })),
         field("", el("span", "hint", `‘${f.label}’ 값 ${n}개마다 이슈를 하나씩 만들고, 그 값을 가진 최상위 이슈를 아래로 넣어요. 분류 값은 그대로 남고, 다시 해도 중복으로 만들지 않아요.`)),
         field("", button("가져오기", "sm", async () => {
           try {
@@ -327,19 +495,13 @@ export function openLevelSheet({ onChanged }) {
     try { [levels, fields] = await Promise.all([api.structureLevels(), api.fieldsAll()]); } catch (e) { fail(e); return; }
     err.textContent = "";
     list.replaceChildren(...levels.map(rowFor));
-    const leaf = el("li", "lvrow fixed");
-    leaf.append(el("span", "lvorder", String(levels.length + 1)));
-    const pick = el("span", "lvpick static");
-    pick.append(issueIcon(), el("span", "", LEAF_LABEL));
-    leaf.append(pick, el("span", "grow"), el("small", "hint", "가장 아래 수준 · 고정"));
-    list.append(leaf);
     await paintConvert();
   }
 
   const sec = el("section", "ds");
   sec.append(el("h3", "", "수준"), list, err);
   const sec2 = el("section", "ds");
-  sec2.append(el("h3", "", "수준 추가"), where, addForm, el("p", "hint", "상위 이슈는 같거나 더 높은 수준이어야 해요. 순서를 바꿔 이 규칙이 깨지면 바꾸지 않고 알려 줘요."));
+  sec2.append(el("h3", "", "수준 추가"), where, addForm, el("p", "hint", "수준 순서는 같은 상위에 속한 이슈의 표시 순서에 적용돼요."));
   s.body.append(sec, sec2, conv);
   s.foot.append(button("닫기", "pri", () => s.close()));
   load();

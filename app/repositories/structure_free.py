@@ -152,6 +152,26 @@ def _apply(conn: sqlite3.Connection, task_ids: list[int], nodes: dict[int, dict[
     return changed
 
 
+def create_task(
+    conn: sqlite3.Connection, data: dict[str, Any], parent: int | None, before: tuple[str, int] | None,
+) -> dict[str, Any]:
+    """Create and place a task atomically, inheriting its destination's classification."""
+    ensure(conn)
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        nodes = nodes_by_id(conn)
+        if parent is not None and parent not in nodes:
+            raise TaskError("대상 그룹을 찾을 수 없습니다.", 404)
+        order = siblings(conn, parent)
+        if before is not None and before not in order:
+            raise TaskError("기준 위치가 대상 그룹 안에 없습니다.", 409)
+        props = {**(data.get("props") or {}), **assignments(nodes, parent)}
+        task = tasks_repo.insert(conn, {**data, "props": props})
+        order.insert(len(order) if before is None else order.index(before), ("issue", task["id"]))
+        write_order(conn, parent, order)
+        return task
+
+
 def move(conn: sqlite3.Connection, data: Any) -> dict[str, Any]:
     """Move a group (with its children) or an issue under `parent_id` (null = top level), before `before`
     ({kind, id}) or at the end. Groups cannot enter their own subtree."""
@@ -192,12 +212,26 @@ def move(conn: sqlite3.Connection, data: Any) -> dict[str, Any]:
     return {"free": get_free(conn), "changed": changed}
 
 
-def add_group(conn: sqlite3.Connection, data: Any) -> dict[str, Any]:
+def _group_label(data: Any) -> str:
     if not isinstance(data, dict):
         raise TaskError("요청 형식이 올바르지 않습니다.")
     label = str(data.get("label") or "").strip()
     if not label or len(label) > 50:
         raise TaskError("그룹 이름은 1~50자로 입력하세요.")
+    return label
+
+
+def rename_group(conn: sqlite3.Connection, node_id: int, data: Any) -> dict[str, Any]:
+    label = _group_label(data)
+    changed = conn.execute("UPDATE structure_nodes SET label = ? WHERE id = ?", (label, node_id))
+    if not changed.rowcount:
+        raise TaskError("대상 그룹을 찾을 수 없습니다.", 404)
+    conn.commit()
+    return get_free(conn)
+
+
+def add_group(conn: sqlite3.Connection, data: Any) -> dict[str, Any]:
+    label = _group_label(data)
     parent = data.get("parent_id")
     ensure(conn)
     if parent is not None and parent not in nodes_by_id(conn):

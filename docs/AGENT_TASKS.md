@@ -23,6 +23,6 @@
 
 기본 명령은 `python -m app.cli [--db data/mi_planner.db] [--vault vault] <명령>`이다. 출력은 JSON이고 오류는 `{"error": "..."}`와 종료 코드 1을 반환한다.
 
-- 할일은 `task list [--open --overdue --due-within N --status todo --eval-id N --q 글자]`, `task show ID`, `task add "제목" [--priority 1..3 --due YYYY-MM-DD --planned … --requester … --eval-id N --note …]`, `task set ID --status doing --due none`, `task done ID`.
+- 할일은 `task list [--open --overdue --due-within N --status todo --eval-id N --q 글자]`, `task show ID`, `task add "제목" [--priority 1..3 --due YYYY-MM-DD --planned … --requester … --eval-id N --note … --level 이름]`, `task set ID --status doing --due none [--level 이름]`, `task done ID`.
 - 평가·MOS는 `eval list`, `eval show ID [--full]`, `eval stalled`, `eval set-stage ID --cells 1,2,3 --stage 단계키 [--at YYYY-MM-DDTHH:mm]`, `eval set-cell CELL --value 항목=값 --note 메모`, `eval history CELL`. 항목은 key나 label로 입력한다. 값은 필드 형식에 맞춰 변환한다.
 - 검색은 `search 글자`. 노트·일지는 `vault/`의 일반 파일로 다룬다. `none`으로 값을 비운다. RCP 쓰기 명령은 없다(D-11).

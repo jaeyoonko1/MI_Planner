@@ -47,6 +47,11 @@ def free_add_group(body: dict[str, Any], conn=Depends(get_conn)) -> dict:
     return structure_free.add_group(conn, body)
 
 
+@router.patch("/free/groups/{node_id}")
+def free_rename_group(node_id: int, body: dict[str, Any], conn=Depends(get_conn)) -> dict:
+    return structure_free.rename_group(conn, node_id, body)
+
+
 @router.post("/copy", status_code=201)
 def copy(request: Request, body: dict[str, Any], conn=Depends(get_conn)) -> dict:
     res = structure_copy.copy(conn, body)
@@ -106,5 +111,5 @@ def patch_level(level_id: int, body: dict[str, Any], conn=Depends(get_conn)) -> 
 
 @router.delete("/levels/{level_id}")
 def delete_level(level_id: int, conn=Depends(get_conn)) -> dict:
-    """Issues of the level move one level down; restorable through /trash/{id}/restore."""
+    """Issues move to an adjacent level; restorable through /trash/{id}/restore."""
     return issue_levels.delete_level(conn, level_id)

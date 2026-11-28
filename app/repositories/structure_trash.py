@@ -453,8 +453,12 @@ def _apply_restore(conn: sqlite3.Connection, vault: Vault, trash_id: int,
     for gid in by_id:
         put(gid)
     nodes_now = set(sf.nodes_by_id(conn))
+    level_ids = {r["id"] for r in conn.execute("SELECT id FROM issue_levels")}
     for s in p["tasks"]:
-        _insert(conn, "tasks", s["row"], skip=("parent_task_id",))
+        row = s["row"]
+        if row.get("level_id") not in level_ids:
+            row = {**row, "level_id": None}
+        _insert(conn, "tasks", row, skip=("parent_task_id",))
     for s in p["tasks"]:
         tid, par = s["row"]["id"], s["row"].get("parent_task_id")
         if par is not None and conn.execute("SELECT 1 FROM tasks WHERE id = ?", (par,)).fetchone():

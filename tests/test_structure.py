@@ -21,7 +21,7 @@ def test_initial_view_is_issue_hierarchy_with_epic_type_ready(client) -> None:
     # V-011: an unsaved view opens as the issue hierarchy; the classification levels stay ready for 분류 기준
     v = client.get("/api/structure/view").json()
     assert v["mode"] == "issues" and keys(v) == ["epic", "type"] and not v["saved"]
-    assert [lv["label"] for lv in v["issue_levels"]] == ["에픽"]
+    assert [lv["label"] for lv in v["issue_levels"]] == ["에픽", "이슈"]
     assert (v["levels"][0]["icon"], v["levels"][0]["color"]) == ("layers", "violet")
     assert "priority" in keys(v, "available") and "due_date" not in keys(v, "available")
 
@@ -103,3 +103,30 @@ def test_free_mode_is_saved_and_restored(client) -> None:
     v = client.put("/api/structure/view", json={"mode": "free", "levels": ["epic", "type"]}).json()
     assert v["mode"] == "free" and v["free_reason"] is None
     assert client.get("/api/structure/view").json()["mode"] == "free"
+
+
+def test_create_issue_and_free_placement_are_atomic(client) -> None:
+    assert client.post("/api/todos/fields/epic/options", json={"label": "Test area"}).status_code == 201
+    value = client.get("/api/todos/fields/epic").json()["options"][0]["value"]
+    anchor = client.post("/api/todos", json={"title": "Anchor", "props": {"epic": value}}).json()
+    layout = client.get("/api/structure/free").json()
+    group = next(node for node in layout["nodes"] if node["field_key"] == "type")
+    epic, _ = client.get("/api/structure/levels").json()["items"]
+    spec = {
+        "title": "Placed issue",
+        "level_id": epic["id"],
+        "parent_task_id": anchor["id"],
+        "free_placement": {"parent_id": group["id"], "before": {"kind": "issue", "id": anchor["id"]}},
+    }
+    response = client.post("/api/todos", json=spec)
+    assert response.status_code == 201, response.text
+    task = response.json()
+    assert task["level_id"] == epic["id"] and task["parent_task_id"] == anchor["id"]
+    assert task["props"]["epic"] == value
+    layout = client.get("/api/structure/free").json()
+    assert [row["task_id"] for row in layout["items"] if row["node_id"] == group["id"]] == [task["id"], anchor["id"]]
+
+    spec["free_placement"]["before"]["id"] = 99999
+    assert client.post("/api/todos", json=spec).status_code == 409
+    assert {row["id"] for row in client.get("/api/todos").json()["items"]} == {task["id"], anchor["id"]}
+    assert client.get("/api/structure/free").json() == layout

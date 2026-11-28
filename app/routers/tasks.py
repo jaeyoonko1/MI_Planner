@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Iterator, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 
 from app import db, journal, journal_links, memo, search
-from app.repositories import tasks as repo
+from app.repositories import structure_free, tasks as repo
 from app.vault import content_revision
 
 router = APIRouter(prefix="/api/todos")
+
+
+class FreeAnchor(BaseModel):
+    kind: Literal["group", "issue"]
+    id: StrictInt
+
+
+class FreePlacement(BaseModel):
+    parent_id: StrictInt | None = None
+    before: FreeAnchor | None = None
 
 
 class TodoIn(BaseModel):
@@ -25,7 +35,9 @@ class TodoIn(BaseModel):
     note: str | None = None
     props: dict | None = None
     mark: str | None = None
-    level_id: int | None = None
+    level_id: StrictInt | None = None
+
+    free_placement: FreePlacement | None = None
 
 
 class TodoPatch(BaseModel):
@@ -42,7 +54,7 @@ class TodoPatch(BaseModel):
     note_revision: str | None = None
     props: dict | None = None
     mark: str | None = None
-    level_id: int | None = None
+    level_id: StrictInt | None = None
 
 
 def get_conn(request: Request) -> Iterator:
@@ -105,8 +117,13 @@ def list_todos(
 
 @router.post("", status_code=201)
 def create_todo(request: Request, body: TodoIn, conn=Depends(get_conn)) -> dict:
-    data = body.model_dump(exclude_none=True)
-    task = repo.create(conn, data)
+    data = body.model_dump(exclude_none=True, exclude={"free_placement"})
+    place = body.free_placement
+    if place is None:
+        task = repo.create(conn, data)
+    else:
+        before = (place.before.kind, place.before.id) if place.before else None
+        task = structure_free.create_task(conn, data, place.parent_id, before)
     return {**task, "journal_days": journal_links.after_task_change(request.app.state.vault, None, task)}
 
 

@@ -48,6 +48,7 @@ export const api = {
   structureFree: () => request("GET", "/api/structure/free"),
   structureFreeMove: (data) => request("POST", "/api/structure/free/move", data),
   structureAddGroup: (data) => request("POST", "/api/structure/free/groups", data),
+  structureRenameGroup: (id, label) => request("PATCH", `/api/structure/free/groups/${id}`, { label }),
   structureCopy: (data) => request("POST", "/api/structure/copy", data),
   structureDeletePreview: (data) => request("POST", "/api/structure/delete-preview", data),
   structureDelete: (data) => request("POST", "/api/structure/delete", data),

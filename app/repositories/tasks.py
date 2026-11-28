@@ -80,6 +80,10 @@ def _prepare(
     fields or inside props; top-level wins. A null value removes the key."""
     from app.repositories import task_fields as tf  # lazy: avoids an import cycle
 
+    if "level_id" in data:
+        from app.repositories import issue_levels
+
+        issue_levels.validate_level(conn, data["level_id"])
     data = dict(data)
     incoming = data.pop("props", None)
     if incoming is not None and not isinstance(incoming, dict):
@@ -136,39 +140,38 @@ def _check_parent(conn: sqlite3.Connection, task_id: int | None, parent_id: int 
 
 
 def create(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
-    from app.repositories import issue_levels  # lazy: avoids an import cycle
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        return insert(conn, data)
 
+
+def insert(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
+    """Insert a task within the caller's write transaction."""
     clean = _prepare(conn, data, None)
     _check_parent(conn, None, clean.get("parent_task_id"))
-    issue_levels.check_placement(conn, None, clean.get("level_id"), clean.get("parent_task_id"))
     now = _now()
     cols = [*clean, "created_at", "updated_at"]
     vals = [*clean.values(), now, now]
     cur = conn.execute(
         f"INSERT INTO tasks ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", vals
     )
-    conn.commit()
     return get(conn, int(cur.lastrowid))
 
 
 def update(conn: sqlite3.Connection, task_id: int, data: dict[str, Any]) -> dict[str, Any]:
-    current = get(conn, task_id)
-    clean = _prepare(conn, data, current)
-    if "parent_task_id" in clean:
-        _check_parent(conn, task_id, clean["parent_task_id"])
-    if "parent_task_id" in clean or "level_id" in clean:  # V-011: a child never sits above its parent
-        from app.repositories import issue_levels
-
-        issue_levels.check_placement(conn, task_id, clean.get("level_id", current.get("level_id")),
-                                     clean.get("parent_task_id", current.get("parent_task_id")))
-    if clean:  # always non-empty: props is rewritten
-        sets = ", ".join(f"{k} = ?" for k in clean)
-        conn.execute(
-            f"UPDATE tasks SET {sets}, updated_at = ? WHERE id = ?",
-            [*clean.values(), _now(), task_id],
-        )
-        conn.commit()
-    return get(conn, task_id)
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        current = get(conn, task_id)
+        clean = _prepare(conn, data, current)
+        if "parent_task_id" in clean:
+            _check_parent(conn, task_id, clean["parent_task_id"])
+        if clean:  # always non-empty: props is rewritten
+            sets = ", ".join(f"{k} = ?" for k in clean)
+            conn.execute(
+                f"UPDATE tasks SET {sets}, updated_at = ? WHERE id = ?",
+                [*clean.values(), _now(), task_id],
+            )
+        return get(conn, task_id)
 
 
 def delete(conn: sqlite3.Connection, task_id: int) -> None:

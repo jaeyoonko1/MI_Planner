@@ -583,14 +583,17 @@ data/recipes/.trash/                           정리된 blob (바로 지우지 
 - 자유 배치 위치는 `structure_nodes`(id, parent_id, label, field_key?, field_value?, position)와 `structure_items`(task_id, node_id, position)에만 저장한다. vault 페이지 트리와 별개. 그룹은 선택적으로 분류 값에 묶이며(`field_key/field_value`), 그 아래에 놓인 이슈는 그 값을 받는다. 처음 열 때 현재 계층(`structure_view.levels`)을 그룹으로 한 번 복제하고(`settings.structure_free_seeded`) 이후 편집은 유지한다.
 - `GET /api/structure/free` → `{nodes:[…], items:[{task_id,node_id,position}]}` (배치 안 된 이슈는 최상위 끝).
 - `POST /api/structure/free/move` `{kind:"group"|"issue", id, parent_id|null, before?:{kind,id}}` → `{free, changed:[task_id…]}`. 그룹은 하위와 함께 이동하고 자기 하위로 옮기면 400 `순환`. 옮긴 이슈(그룹이면 하위 이슈 전체)는 새 경로의 분류 값을 받는다. 이슈 ID 불변. 분류 보기에서의 이동은 `PATCH /api/todos/{id}`의 `props`.
+- `POST /api/todos`의 선택 입력 `free_placement: {parent_id: 정수|null, before?: {kind:"group"|"issue", id: 정수}|null}`는 새 이슈를 자유 배치에 원자적으로 배치한다. 생략한 기준 행은 그룹 맨 끝을 뜻한다. 그룹의 분류 값을 함께 적용하며 그룹 또는 기준 행이 유효하지 않으면 생성하지 않는다.
 - `POST /api/structure/free/groups` `{label, parent_id|null}` → `free` (분류 값에 묶이지 않은 그룹).
+- `PATCH /api/structure/free/groups/{node_id}` `{label}` → `free`. 그룹 표시 이름을 1~50자로 바꾸며 분류 연결·자식·배치 순서를 유지한다.
 - `POST /api/structure/copy` — `{kind:"issue", task_id}`(제목 + " · 복사본"), `{kind:"group", field_key, value, task_ids}`(분류 보기: choice 분류의 새 선택지 "X · 복사본"을 만들고 그 값으로 복사. `field_key:"epic"`이면 다른 유형 가지의 같은 에픽 이슈 전부 포함), `{kind:"node", node_id}`(자유 배치: 선택한 하위 트리만, 바인딩된 그룹은 새 선택지). 응답 `{created:[새 id…], map, option?, node_id?, free?}`. 복사본은 새 ID이며 상태·메모·props는 값 복사(원본과 독립). 계획일·페이지·평가 연결은 복사하지 않는다.
 - `POST /api/structure/delete-preview` · `POST /api/structure/delete` `{items:[{kind:"issue"|"group", id}], children:"move_up"|"delete"}` — 소프트 삭제(V-004, D-40, 마이그레이션 `012_structure_trash`). 미리보기는 `{issues, groups, children, moved_up, moved_groups, pages, journal_lines, subtasks, group_labels, issue_titles, needs_confirm}`; 삭제는 `{trash_id, summary, issues, groups, impact, journal_days, free}`. 한 요청 = 한 트랜잭션(실패하면 DB·휴지통으로 옮긴 페이지 모두 원복), 최대 500개. 그룹은 `children:"move_up"`이면 하위를 그 자리로 올리고 `"delete"`이면 하위 전체를 삭제. 이슈 페이지·이미지 폴더는 `vault/.trash`로.
 - `POST /api/structure/trash/{id}/restore` → `{trash_id, summary, issues, groups, journal_days, journal_skipped, free}` — 같은 ID·값·순서·그룹 소속·페이지 연결로 복원. 이미 복원했으면 409, 같은 번호 이슈·그룹이 이미 있으면 409(변경 없음). `GET /api/structure/trash` → `{items:[{id, summary, created_at, restored_at}]}`.
 
-### issue_levels (V-011, 마이그레이션 `013_issue_levels.sql`, D-48)
-- `id, label, rank(높을수록 상위), icon, color, created_at, updated_at`. 시드: `에픽`(rank 1). 가장 아래 '이슈'는 행 없음(`tasks.level_id` NULL).
-- `tasks.level_id`(→ issue_levels, ON DELETE SET NULL) 추가, 인덱스 `idx_tasks_parent`, `idx_tasks_level`. 규칙: rank(자식) ≤ rank(부모).
+### issue_levels (V-011 · V-014, 마이그레이션 013·014, D-48·D-49)
+- `id, label, rank, icon, color, is_default, created_at, updated_at`. 초기 수준은 에픽과 기본 수준 이슈다. 순위는 형제 이슈의 표시 순서에 적용한다.
+- `tasks.level_id`는 실제 수준을 참조한다. 마이그레이션에서 기존 NULL을 이슈 수준으로 채운다. INSERT/UPDATE에서 NULL을 전달하거나 삽입 시 수준을 생략하면 트리거가 현재 기본 수준을 적용한다.
+- `tasks.parent_task_id`로 상하위를 연결한다. 순환과 존재하지 않는 상위는 거부한다. 상위와 하위의 수준을 독립적으로 바꿀 수 있다.
 
 ### tasks
 | 컬럼 | 타입 | 설명 |
@@ -724,13 +727,13 @@ GET    /api/search?q=
 # 일지
 GET    /api/journal/{yyyy-mm}    PUT /api/journal/{yyyy-mm}/{dd}
 GET    /api/journal/{yyyy-mm}/auto   # 자동 표시 데이터
-# 이슈 계층 (V-011, D-48) — 오류는 {"error"}
-GET  /api/structure/levels → {items:[{id,label,rank,icon,color,used_by}]} (상위부터)
-POST /api/structure/levels {label, icon?, color?, index?(0=맨 위, 기본=이슈 바로 위)} → 201 · 이름 중복/'이슈' 409
-PATCH /api/structure/levels/{id} {label?, icon?, color?} · PUT /api/structure/levels/order {ids(위→아래)} (기존 연결이 깨지면 409)
-DELETE /api/structure/levels/{id} → {trash_id, moved, to} (이슈는 한 수준 아래로; POST /api/structure/trash/{id}/restore로 복원)
+# 이슈 계층 (V-014, D-49) — 오류는 {"error"}
+GET  /api/structure/levels → {items:[{id,label,rank,icon,color,is_default,used_by}]} (상위부터)
+POST /api/structure/levels {label, icon?, color?, index?(0=맨 위, 기본=마지막 수준 바로 위)} → 201 · 이름 중복 409
+PATCH /api/structure/levels/{id} {label?, icon?, color?, is_default?:true} · PUT /api/structure/levels/order {ids(위→아래)}
+DELETE /api/structure/levels/{id} → {trash_id, moved, to} (이슈는 아래 수준으로 이동, 맨 아래를 삭제하면 위 수준으로 이동, 마지막 수준 삭제 409, 휴지통 API로 복원)
 POST /api/structure/levels/convert {field_key, level_id} → {created, reused, linked} (선택형 분류 값마다 상위 이슈, 상위 없는 이슈만 연결, 값 보존)
-POST/PATCH /api/todos 에 level_id (수준 규칙 위반 400, 없는 수준 404)
+POST/PATCH /api/todos 에 level_id (NULL은 기본 수준, 없는 수준 404, 상위 순환 400)
 PUT /api/structure/view mode: issues | fields | free (저장 안 됐으면 issues), 응답에 issue_levels
 POST /api/structure/delete(-preview) items에 {kind:"value", key, value} 추가 (분류 값: move_up=값만 비움 / delete=값의 이슈까지), 하위 이슈: move_up=가장 가까운 상위로 / delete=하위 트리. 미리보기에 values·value_labels·cleared
 # 할일

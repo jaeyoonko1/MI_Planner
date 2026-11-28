@@ -146,7 +146,7 @@ export function openFor(target, { x, y, keyboard = false, event = null } = {}) {
   const items = collect(target, ctx);
   if (!items.length) return false;
   const at = x === undefined ? pointFor(target) : { x, y };
-  openMenu({ items, x: at.x, y: at.y, keyboard, label: "바로 가기 메뉴" });
+  openMenu({ items, x: at.x, y: at.y, keyboard, label: "바로 가기 메뉴", host: target.closest("dialog[open]") });
   return true;
 }
 
@@ -166,12 +166,12 @@ function snapshotSelection(origin) {
   };
 }
 
-export function openMenu({ items, x, y, keyboard = false, label = "메뉴" }) {
+export function openMenu({ items, x, y, keyboard = false, label = "메뉴", host = null }) {
   closeMenu(false);
   const built = items[0]?.type ? items : buildItems(items);
   if (!built.some((i) => i.type === "item")) return null;
   const origin = document.activeElement;
-  openState = { menus: [], origin, restore: snapshotSelection(origin), typing: createTypeBuffer(), timer: 0, at: performance.now() };
+  openState = { menus: [], origin, host, restore: snapshotSelection(origin), typing: createTypeBuffer(), timer: 0, at: performance.now() };
   const menu = mount(built, null, label);
   place(menu, (el) => placeMenu({ x, y, w: el.offsetWidth, h: el.offsetHeight, vw: innerWidth, vh: innerHeight }));
   listen();
@@ -217,7 +217,7 @@ function mount(items, parent, label) {
   });
   el.addEventListener("pointerdown", (e) => e.stopPropagation());
   el.addEventListener("contextmenu", (e) => e.preventDefault());
-  (POPOVER ? document.body : document.querySelector("dialog[open]") || document.body).append(el);
+  (openState.host || document.body).append(el);
   openState.menus.push(menu);
   return menu;
 }

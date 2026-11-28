@@ -86,8 +86,7 @@ export function buildFreeTree(free, tasks, levelByKey) {
 
 // Issue hierarchy (V-011, Jira style): every row is an issue; children come from parent_task_id. Upper levels
 // (rank > 0) sort before plain issues, then by id (creation order). `items` = all descendants (for done counts).
-export const LEAF = { id: null, label: "이슈", rank: 0, icon: "issue", color: "blue" };
-export const rankOf = (task, levels) => (task?.level_id == null ? 0 : levels.find((l) => l.id === task.level_id)?.rank ?? 0);
+export const rankOf = (task, levels) => levels.find((l) => l.id === task?.level_id)?.rank ?? 0;
 
 export function buildIssueTree(tasks, levels) {
   const byLevel = new Map((levels ?? []).map((l) => [l.id, l]));
@@ -100,7 +99,9 @@ export function buildIssueTree(tasks, levels) {
   }
   const rank = (t) => byLevel.get(t.level_id)?.rank ?? 0;
   const walk = (pid, parent, seen) => (kids.get(pid) ?? []).slice().sort((a, b) => rank(b) - rank(a) || a.id - b.id).map((t) => {
-    const n = { kind: "issue", id: `i${t.id}`, task: t, level: byLevel.get(t.level_id) ?? null, assign: {}, parent, children: [] };
+    const level = byLevel.get(t.level_id) ?? null;
+    const outOfOrder = !!parent?.level && !!level && level.rank > parent.level.rank;
+    const n = { kind: "issue", id: `i${t.id}`, task: t, level, outOfOrder, assign: {}, parent, children: [] };
     n.children = seen.has(t.id) ? [] : walk(t.id, n, new Set([...seen, t.id]));
     n.items = n.children.flatMap((c) => [c.task, ...c.items]);
     n.done = n.items.filter((x) => x.status === "done").length;

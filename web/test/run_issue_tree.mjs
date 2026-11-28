@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { buildIssueTree, flatten, hasKids, rankOf, visibleRows } from "../js/structmodel.js";
 
-const levels = [{ id: 1, label: "에픽", rank: 2 }, { id: 2, label: "작업", rank: 1 }];
-const t = (id, extra = {}) => ({ id, title: `T${id}`, status: "todo", parent_task_id: null, level_id: null, ...extra });
+const levels = [{ id: 1, label: "에픽", rank: 2 }, { id: 2, label: "작업", rank: 1 }, { id: 3, label: "이슈", rank: 0, is_default: true }];
+const t = (id, extra = {}) => ({ id, title: `T${id}`, status: "todo", parent_task_id: null, level_id: 3, ...extra });
 const tasks = [
   t(5),                                         // plain top-level issue
   t(1, { level_id: 1, title: "프로젝트" }),      // epic
@@ -27,6 +27,9 @@ assert.equal(hasKids(tree[1]), false, "an epic without children does not fold");
 assert.equal(hasKids({ kind: "group", children: [] }), true);
 assert.equal(rankOf(tasks[1], levels), 2);
 assert.equal(rankOf(tasks[0], levels), 0);
+assert.equal(tree[2].level.label, "이슈");
+const inverted = buildIssueTree([t(1), t(2, { parent_task_id: 1, level_id: 1 })], levels);
+assert.equal(inverted[0].children[0].outOfOrder, true);
 
 assert.deepEqual(flatten(tree).map((n) => n.id), ["i1", "i4", "i6", "i3", "i2", "i5", "i7"]);
 const vis = visibleRows(tree, new Set(["i4"]));

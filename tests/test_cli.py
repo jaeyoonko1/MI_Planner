@@ -28,6 +28,11 @@ def call(env, capsys, *argv: str):
 def test_task_add_set_list_done(env, capsys):
     code, task = call(env, capsys, "task", "add", "EQ-A01 점검", "--priority", "1", "--due", "2026-12-01")
     assert code == 0 and task["title"] == "EQ-A01 점검" and task["priority"] == 1
+    default_level = task["level_id"]
+    code, task = call(env, capsys, "task", "set", str(task["id"]), "--level", "에픽")
+    assert code == 0 and task["level_id"] != default_level
+    code, task = call(env, capsys, "task", "set", str(task["id"]), "--level", "이슈")
+    assert code == 0 and task["level_id"] == default_level
     code, task = call(env, capsys, "task", "set", str(task["id"]), "--status", "doing", "--due", "none")
     assert task["status"] == "doing" and task["due_date"] is None
     code, listed = call(env, capsys, "task", "list", "--open", "--q", "점검")

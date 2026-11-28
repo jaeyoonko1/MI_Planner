@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 import sys
 from pathlib import Path
 from typing import Any
 
 from app import db, search
 from app.repositories import evaluations as ev
+from app.repositories import issue_levels
 from app.repositories import tasks as tk
 from app.vault import DEFAULT_VAULT_PATH, Vault, VaultError
 
@@ -25,7 +27,7 @@ class CliError(Exception):
     pass
 
 
-def _task_fields(args: argparse.Namespace) -> dict[str, Any]:
+def _task_fields(conn: sqlite3.Connection, args: argparse.Namespace) -> dict[str, Any]:
     raw = {"title": args.title, "status": args.status, "priority": args.priority, "requester": args.requester,
            "due_date": args.due, "planned_date": args.planned, "eval_id": args.eval_id, "note": args.note,
            "page_path": args.page_path, "parent_task_id": args.parent, "mark": args.mark}
@@ -41,6 +43,8 @@ def _task_fields(args: argparse.Namespace) -> dict[str, Any]:
             except ValueError:
                 raise CliError(f"{key}는 숫자 또는 none이어야 합니다.") from None
         out[key] = value
+    if args.level is not None:
+        out["level_id"] = issue_levels.find_level_id(conn, args.level)
     return out
 
 
@@ -56,6 +60,7 @@ def _add_task_options(p: argparse.ArgumentParser, *, title_required: bool) -> No
     p.add_argument("--planned", help="YYYY-MM-DD or none")
     p.add_argument("--eval-id", dest="eval_id", help="evaluation id or none")
     p.add_argument("--page-path", dest="page_path")
+    p.add_argument("--level", help="issue level name")
     p.add_argument("--parent", help="parent task id or none")
     p.add_argument("--mark", choices=("star", "urgent", "none"))
     p.add_argument("--note")
@@ -145,9 +150,9 @@ def _task(conn, args: argparse.Namespace) -> Any:
     if args.cmd == "show":
         return tk.get(conn, args.id)
     if args.cmd == "add":
-        return tk.create(conn, _task_fields(args))
+        return tk.create(conn, _task_fields(conn, args))
     if args.cmd == "set":
-        fields = _task_fields(args)
+        fields = _task_fields(conn, args)
         if not fields:
             raise CliError("바꿀 항목을 하나 이상 지정하세요 (--status, --due ...).")
         return tk.update(conn, args.id, fields)
