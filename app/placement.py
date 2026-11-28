@@ -300,6 +300,11 @@ def existing_page(vault: Vault, task: dict[str, Any]) -> str | None:
 
 def expand(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dict[str, Any] | None = None) -> dict[str, Any]:
     """Give an issue its page (once). A second call returns the existing page unchanged."""
+    with vault.content_lock():
+        return _expand(conn, vault, task_id, override)
+
+
+def _expand(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dict[str, Any] | None) -> dict[str, Any]:
     _begin(conn)
     created: list[str] = []
     try:
@@ -348,6 +353,11 @@ def create_with_page(conn: sqlite3.Connection, vault: Vault, data: dict[str, Any
 
 def relocate(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dict[str, Any] | None = None) -> dict[str, Any]:
     """Explicitly move an existing issue page to where the rules (or the override) say. Undone on failure."""
+    with vault.content_lock():
+        return _relocate(conn, vault, task_id, override)
+
+
+def _relocate(conn: sqlite3.Connection, vault: Vault, task_id: int, override: dict[str, Any] | None) -> dict[str, Any]:
     _begin(conn)
     created: list[str] = []
     moved: tuple[str, str, dict[str, Any]] | None = None

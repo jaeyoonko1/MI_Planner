@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 import shutil
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
@@ -10,6 +14,8 @@ from threading import RLock
 from typing import Any
 
 from app.vault_content import content_write_lock, replace_content
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_VAULT_PATH = ROOT / "vault"
@@ -59,6 +65,12 @@ class Vault:
         self.page_lock = RLock()
         root.mkdir(parents=True, exist_ok=True)
 
+    @contextmanager
+    def content_lock(self) -> Iterator[None]:
+        """Use this order before acquiring a SQLite write transaction for a vault mutation."""
+        with self.page_lock, content_write_lock(self.root):
+            yield
+
     # ---- path handling -------------------------------------------------
     def _dir(self, rel: str, *, must_exist: bool = True) -> Path:
         rel = rel.strip("/").replace("\\", "/")
@@ -80,9 +92,8 @@ class Vault:
     def _write_meta(self, page_dir: Path, meta: dict[str, Any]) -> None:
         with self.page_lock:
             meta["updated"] = _now()
-            (page_dir / META).write_text(
-                json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-            )
+            data = json.dumps(meta, ensure_ascii=False, indent=2) + "\n"
+            replace_content(page_dir / META, data.replace("\n", os.linesep).encode("utf-8"))
 
     def _children(self, parent: Path) -> list[Path]:
         kids = [
@@ -123,7 +134,7 @@ class Vault:
         extra_meta adds keys (e.g. task_id for an issue page) to the very first _page.json write."""
         if page_type not in PAGE_TYPES:
             raise VaultError("알 수 없는 페이지 종류입니다.")
-        with self.page_lock:
+        with self.content_lock():
             parent_dir = self._dir(parent)
             folder = self._unique_dir(parent_dir, _safe_name(folder_name or title))
             folder.mkdir()
@@ -198,17 +209,36 @@ class Vault:
         content = content_file.read_bytes().decode("utf-8") if content_file.is_file() else ""
         return {"path": self._rel(page), "meta": meta, "content": content}
 
-    def write(self, rel: str, content: str, expected: str | None = None) -> dict[str, Any]:
-        with self.page_lock, content_write_lock(self.root):
+    def write(self, rel: str, content: str, expected: str | None = None, *,
+              rollback: ExitStack | None = None, extra_meta: dict[str, Any] | None = None) -> dict[str, Any]:
+        # The caller must hold content_lock through the lifetime of a rollback stack.
+        with self.content_lock():
             page = self._dir(rel)
             meta = self._read_meta(page)
             path = page / _content_file(meta.get("type", "note"))
+            previous_body = path.read_bytes() if (expected is not None or rollback is not None) and path.is_file() else None
             if expected is not None:
-                current = path.read_bytes().decode("utf-8") if path.is_file() else ""
-                check_content_revision(current, expected)
+                check_content_revision((previous_body or b"").decode("utf-8"), expected)
+            if rollback is not None:
+                previous_meta = (page / META).read_bytes()
             replace_content(path, content.encode("utf-8"))
+            if rollback is not None:
+                rollback.callback(self._restore_content, path, previous_body)
+                rollback.callback(self._restore_content, page / META, previous_meta)
+            if extra_meta:
+                meta.update(extra_meta)
             self._write_meta(page, meta)
             return {"path": self._rel(page), "meta": meta, "content": content}
+
+    @staticmethod
+    def _restore_content(path: Path, previous: bytes | None) -> None:
+        try:
+            if previous is None:
+                path.unlink(missing_ok=True)
+            else:
+                replace_content(path, previous)
+        except OSError:
+            logger.exception("Could not restore %s after a failed save", path.name)
 
     # ---- attachments (pasted images) -------------------------------------
     @staticmethod
@@ -298,7 +328,7 @@ class Vault:
                     shutil.copy2(f, dest / f.name)
 
     def set_note_layout(self, rel: str, layout: dict[str, Any]) -> None:
-        with self.page_lock:
+        with self.content_lock():
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 바꿀 수 없습니다.")
@@ -310,7 +340,7 @@ class Vault:
 
     def set_meta(self, rel: str, **values: Any) -> None:
         """Add/replace keys in _page.json (used for the memo-unification stamp)."""
-        with self.page_lock:
+        with self.content_lock():
             page = self._dir(rel)
             meta = self._read_meta(page)
             meta.update(values)
@@ -318,7 +348,7 @@ class Vault:
 
     def update(self, rel: str, *, title: str | None = None, parent: str | None = None,
                order: int | None = None) -> dict[str, Any]:
-        with self.page_lock:
+        with self.content_lock():
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 바꿀 수 없습니다.")
@@ -342,7 +372,7 @@ class Vault:
             return self.read(self._rel(dest))
 
     def delete(self, rel: str, *, expected_meta: dict[str, Any] | None = None) -> str:
-        with self.page_lock:
+        with self.content_lock():
             page = self._dir(rel)
             if page == self.root:
                 raise VaultError("루트는 삭제할 수 없습니다.")
@@ -361,7 +391,7 @@ class Vault:
     def restore_page(self, trashed: str, original: str) -> str:
         """Move a trashed page folder back next to where it was (V-004). The parent falls back to the root when
         it is gone, and a taken name gets a ' (2)' suffix. Returns the new page path."""
-        with self.page_lock:
+        with self.content_lock():
             src = self._trashed(trashed)
             parts = [p for p in original.strip("/").split("/") if p]
             if not parts:

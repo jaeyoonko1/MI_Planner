@@ -101,7 +101,7 @@ def create_evaluation(conn: sqlite3.Connection, vault: Vault, data: dict[str, An
     request_id = data["request_id"]
     fingerprint = _fingerprint(data) if request_id else None
     try:
-        with conn:
+        with vault.content_lock(), conn:
             conn.execute("BEGIN IMMEDIATE")
             if request_id:
                 prior = conn.execute(

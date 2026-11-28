@@ -4,12 +4,13 @@ import sqlite3
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import memo
+from app import db, memo
 from app.main import create_app
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 16
@@ -231,6 +232,18 @@ def test_patch_on_legacy_pair_keeps_old_texts_in_backup(env) -> None:
     assert meta(tmp / "vault", rel)[memo.BACKUP] == "옛 메모"
 
 
+def test_stale_patch_does_not_adopt_a_legacy_pair(env) -> None:
+    c, tmp = env
+    tid, rel = legacy(c, tmp, "old memo", "old page")
+    before = meta(tmp / "vault", rel)
+    stale = c.patch(f"/api/todos/{tid}", json={"note": "new", "note_revision": "stale"})
+    assert stale.status_code == 409
+    assert page_text(tmp / "vault", rel) == "old page"
+    assert meta(tmp / "vault", rel) == before
+    with closing(db.connect(tmp / "t.db")) as conn:
+        assert conn.execute("SELECT note FROM tasks WHERE id = ?", (tid,)).fetchone()["note"] == "old memo"
+
+
 def test_startup_sweep_merges_existing_pairs(tmp_path: Path) -> None:
     app = create_app(tmp_path / "t.db", tmp_path / "vault")
     with TestClient(app) as c:
@@ -346,41 +359,143 @@ def test_rejected_patch_leaves_page_issue_and_revision_untouched(env) -> None:
     assert ok.json()["note_revision"] != revision
 
 
+def _two_apps(tmp_path: Path):
+    return create_app(tmp_path / "t.db", tmp_path / "vault"), create_app(tmp_path / "t.db", tmp_path / "vault")
+
+
+def _b_puts_while_a_is_inside(monkeypatch, b, rel: str, content: str, revision: str | None) -> dict:
+    """Run B before A's write if A has left the vault unlocked, or queue B behind A otherwise."""
+    import threading
+
+    from app import vault_content
+
+    seen: dict = {}
+    real = memo.write_note
+
+    def hooked(*args, **kwargs):
+        ready = threading.Event()
+
+        def put():
+            lock_path = b.app.state.vault.root / ".content-write.lock"
+            try:
+                with lock_path.open("a+b") as lock:
+                    lock.seek(0)
+                    try:
+                        if vault_content.os.name == "nt":
+                            vault_content.msvcrt.locking(lock.fileno(), vault_content.msvcrt.LK_NBLCK, 1)
+                        else:
+                            vault_content.fcntl.flock(lock, vault_content.fcntl.LOCK_EX | vault_content.fcntl.LOCK_NB)
+                    except OSError:
+                        seen["waited"] = True
+                        ready.set()
+                    else:
+                        seen["waited"] = False
+                body = {"content": content}
+                if revision is not None:
+                    body["content_revision"] = revision
+                seen["put"] = b.put("/api/pages", params={"path": rel}, json=body)
+            finally:
+                ready.set()
+
+        worker = threading.Thread(target=put, daemon=True)
+        worker.start()
+        seen["thread"] = worker
+        assert ready.wait(5)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(memo, "write_note", hooked)
+    return seen
+
+
+def _finish_put(seen):
+    seen["thread"].join(timeout=15)
+    assert not seen["thread"].is_alive()
+    assert seen["put"].status_code == 200
+    return seen["put"].json()["content_revision"]
+
+
 def test_failed_patch_never_removes_a_body_saved_by_another_app(tmp_path: Path, monkeypatch) -> None:
-    """Two apps share one DB/vault. A writes the page, then its DB step fails; B saved the page in between.
-    A's rollback is conditional on the page still being A's text, so B's body and revision survive."""
+    """Revision omitted. B saves a different body after A's snapshot; A then writes and its DB step fails.
+    A's rollback happens inside the lock A held since the snapshot, so B's save is neither erased nor lost."""
     from app.repositories import tasks as repo
 
-    app_a = create_app(tmp_path / "t.db", tmp_path / "vault")
-    app_b = create_app(tmp_path / "t.db", tmp_path / "vault")
+    app_a, app_b = _two_apps(tmp_path)
     with TestClient(app_a, raise_server_exceptions=False) as a, TestClient(app_b, raise_server_exceptions=False) as b:
         tid = issue(a, note="처음")["id"]
         rel = expand(a, tid)
         url = f"/api/todos/{tid}"
-        revision = a.get(url).json()["note_revision"]
-        seen: dict = {}
+        seen = _b_puts_while_a_is_inside(monkeypatch, b, rel, "B 본문", None)
         real = repo.update
 
-        def stalled(conn, task_id, data):
-            if "note" in data and "b" not in seen:  # A stands here after its page write and before its DB write
-                params = {"path": rel}
-                assert page_text(tmp_path / "vault", rel) == "A 본문"
-                cur = b.get("/api/pages", params=params).json()
-                put = b.put("/api/pages", params=params, json={"content": "B 본문", "content_revision": cur["content_revision"]})
-                seen["b"] = put
+        def failing(conn, task_id, data):
+            if "note" in data:
                 raise repo.TaskError("DB 단계 실패", 500)
             return real(conn, task_id, data)
 
-        monkeypatch.setattr(repo, "update", stalled)
-        failed = a.patch(url, json={"note": "A 본문", "note_revision": revision})
+        monkeypatch.setattr(repo, "update", failing)
+        failed = a.patch(url, json={"note": "A 본문"})
+        saved = _finish_put(seen)
         assert failed.status_code == 500 and "error" in failed.json()
-        assert seen["b"].status_code == 200
-        assert page_text(tmp_path / "vault", rel) == "B 본문"
-        assert b.get("/api/pages", params={"path": rel}).json()["content_revision"] == seen["b"].json()["content_revision"]
         monkeypatch.setattr(repo, "update", real)
-        fresh = b.get("/api/pages", params={"path": rel}).json()
-        again = b.put("/api/pages", params={"path": rel}, json={"content": "B 본문 2", "content_revision": fresh["content_revision"]})
-        assert again.status_code == 200
+        assert page_text(tmp_path / "vault", rel) == "B 본문"
+        page = b.get("/api/pages", params={"path": rel}).json()
+        assert page["content_revision"] == saved
+        assert seen["waited"]
+        assert a.get(url).json()["note"] == "B 본문"
+
+
+def test_stale_revision_409_writes_nothing_and_keeps_the_other_apps_identical_body(tmp_path: Path, monkeypatch) -> None:
+    """A's revision is stale before writing. B's matching text never triggers a compensating write."""
+    from app import vault as vault_module
+
+    app_a, app_b = _two_apps(tmp_path)
+    with TestClient(app_a, raise_server_exceptions=False) as a, TestClient(app_b, raise_server_exceptions=False) as b:
+        tid = issue(a, note="처음")["id"]
+        rel = expand(a, tid)
+        url = f"/api/todos/{tid}"
+        r0 = a.get(url).json()["note_revision"]
+        intervening = b.put("/api/pages", params={"path": rel}, json={"content": "중간 본문"})
+        assert intervening.status_code == 200
+        seen = _b_puts_while_a_is_inside(monkeypatch, b, rel, "새 본문", intervening.json()["content_revision"])
+        writes = []
+        replace = vault_module.replace_content
+
+        def track(path, data):
+            if path.name == "index.md":
+                writes.append(data.decode("utf-8"))
+            replace(path, data)
+
+        monkeypatch.setattr(vault_module, "replace_content", track)
+        stale = a.patch(url, json={"note": "새 본문", "note_revision": r0})
+        saved = _finish_put(seen)
+        assert stale.status_code == 409
+        assert page_text(tmp_path / "vault", rel) == "새 본문"
+        page = b.get("/api/pages", params={"path": rel}).json()
+        assert page["content_revision"] == saved
+        assert writes == ["새 본문"]
+        assert seen["waited"]
+
+
+def test_patch_without_revision_and_db_error_restores_the_snapshot_taken_under_the_lock(tmp_path: Path) -> None:
+    """The previous body can be a save from B that landed before A acquired the lock."""
+    app_a, app_b = _two_apps(tmp_path)
+    with TestClient(app_a, raise_server_exceptions=False) as a, TestClient(app_b) as b:
+        tid = issue(a, note="처음")["id"]
+        rel = expand(a, tid)
+        url = f"/api/todos/{tid}"
+        saved = b.put("/api/pages", params={"path": rel}, json={"content": "B 본문"})
+        assert saved.status_code == 200
+        with closing(db.connect(tmp_path / "t.db")) as conn, conn:
+            conn.execute("CREATE TRIGGER fail_note BEFORE UPDATE OF note ON tasks "
+                         "BEGIN SELECT RAISE(ABORT, 'injected failure'); END")
+        assert a.patch(url, json={"note": "새 본문"}).status_code == 500
+        with closing(db.connect(tmp_path / "t.db")) as conn, conn:
+            conn.execute("DROP TRIGGER fail_note")
+        assert page_text(tmp_path / "vault", rel) == "B 본문"
+        assert a.get(url).json()["note_revision"] == saved.json()["content_revision"]
+        ok = a.patch(url, json={"note": "새 본문"})
+        assert ok.status_code == 200 and page_text(tmp_path / "vault", rel) == "새 본문"
+        assert ok.json()["note_revision"] == b.get("/api/pages", params={"path": rel}).json()["content_revision"]
 
 
 def test_page_metadata_write_failure_does_not_leave_the_new_body(env, monkeypatch) -> None:
@@ -392,12 +507,15 @@ def test_page_metadata_write_failure_does_not_leave_the_new_body(env, monkeypatc
     url = f"/api/todos/{tid}"
     rel = expand(c, tid)
     revision = c.get(url).json()["note_revision"]
+    meta_path = tmp / "vault" / rel / "_page.json"
+    old_meta = meta_path.read_bytes()
     real = Vault._write_meta
     calls = {"n": 0}
 
     def flaky(self, page, meta):
         calls["n"] += 1
         if calls["n"] == 1:
+            meta_path.write_bytes(b'{"type":')
             raise OSError("injected")
         return real(self, page, meta)
 
@@ -405,6 +523,29 @@ def test_page_metadata_write_failure_does_not_leave_the_new_body(env, monkeypatc
     failed = c.patch(url, json={"note": "새 본문", "note_revision": revision})
     assert failed.status_code == 500
     monkeypatch.setattr(Vault, "_write_meta", real)
+    assert meta_path.read_bytes() == old_meta
     assert page_text(tmp / "vault", rel) == "처음"
     assert c.get(url).json()["note"] == "처음" and c.get(url).json()["note_revision"] == revision
     assert c.patch(url, json={"note": "새 본문", "note_revision": revision}).status_code == 200
+
+
+def test_page_expansion_and_note_patch_from_two_apps_do_not_deadlock(tmp_path: Path) -> None:
+    """Expansion writes the body while its DB transaction is open; a note PATCH holds the content lock while it
+    writes the DB. Both take the content lock first, so concurrent runs finish instead of waiting on each other."""
+    import threading
+
+    app_a, app_b = _two_apps(tmp_path)
+    with TestClient(app_a, raise_server_exceptions=False) as a, TestClient(app_b, raise_server_exceptions=False) as b:
+        results: list[int] = []
+        for n, expander in enumerate((a, b, a, b)):
+            tid = issue(a, title=f"경합 {n}", note="처음")["id"]
+            workers = [
+                threading.Thread(target=lambda: results.append(expander.post(f"/api/todos/{tid}/page", json={}).status_code)),
+                threading.Thread(target=lambda: results.append(a.patch(f"/api/todos/{tid}", json={"note": f"본문 {n}"}).status_code)),
+            ]
+            for w in workers:
+                w.start()
+            for w in workers:
+                w.join(timeout=30)
+                assert not w.is_alive()
+        assert results == [200] * 8

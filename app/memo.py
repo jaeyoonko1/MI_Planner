@@ -11,6 +11,7 @@ stamped `memo_unified`, after which the two never diverge again.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import ExitStack
 from datetime import datetime
 from typing import Any
 
@@ -53,15 +54,20 @@ def adopt(conn: sqlite3.Connection, vault: Vault, task: dict[str, Any], page_rel
     page = vault.read(page_rel)
     if page["meta"].get(FLAG):
         return False
-    text, merged = merge_texts(page["content"], task.get("note") or "")
-    extra: dict[str, Any] = {FLAG: _now()}
-    if merged:
-        extra[BACKUP] = task.get("note")  # the old memo, verbatim, in the human-readable meta file
+    text, extra = _adoption(page, task)
     if text != page["content"]:
         vault.write(page_rel, text, content_revision(page["content"]))
     vault.set_meta(page_rel, **extra)
     _mirror(conn, task["id"], text)
-    return merged
+    return BACKUP in extra
+
+
+def _adoption(page: dict[str, Any], task: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    text, merged = merge_texts(page["content"], task.get("note") or "")
+    extra: dict[str, Any] = {FLAG: _now()}
+    if merged:
+        extra[BACKUP] = task.get("note")
+    return text, extra
 
 
 def read(conn: sqlite3.Connection, vault: Vault, task_id: int) -> dict[str, Any]:
@@ -82,16 +88,20 @@ def read(conn: sqlite3.Connection, vault: Vault, task_id: int) -> dict[str, Any]
             "note_revision": content_revision(content)}
 
 
-def write_note(conn: sqlite3.Connection, vault: Vault, before: dict[str, Any], note: str | None,
-               expected: str | None = None) -> None:
-    """A PATCH of `note` (call BEFORE repo.update, with the task as it was): the text goes into the page body
-    when the issue has a page. An un-unified pair is merged first so the old texts survive in the meta backup."""
+def write_note(vault: Vault, before: dict[str, Any], note: str | None,
+               expected: str | None = None, *, rollback: ExitStack) -> None:
+    """Save the linked body and stage its rollback until the PATCH updates the database."""
     rel = placement.existing_page(vault, before)
     if not rel:
         check_content_revision(before.get("note"), expected)
         return
-    adopt(conn, vault, before, rel)
-    vault.write(rel, note or "", expected)
+    page = vault.read(rel)
+    if page["meta"].get(FLAG):
+        vault.write(rel, note or "", expected, rollback=rollback)
+        return
+    text, extra = _adoption(page, before)
+    check_content_revision(text, expected)
+    vault.write(rel, note or "", rollback=rollback, extra_meta=extra)
 
 
 def before_page_write(conn: sqlite3.Connection, vault: Vault, rel: str) -> int | None:
@@ -114,13 +124,15 @@ def after_page_write(conn: sqlite3.Connection, task_id: int, content: str) -> No
 def sweep(conn: sqlite3.Connection, vault: Vault) -> int:
     """Startup pass: unify every issue that already has a page. Returns how many were merged (differing)."""
     merged = 0
-    for t in repo.list_tasks(conn):
-        if not t.get("page_path"):
+    for task in repo.list_tasks(conn):
+        if not task.get("page_path"):
             continue
         try:
-            rel = placement.existing_page(vault, t)
-            if rel and adopt(conn, vault, t, rel):
-                merged += 1
+            with vault.content_lock():
+                current = repo.get(conn, task["id"])
+                rel = placement.existing_page(vault, current)
+                if rel and adopt(conn, vault, current, rel):
+                    merged += 1
         except Exception:  # noqa: BLE001 - one broken page must not block startup
             continue
     return merged

@@ -73,7 +73,7 @@ def tree(request: Request) -> dict:
 @router.get("")
 def read_page(request: Request, path: str) -> dict:
     vault = _vault(request)
-    with vault.page_lock:
+    with vault.content_lock():
         page = vault.read(path)
         if page["meta"].get("task_id") is not None and not page["meta"].get(memo.FLAG):
             _relink(request, lambda c: memo.before_page_write(c, vault, path))
@@ -84,7 +84,7 @@ def read_page(request: Request, path: str) -> dict:
 @router.put("")
 def write_page(request: Request, path: str, body: PageContent) -> dict:
     vault = _vault(request)
-    with vault.page_lock:
+    with vault.content_lock():
         conn = db.connect(request.app.state.db_path)
         try:
             tid = memo.before_page_write(conn, vault, path)
@@ -121,16 +121,20 @@ def create_page(request: Request, body: PageCreate) -> dict:
 
 @router.patch("")
 def update_page(request: Request, path: str, body: PageUpdate) -> dict:
-    page = _vault(request).update(path, title=body.title, parent=body.parent, order=body.order)
-    if page["path"] != path:  # issue links follow the folder (their page identity is task_id anyway)
-        _relink(request, lambda c: placement.repoint(c, path, page["path"]))
+    vault = _vault(request)
+    with vault.content_lock():
+        page = vault.update(path, title=body.title, parent=body.parent, order=body.order)
+        if page["path"] != path:  # issue links follow the folder (their page identity is task_id anyway)
+            _relink(request, lambda c: placement.repoint(c, path, page["path"]))
     return page
 
 
 @router.delete("")
 def delete_page(request: Request, path: str) -> dict:
-    trashed = _vault(request).delete(path)
-    _relink(request, lambda c: placement.unlink(c, path))
+    vault = _vault(request)
+    with vault.content_lock():
+        trashed = vault.delete(path)
+        _relink(request, lambda c: placement.unlink(c, path))
     return {"trashed": trashed}
 
 

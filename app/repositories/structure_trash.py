@@ -218,6 +218,11 @@ def _new_order(entries: list[tuple[str, int]], plan: _Plan, before: dict[str, li
 
 
 def delete(conn: sqlite3.Connection, vault: Vault, data: Any) -> dict[str, Any]:
+    with vault.content_lock():
+        return _delete(conn, vault, data)
+
+
+def _delete(conn: sqlite3.Connection, vault: Vault, data: Any) -> dict[str, Any]:
     if conn.in_transaction:
         conn.commit()
     conn.execute("BEGIN IMMEDIATE")
@@ -393,6 +398,11 @@ def list_trash(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def restore(conn: sqlite3.Connection, vault: Vault, trash_id: int) -> dict[str, Any]:
+    with vault.content_lock():
+        return _restore(conn, vault, trash_id)
+
+
+def _restore(conn: sqlite3.Connection, vault: Vault, trash_id: int) -> dict[str, Any]:
     if conn.in_transaction:
         conn.commit()
     conn.execute("BEGIN IMMEDIATE")

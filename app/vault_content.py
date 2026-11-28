@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import stat
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,8 +15,31 @@ else:
     import fcntl
 
 
+_held = threading.local()
+
+
 @contextmanager
 def content_write_lock(vault: Path) -> Iterator[None]:
+    """Cross-process lock for page bodies. Re-entrant per thread: a caller that holds it for a whole
+    read-modify-write (snapshot, page write, DB write, rollback) can still call code that takes it again;
+    other threads and processes keep waiting on the OS lock."""
+    key = os.path.normcase(vault.resolve())
+    paths = getattr(_held, "paths", None)
+    if paths is None:
+        paths = _held.paths = set()
+    if key in paths:
+        yield
+        return
+    with _os_lock(vault):
+        paths.add(key)
+        try:
+            yield
+        finally:
+            paths.remove(key)
+
+
+@contextmanager
+def _os_lock(vault: Path) -> Iterator[None]:
     # Keep the lock file in place so every process locks the same file, even across page moves.
     with (vault / ".content-write.lock").open("a+b") as lock:
         lock.seek(0)
