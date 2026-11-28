@@ -28,6 +28,7 @@ let revision = 0;
 let refreshRevision = 0;
 let levelsExpanded = false;
 let hierarchyWrite = null;
+let stalePaint = false; // a refresh landed while typing: the badge and fields need a repaint after blur
 
 function ensurePanel() {
   if (panel) return panel;
@@ -47,6 +48,13 @@ function ensurePanel() {
     if (structure) structure.focusRow();
     else closeInspector();
   });
+  // A refresh that arrived while a field or the memo had focus is painted once focus leaves the panel's inputs.
+  panel.addEventListener("focusout", () => setTimeout(() => {
+    if (!stalePaint || openId == null) return;
+    const a = document.activeElement;
+    if (panel.contains(a) && (/^(INPUT|TEXTAREA)$/.test(a.tagName) || memo?.ctl.contains(a))) return;
+    paint();
+  }, 0));
   document.querySelector(".main").append(panel);
   return panel;
 }
@@ -195,9 +203,17 @@ async function refresh(reloadFields = false) {
     return;
   }
   const active = document.activeElement;
-  if (panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName)) return;
-  if (active === title && title.textContent.trim() !== title.dataset.savedTitle) return;
-  if (memo?.ctl.contains(document.activeElement)) { const task = hub.task(openId); memo.ctl.syncFrom(task?.note || "", task?.note_revision); return; }
+  if (panel.contains(active) && /^(INPUT|TEXTAREA)$/.test(active.tagName)) { stalePaint = true; return; }
+  if (active === title && title.textContent.trim() !== title.dataset.savedTitle) { stalePaint = true; return; }
+  if (memo?.ctl.contains(document.activeElement)) {
+    // keep the focused cell, but take the newest revision/text when nothing is unsaved, and show the new level now
+    const task = hub.task(openId);
+    memo.ctl.syncFrom(task?.note || "", task?.note_revision);
+    const toggle = panel.querySelector('[data-fk="level"]');
+    if (toggle && task) labelLevelToggle(toggle, levels.find((l) => l.id === task.level_id));
+    stalePaint = true;
+    return;
+  }
   paint();
 }
 
@@ -396,6 +412,7 @@ function pageRow(t) {
 }
 
 function paint() {
+  stalePaint = false;
   const t = hub.task(openId);
   if (!t) return;
   const keep = document.activeElement?.dataset?.fk;

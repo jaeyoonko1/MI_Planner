@@ -158,6 +158,14 @@ def insert(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
     return get(conn, int(cur.lastrowid))
 
 
+def validate_update(conn: sqlite3.Connection, task_id: int, data: dict[str, Any]) -> None:
+    """Run every check update() would run, writing nothing (callers with side effects check first)."""
+    current = get(conn, task_id)
+    clean = _prepare(conn, data, current)
+    if "parent_task_id" in clean:
+        _check_parent(conn, task_id, clean["parent_task_id"])
+
+
 def update(conn: sqlite3.Connection, task_id: int, data: dict[str, Any]) -> dict[str, Any]:
     with conn:
         conn.execute("BEGIN IMMEDIATE")

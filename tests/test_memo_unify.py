@@ -317,3 +317,30 @@ def test_fold_state_is_a_setting_not_file_content(env) -> None:
     assert "fold" not in json.dumps(meta(tmp / "vault", rel))
     assert c.put("/api/settings/memo_folds", json={"value": "[1]"}).status_code == 400
     assert c.put("/api/settings/memo_folds", json={"value": "nope"}).status_code == 400
+
+
+def test_rejected_patch_leaves_page_issue_and_revision_untouched(env) -> None:
+    """A PATCH that fails (unknown level, stale revision) must not change the page body, the memo or the revision."""
+    c, tmp = env
+    tid = issue(c, note="처음")["id"]
+    url = f"/api/todos/{tid}"
+    rel = expand(c, tid)
+    revision = c.get(url).json()["note_revision"]
+    before_task = c.get(url).json()
+
+    bad = c.patch(url, json={"note": "새 본문", "note_revision": revision, "level_id": 999999})
+    assert bad.status_code in (400, 404) and "error" in bad.json()
+    assert page_text(tmp / "vault", rel) == "처음"
+    assert c.get(url).json() == before_task
+    with sqlite3.connect(tmp / "t.db") as db:
+        assert db.execute("SELECT note FROM tasks WHERE id = ?", (tid,)).fetchone() == ("처음",)
+
+    stale = c.patch(url, json={"note": "충돌", "note_revision": "stale", "title": "바뀜"})
+    assert stale.status_code == 409
+    assert page_text(tmp / "vault", rel) == "처음"
+    assert c.get(url).json() == before_task
+
+    ok = c.patch(url, json={"note": "새 본문", "note_revision": revision, "title": "바뀜"})
+    assert ok.status_code == 200 and ok.json()["note"] == "새 본문"
+    assert page_text(tmp / "vault", rel) == "새 본문"
+    assert ok.json()["note_revision"] != revision

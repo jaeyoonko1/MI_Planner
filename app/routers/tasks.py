@@ -5,7 +5,7 @@ from typing import Iterator, Literal
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, StrictInt
 
-from app import db, journal, journal_links, memo, search
+from app import db, journal, journal_links, memo, placement, search
 from app.repositories import structure_free, tasks as repo
 from app.vault import content_revision
 
@@ -165,9 +165,17 @@ def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get
     vault = request.app.state.vault
     with vault.page_lock:
         before = repo.get(conn, task_id)
+        repo.validate_update(conn, task_id, data)  # a doomed request must not touch the page body
         if "note" in data:
+            rel = placement.existing_page(vault, before)
+            old_body = vault.read(rel)["content"] if rel else None
             memo.write_note(conn, vault, before, data["note"], body.note_revision)
-        task = repo.update(conn, task_id, data)
+        try:
+            task = repo.update(conn, task_id, data)
+        except Exception:
+            if "note" in data and old_body is not None and vault.read(rel)["content"] != old_body:
+                vault.write(rel, old_body, None)  # roll the page back to what it was
+            raise
         if "note" in data:
             task["note_revision"] = content_revision(task.get("note"))
     # the linked journal line follows the task (title, check, mark, planned day)

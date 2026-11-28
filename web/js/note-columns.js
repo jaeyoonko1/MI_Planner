@@ -628,7 +628,9 @@ export function mountNoteColumns(mountEditor, cfg) {
     el: root,
     getMd,
     syncFrom(md, nextRevision, meta) {
-      if (isBusy() || conflict || getMd() !== last || !nextRevision) return;
+      // Focus alone is not "busy": only a save in flight or unsaved text (getMd() !== last) blocks a sync,
+      // so a focused but untouched cell still gets the newest revision and never fails with a false 409.
+      if (pending > 0 || conflict || getMd() !== last || !nextRevision) return;
       if (md !== last) setMd(md, nextRevision, meta);
       else revision = nextRevision;
     },
