@@ -523,6 +523,9 @@ export function tableFromNode(tableNode, rules, limits = PASTE_LIMITS, excel = f
         const excelOverflow = excel ? excelOverflowOf(cellNode) : null;
         const runs = collectRuns(cellNode, ctx, rules, [], { excelOverflow });
         origin.lines = runsToLines(runs);
+        if (layoutOnly && layoutColspan > 1 && cellNode.attrs["x:num"] === undefined) {
+          origin.displaySpan = layoutColspan;
+        }
         if (excel && runs.some((run) => !run.br && !sameExcelTextStyles(run.excelStyles, ctx.excelStyles))) {
           origin.richText = runsToLines(runs, (a, b) => sameExcelTextStyles(a.excelStyles, b.excelStyles))
             .map((line) => line.map(({ text, excelStyles }) => ({ text, styles: excelStyles })));
@@ -583,9 +586,14 @@ export function tableFromNode(tableNode, rules, limits = PASTE_LIMITS, excel = f
         while (r + rowSpan < block.rows.length && keptRows[r + rowSpan] < from.r + from.rowspan) rowSpan++;
         if (rowSpan > 1 || colSpan > 1) block.merged++;
         const displayText = from.lines.map((line) => line.map((run) => run.text).join("")).join("\n");
+        let overflowRight = 0;
+        if (displayText.trim() && from.displaySpan && rowSpan === 1 && colSpan === 1) {
+          while (visibleColumns[c + overflowRight + 1] < from.c + from.displaySpan) overflowRight++;
+        }
         cells.push({
           row: r, col: c,
           ...(from.richText ? { richText: from.richText } : {}),
+          ...(overflowRight ? { overflowRight } : {}),
           ...excelCellMetadata(
             from.node.attrs, styleOf(from.node, rules), displayText, rowSpan, colSpan,
           ),

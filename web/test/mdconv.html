@@ -1,10 +1,12 @@
 <!doctype html>
 <meta charset="utf-8"><title>mdconv tests</title>
+<link rel="stylesheet" href="/css/note.css">
 <!-- Open http://127.0.0.1:8765/test/mdconv.html — every line should start with PASS. -->
 <pre id="out">running…</pre>
 <script type="module">
 import { mdToHtml, htmlToMd, loadInto, refreshExcelTableViews } from "/js/mdconv.js";
-import { serializeExcelTable } from "/js/excel-table-block.js";
+import { readExcelTable, serializeExcelTable } from "/js/excel-table-block.js";
+import { openFor } from "/js/contextmenu.js";
 import { runNoteLineAction } from "/js/note-lines.js";
 import { bindNoteTables } from "/js/note-table.js";
 import { mountFormatBar } from "/js/note-format.js";
@@ -46,6 +48,15 @@ const show = (v) => JSON.stringify(v);
      "Excel view: formatted cell text is escaped");
   ok(grid?.querySelector("col").style.width === "80pt" && grid.rows[0].style.height === "32px"
      && grid.rows[0].cells[1].style.textAlign === "right", "Excel view: dimensions and General numeric alignment");
+  ok(!grid.hasAttribute("data-excel-fixed") && !grid.style.width,
+     "Excel view: incomplete column widths use intrinsic sizing");
+  const knownWidths = serializeExcelTable({ ...source, columnWidths: { lot: "45pt", value: "60" } });
+  const fixedEditor = load(knownWidths);
+  const fixedGrid = fixedEditor.querySelector(".note-excel-grid");
+  ok(fixedGrid.hasAttribute("data-excel-fixed") && fixedGrid.getAttribute("style").includes("width:calc(45pt + 60px)")
+     && fixedGrid.rows[0].cells[0].rowSpan === 2 && htmlToMd(fixedEditor) === knownWidths,
+     "Excel view: complete mixed-unit column widths size the merged grid without rewriting it",
+     fixedGrid.style.width);
   ok(htmlToMd(editor) === file && rt(rt(file)) === file, "Excel view: mixed EOL round trip");
   editor.firstElementChild.textContent = "수정한 문단";
   ok(htmlToMd(editor).includes(fence) && rt(htmlToMd(editor)) === htmlToMd(editor), "Excel view: editing an adjacent paragraph preserves the fence");
@@ -346,6 +357,195 @@ ok(!hostile.querySelector("script,img,b") && ![...hostile.querySelectorAll("*")]
     "Excel view: zero and out-of-range angles fall back while standard direction survives");
   ok(cells.every(cell => cell.textContent === "<X>&") && htmlToMd(editor) === fence,
     "Excel view: orientation preserves escaped text and the original fence");
+}
+{
+  const styles = { "mso-text-control": "shrinktofit", "white-space": "nowrap", "font-size": "16pt", "text-align": "right" };
+  const fence = serializeExcelTable({
+    id: "shrink", version: 1, columns: ["a", "b"], columnWidths: { a: "45pt", b: "45pt" },
+    rows: [{ id: "r1", cells: [
+      { displayText: "LOT-TEST-123456789", value: null, styles },
+      { displayText: "01", value: { type: "text", raw: "01" }, styles },
+    ] }],
+  });
+  const editor = load(fence);
+  editor.classList.add("note-editor");
+  const binding = bindNoteTables(editor, () => {}, { documentMarkdown: () => htmlToMd(editor) });
+  binding.refresh();
+  document.body.append(editor);
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const [long, short] = editor.querySelectorAll(".note-excel-fit > span");
+  const wrapper = long.parentElement.getBoundingClientRect();
+  const line = long.getBoundingClientRect();
+  ok(Number(long.style.zoom) > 0 && Number(long.style.zoom) < 1
+    && line.left >= wrapper.left && Math.abs(line.right - wrapper.right) < 1,
+    "Excel view: long right-aligned text fits the recorded cell width");
+  ok(!short.style.zoom && htmlToMd(editor) === fence,
+    "Excel view: shrink preserves short text size and the saved styles and values");
+  binding.destroy();
+  editor.remove();
+}
+{
+  const overflow = { displayText: "LOT-TEST-123456789", value: null, overflowRight: 2 };
+  const fence = serializeExcelTable({
+    id: "overflow", version: 1, columns: ["a", "b", "c"], columnWidths: { a: "40pt", b: "45pt", c: "50pt" },
+    rows: [
+      { id: "open", cells: [overflow, null, null] },
+      { id: "painted", cells: [overflow, null, { displayText: "", value: null, styles: { "background-color": "#ffaf00" } }] },
+      { id: "merged", cells: [overflow, { displayText: "", value: null, colSpan: 2 }, null] },
+    ],
+  });
+  const editor = load(fence);
+  document.body.append(editor);
+  const [open, painted, merged] = editor.querySelectorAll(".note-excel-grid tr");
+  const clip = row => Number.parseFloat(getComputedStyle(row.cells[0].firstElementChild).clipPath.split(" ")[1]);
+  ok(open.cells.length === 3 && open.cells[0].colSpan === 1
+    && Math.abs(clip(open) + 95 * 4 / 3) < 0.1,
+    "Excel view: a display span clips at the last eligible blank while each cell remains independent");
+  ok(Math.abs(clip(painted) + 60) < 0.1
+    && !merged.querySelector(".note-excel-overflow") && htmlToMd(editor) === fence,
+    "Excel view: an empty filled cell or a merge stops the display span");
+  editor.remove();
+}
+{
+  const text = (align, styles = {}) => ({
+    displayText: "LOT-TEST-123456789", value: null, styles: { "text-align": align, ...styles },
+  });
+  const fence = serializeExcelTable({
+    id: "aligned-overflow", version: 1, columns: ["a", "b", "c", "d", "e"],
+    columnWidths: { a: "40pt", b: "45pt", c: "50pt", d: "60pt", e: "20pt" },
+    rows: [
+      { id: "center", cells: [null, { displayText: "", value: null, styles: { border: "none" } }, text("center"), null, text("right")] },
+      { id: "right", cells: [null, null, text("right"), null, null] },
+      { id: "blocked", cells: [null, { displayText: "", value: null, rowSpan: 2 }, text("right"), null, null] },
+      { id: "covered", cells: [null, null, text("center"), null, null] },
+      { id: "wrap", cells: [null, null, text("center", { "white-space": "normal" }), null, null] },
+    ],
+  });
+  const editor = load(fence);
+  editor.classList.add("note-editor");
+  document.body.append(editor);
+  const rows = editor.querySelectorAll(".note-excel-grid tr");
+  const overflow = row => rows[row].querySelector('[data-excel-x="2"] .note-excel-overflow');
+  const insets = row => getComputedStyle(overflow(row)).clipPath.slice(6, -1).split(" ").map(Number.parseFloat);
+  const center = overflow(0);
+  const right = overflow(1);
+  const bounds = center.getBoundingClientRect();
+  const centered = center.firstElementChild.getBoundingClientRect();
+  ok(Math.abs(insets(0)[1] + 80) < 0.1 && Math.abs(insets(0)[3] + 85 * 4 / 3) < 0.1
+    && centered.left < bounds.left && centered.right > bounds.right
+    && Math.abs(centered.left + centered.right - bounds.left - bounds.right) < 1,
+    "Excel view: centered text keeps its anchor and spills on both sides");
+  ok(insets(1)[1] === 0 && Math.abs(insets(1)[3] + 85 * 4 / 3) < 0.1
+    && Math.abs(right.firstElementChild.getBoundingClientRect().right - right.getBoundingClientRect().right) < 1,
+    "Excel view: right-aligned text spills only to the left");
+  ok(insets(2).every(inset => inset === 0) && insets(3)[3] === 0 && !overflow(4) && htmlToMd(editor) === fence,
+    "Excel view: a merged neighbor blocks spill across both covered rows and wrapped text stays inside");
+  editor.remove();
+}
+{
+  const cell = (displayText, styles) => ({ displayText, value: null, styles });
+  const table = {
+    id: "autofit", version: 1, columns: ["a", "b", "c"],
+    columnWidths: { a: "48px", b: "120px", c: "100px" },
+    rows: [
+      { id: "a", cells: [cell("Unscaled text sizes this column", { "mso-text-control": "shrinktofit" }),
+        cell("Small"), cell("Wrapped words ".repeat(15), { "white-space": "pre-wrap" })] },
+      { id: "b", cells: [null, { ...cell("Wide merge ".repeat(20)), colSpan: 2 }, null] },
+    ],
+  };
+  const fence = serializeExcelTable(table);
+  const editor = load(fence);
+  editor.classList.add("note-editor");
+  document.body.append(editor);
+  const binding = bindNoteTables(editor, () => {}, { documentMarkdown: () => htmlToMd(editor) });
+  binding.refresh();
+  const key = (target, key, modifiers = {}) =>
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers }));
+  const grid = editor.querySelector(".note-excel-grid");
+  const first = grid.rows[0].cells[0];
+  first.focus();
+  key(first, "ArrowRight", { shiftKey: true });
+  const rightDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 2 });
+  const retained = !first.dispatchEvent(rightDown);
+  openFor(first, { keyboard: true });
+  document.activeElement.click();
+  const after = htmlToMd(editor);
+  const updated = readExcelTable(after, table.id);
+  ok(retained && parseFloat(updated.columnWidths.a) > 48 && parseFloat(updated.columnWidths.b) < 120
+    && updated.columnWidths.c === "100px" && grid.querySelectorAll("[aria-selected=true]").length === 2,
+    "Excel edit: right-click retains selected columns, autofit measures unscaled text and ignores horizontal merges",
+    show([retained, updated.columnWidths, grid.querySelectorAll("[aria-selected=true]").length]));
+  key(document.activeElement, "z", { ctrlKey: true });
+  ok(htmlToMd(editor) === fence, "Excel edit: undo restores the original column widths and source");
+  key(document.activeElement, "y", { ctrlKey: true });
+  ok(htmlToMd(editor) === after, "Excel edit: redo restores the fitted columns as one edit");
+  binding.destroy();
+  editor.remove();
+}
+{
+  const value = {
+    displayText: "12.5%", value: { type: "number", raw: "0.125" }, numberFormat: "0.0%", rowSpan: 2,
+    richText: [[{ text: "12.5%", styles: { "font-weight": "bold" } }]],
+  };
+  const neighbor = { displayText: "Keep", value: null };
+  const table = {
+    id: "cut-range", version: 1, columns: ["a", "b", "c"],
+    rows: [
+      { id: "r0", cells: [value, { displayText: "B1", value: null }, neighbor] },
+      { id: "r1", cells: [null, null, null] },
+    ],
+  };
+  const fence = serializeExcelTable(table);
+  const editor = load(fence);
+  editor.classList.add("note-editor");
+  document.body.append(editor);
+  const binding = bindNoteTables(editor, () => {}, { documentMarkdown: () => htmlToMd(editor) });
+  binding.refresh();
+  const grid = editor.querySelector(".note-excel-grid");
+  const key = (key, modifiers = {}) => document.activeElement.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...modifiers }));
+  const cut = clipboardData => document.activeElement.dispatchEvent(
+    new ClipboardEvent("cut", { clipboardData, bubbles: true, cancelable: true }));
+  grid.rows[0].cells[0].focus();
+  key("ArrowRight", { shiftKey: true });
+  const blocked = new DataTransfer();
+  const setData = blocked.setData.bind(blocked);
+  blocked.setData = (type, payload) => {
+    if (type === "application/x-mi-excel-range") throw new Error("Clipboard unavailable");
+    setData(type, payload);
+  };
+  cut(null);
+  cut(blocked);
+  ok(htmlToMd(editor) === fence, "Excel cut: unavailable clipboard leaves the source intact");
+
+  const data = new DataTransfer();
+  const handled = !cut(data);
+  const cleared = htmlToMd(editor);
+  const rows = readExcelTable(cleared, table.id).rows;
+  const payload = JSON.parse(data.getData("application/x-mi-excel-range") || "null");
+  ok(handled && data.getData("text/plain") === "12.5%\tB1\r\n\t"
+    && show(payload?.cells[0][0]) === show(value) && rows[0].cells[0].displayText === ""
+    && rows[0].cells[0].value === null && !rows[0].cells[0].richText && rows[0].cells[0].rowSpan === 2
+    && rows[0].cells[0].numberFormat === "0.0%" && rows[0].cells[1].displayText === ""
+    && rows[0].cells[2].displayText === neighbor.displayText,
+    "Excel cut: clipboard keeps typed and rich data while the source keeps merge, number format and its neighbor");
+  cut(new DataTransfer());
+  key("z", { ctrlKey: true });
+  ok(htmlToMd(editor) === fence && grid.querySelectorAll("[aria-selected=true]").length === 3,
+    "Excel cut: one undo restores the complete range after an empty cut");
+  key("y", { ctrlKey: true });
+  ok(htmlToMd(editor) === cleared, "Excel cut: redo clears the same range");
+  const first = grid.rows[0].cells[0];
+  first.focus();
+  first.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  ok(htmlToMd(editor) === fence, "Excel cut: original data remains available for paste");
+  key("F2");
+  const editingData = new DataTransfer();
+  ok(document.activeElement.matches(".note-excel-field") && cut(editingData) && editingData.types.length === 0
+    && htmlToMd(editor) === fence, "Excel cut: editing text leaves the native cut event available");
+  key("Escape");
+  binding.destroy();
+  editor.remove();
 }
 const n = res.length, f = res.filter((l) => l.startsWith("FAIL")).length;
 document.getElementById("out").textContent = `${f ? "FAIL" : "PASS"} summary: ${n - f}/${n}\n` + res.join("\n");

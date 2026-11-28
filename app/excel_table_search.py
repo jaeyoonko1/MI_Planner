@@ -16,7 +16,7 @@ _SURROGATE = re.compile(r"[\ud800-\udfff]")
 _MAX_SOURCE = 4 * 1024 * 1024
 _CELL_KEYS = {
     "displayText", "value", "numberFormat", "rowSpan", "colSpan",
-    "styles", "richText", "fillPattern", "width", "height",
+    "styles", "richText", "fillPattern", "width", "height", "overflowRight",
 }
 
 
@@ -40,6 +40,8 @@ def _valid_cell(cell: object) -> bool:
     # Search consumes the value and grid contract. Rendering validates optional CSS/format metadata.
     return (isinstance(cell, dict) and cell.keys() <= _CELL_KEYS
             and isinstance(cell.get("displayText"), str)
+            and ("overflowRight" not in cell or (type(cell["overflowRight"]) in (int, float)
+                 and 1 <= cell["overflowRight"] < 60 and cell["overflowRight"] == int(cell["overflowRight"])))
             and "value" in cell and _valid_value(cell["value"]))
 
 

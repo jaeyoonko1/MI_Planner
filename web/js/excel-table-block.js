@@ -1,6 +1,6 @@
 // Candidate Markdown storage for editable Excel tables. Unknown blocks stay in the Markdown source.
 import { joinBlocks, segment } from "./mdblocks.js";
-import { parseClipboardTable } from "./note-table-model.js";
+import { clipboardTableText, parseClipboardTable } from "./note-table-model.js";
 import { isExcelDimension, isExcelFillPattern, isExcelNumber, isExcelStyle } from "./paste-excel.js";
 
 const OPEN = /^(`{3,}|~{3,})mi-excel-table[ \t]*$/;
@@ -9,6 +9,7 @@ const MAX_SOURCE_LENGTH = 4 * 1024 * 1024;
 const MAX_ROWS = 1000;
 const MAX_COLS = 60;
 const MAX_CELLS = 10000;
+export const EXCEL_RANGE_TYPE = "application/x-mi-excel-range";
 
 const isRecord = (value) => Object.getPrototypeOf(value ?? false) === Object.prototype;
 export const isExcelTableId = (value) => typeof value === "string" && ID.test(value);
@@ -34,7 +35,7 @@ function validFill(fill) {
 
 const CELL_KEYS = [
   "displayText", "value", "numberFormat", "rowSpan", "colSpan",
-  "styles", "richText", "fillPattern", "width", "height",
+  "styles", "richText", "fillPattern", "width", "height", "overflowRight",
 ];
 
 function validCell(cell) {
@@ -44,6 +45,8 @@ function validCell(cell) {
     && (cell.styles === undefined || validStyles(cell.styles))
     && (cell.richText === undefined || validRichText(cell.richText))
     && (cell.fillPattern === undefined || validFill(cell.fillPattern))
+    && (cell.overflowRight === undefined || (Number.isInteger(cell.overflowRight)
+      && cell.overflowRight > 0 && cell.overflowRight < MAX_COLS))
     && optionalDimension(cell.width) && optionalDimension(cell.height);
 }
 
@@ -228,6 +231,97 @@ export function editExcelCell(table, rowId, columnId, { displayText, value }) {
   return serializeExcelTable(edited) === null ? null : edited;
 }
 
+function validRange(table, { r0, r1, c0, c1 }) {
+  return isSupported(table) && [r0, r1, c0, c1].every(Number.isInteger)
+    && r0 >= 0 && c0 >= 0 && r1 >= r0 && c1 >= c0 && r1 < table.rows.length && c1 < table.columns.length;
+}
+
+function includesWholeMerges(table, { r0, r1, c0, c1 }) {
+  for (let r = 0; r <= r1; r++) {
+    for (let c = 0; c <= c1; c++) {
+      const cell = table.rows[r].cells[c];
+      if (!cell) continue;
+      const lastRow = r + (cell.rowSpan ?? 1) - 1;
+      const lastColumn = c + (cell.colSpan ?? 1) - 1;
+      if (lastRow >= r0 && lastColumn >= c0 && (r < r0 || c < c0 || lastRow > r1 || lastColumn > c1)) return false;
+    }
+  }
+  return true;
+}
+
+/** Clear the values of the anchors in a worksheet rectangle, keeping all cell formatting. */
+export function clearExcelRange(table, range) {
+  if (!validRange(table, range)) return null;
+  const { r0, r1, c0, c1 } = range;
+  let changed = false;
+  const rows = table.rows.map((row, y) => {
+    if (y < r0 || y > r1) return row;
+    let cells;
+    for (let x = c0; x <= c1; x++) {
+      const cell = row.cells[x];
+      if (!cell || !(cell.displayText || cell.value || cell.richText)) continue;
+      cells ??= [...row.cells];
+      cells[x] = withCellValue(cell, "", null);
+    }
+    if (!cells) return row;
+    changed = true;
+    return { ...row, cells };
+  });
+  return changed ? { ...table, rows } : table;
+}
+
+function validClipboardGrid(cells) {
+  const width = cells?.[0]?.length;
+  return Array.isArray(cells) && validSize(cells.length, width)
+    && validGrid(cells.map((row, i) => ({ id: `r${i}`, cells: row })), width);
+}
+
+/** Copy the cells, excluding any neighbor covered only by the visual text overflow. */
+export function copyExcelRange(table, range) {
+  if (!validRange(table, range) || !includesWholeMerges(table, range)) return null;
+  const { r0, r1, c0, c1 } = range;
+  const cells = table.rows.slice(r0, r1 + 1).map(row => row.cells.slice(c0, c1 + 1));
+  if (!validClipboardGrid(cells)) return null;
+  const data = JSON.stringify({ version: 1, cells });
+  if (data.length > MAX_SOURCE_LENGTH) return null;
+  return { data, text: clipboardTableText(cells.map(row => row.map(cell => cell?.displayText ?? ""))) };
+}
+
+export function pasteCopiedExcelRange(table, rowId, columnId, data, { valuesOnly = false } = {}) {
+  if (data.length > MAX_SOURCE_LENGTH) return { error: "source" };
+  let payload;
+  try {
+    payload = JSON.parse(data);
+  } catch {
+    return { error: "source" };
+  }
+  if (payload?.version !== 1 || !validClipboardGrid(payload.cells)) return { error: "source" };
+  const { cells } = payload;
+  return replaceExcelRange(table, rowId, columnId, cells.length, cells[0].length, valuesOnly, () => cells);
+}
+
+/** Repeat the first row or column while keeping the selection's existing merge layout. */
+export function fillExcelRange(table, range, direction) {
+  if (!validRange(table, range) || !["down", "right"].includes(direction)) return { error: "source" };
+  if (!includesWholeMerges(table, range)) return { error: "merge" };
+  const { r0, r1, c0, c1 } = range;
+  const down = direction === "down";
+  if (down ? r0 === r1 : c0 === c1) return { table };
+  const rows = [...table.rows];
+  for (let r = r0; r <= r1; r++) {
+    const cells = [...rows[r].cells];
+    for (let c = c0; c <= c1; c++) {
+      const from = table.rows[down ? r0 : r].cells[down ? c : c0];
+      const to = cells[c];
+      if ((from?.rowSpan ?? 1) !== (to?.rowSpan ?? 1)
+        || (from?.colSpan ?? 1) !== (to?.colSpan ?? 1)) return { error: "merge" };
+      cells[c] = from;
+    }
+    rows[r] = { ...rows[r], cells };
+  }
+  return { table: { ...table, rows } };
+}
+
 /** Replace a rectangle of cells without resizing the destination or changing its IDs. */
 export function pasteExcelRange(table, rowId, columnId, block, { valuesOnly = false } = {}) {
   if (!block?.excel || !Array.isArray(block.rows) || block.truncated) return { error: "source" };
@@ -241,6 +335,7 @@ export function pasteExcelTextRange(table, rowId, columnId, text) {
   const grid = parseClipboardTable(text, MAX_CELLS);
   const width = grid?.[0].length;
   if (!width || grid.some(row => row.length !== width)) return { error: "source" };
+  if (grid.length === 1 && width === 1) return { error: "single-cell" };
   return replaceExcelRange(table, rowId, columnId, grid.length, width, true, () =>
     grid.map(row => row.map(displayText => displayText ? { displayText, value: null } : null)));
 }

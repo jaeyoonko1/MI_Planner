@@ -125,7 +125,10 @@ assert.deepEqual(layoutSpanExcel.rows.map((row) => row.map(({ plain }) => plain)
 ]);
 assert.equal(layoutSpanExcel.merged, 1);
 assert.equal(sourceCell(layoutSpanExcel, 1, 0).colSpan, 1);
+assert.equal(sourceCell(layoutSpanExcel, 1, 0).overflowRight, 1);
 assert.equal(sourceCell(layoutSpanExcel, 2, 0).colSpan, 2);
+assert.equal(sourceCell(layoutSpanExcel, 2, 0).overflowRight, undefined);
+assert.equal(sourceCell(layoutSpanExcel, 3, 0).overflowRight, undefined);
 assert.equal(sourceCell(layoutSpanExcel, 3, 1).displayText, "After blanks");
 assert.doesNotMatch(tableBlockToSource(layoutSpanExcel), /Hidden overflow/);
 assert.equal(clipboardToTable({ html: layoutSpans }).block.merged, 4);

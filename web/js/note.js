@@ -210,6 +210,7 @@ export function mountEditor(cfg) {
     documentMarkdown: cfg.documentMarkdown || (() => htmlToMd(ed)),
   });
   noteTables.refresh();
+  cleanups.push(noteTables.destroy);
 
   // ---- toolbar (note-format.js): block, list, character, size, color, highlight chips
   const fmt = mountFormatBar(ed, bar, {

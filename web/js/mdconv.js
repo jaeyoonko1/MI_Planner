@@ -170,18 +170,34 @@ function orientExcelText(html, rotation, layout) {
   return orientation ? `<span class="note-excel-oriented"${excelStyle(orientation)}>${html}</span>` : html;
 }
 
+function blocksExcelOverflow(cell) {
+  if (!cell) return false;
+  return !!(cell.displayText || cell.value || cell.fillPattern || cell.styles?.["background-color"]
+    || (cell.rowSpan ?? 1) > 1 || (cell.colSpan ?? 1) > 1
+    || Object.entries(cell.styles ?? {}).some(([name, value]) =>
+      /^border(?:-|$)/.test(name) && !/\b(?:none|hidden)\b/i.test(value)));
+}
+
+const excelResizeHandle = '<span class="note-excel-resize" aria-hidden="true" title="끌어서 열 너비 조절"></span>';
+
 function excelGridHtml(table) {
   const width = table.columns.length;
   const covered = new Uint8Array(table.rows.length * width);
-  const columns = table.columns.map((id) => `<col${excelStyle({ width: excelLength(table.columnWidths?.[id]) })}>`).join("");
+  const widths = table.columns.map(id => excelLength(table.columnWidths?.[id]));
+  const columns = widths.map(width => `<col${excelStyle({ width })}>`).join("");
+  // The fixed layout can use the recorded column widths only when all of them are known.
+  const hasColumnWidths = widths.map(Number.parseFloat).every(width => Number.isFinite(width) && width > 0);
+  const layout = hasColumnWidths
+    ? ` data-excel-fixed${excelStyle({ width: `calc(${widths.join(" + ")})` })}`
+    : "";
   const rows = table.rows.map((row, y) => {
     const cells = row.cells.map((cell, x) => {
       if (covered[y * width + x]) return "";
       const location = `tabindex="-1" data-excel-row="${row.id}" data-excel-column="${table.columns[x]}" data-excel-x="${x}"`;
-      if (!cell) return `<td ${location}></td>`;
+      if (!cell) return `<td ${location}>${excelResizeHandle}</td>`;
       const { rowSpan = 1, colSpan = 1, styles = {} } = cell;
       for (let r = y; r < y + rowSpan; r++) {
-        for (let c = x; c < x + colSpan; c++) covered[r * width + c] = 1;
+        covered.fill(1, r * width + x + (r === y ? 1 : 0), r * width + x + colSpan);
       }
       const dimensions = { width: excelLength(cell.width), height: excelLength(cell.height) };
       const alignment = /^(?:general)?$/i.test(styles["text-align"] ?? "") && cell.value?.type === "number"
@@ -189,7 +205,7 @@ function excelGridHtml(table) {
       const { displayText, richText } = cell;
       const runs = richText?.map((line) => line.map((run) => run.text).join("")).join("\n") === displayText
         ? richText : null;
-      const { "mso-rotate": rotation, "layout-flow": layout, ...renderedStyles } = styles;
+      const { "mso-rotate": rotation, "layout-flow": layout, "mso-text-control": textControl, ...renderedStyles } = styles;
       const cellStyles = { ...renderedStyles, ...alignment, ...excelFillStyles(cell.fillPattern) };
       if (runs) {
         // A decoration on the cell would also paint runs that explicitly clear it.
@@ -198,12 +214,44 @@ function excelGridHtml(table) {
       } else if (styles["text-underline-style"] === "double") {
         cellStyles["text-decoration-style"] = "double";
       }
-      const text = orientExcelText(excelCellText(displayText, runs), rotation, layout);
-      return `<td ${location} rowspan="${rowSpan}" colspan="${colSpan}"${excelStyle({ ...dimensions, ...cellStyles })}>${text}</td>`;
+      let text = orientExcelText(excelCellText(displayText, runs), rotation, layout);
+      if (hasColumnWidths && textControl?.toLowerCase() === "shrinktofit" && displayText && !/[\r\n]/.test(displayText)
+        && !Number(rotation) && !layout && !/^(?:vertical|tb)/i.test(styles["writing-mode"] ?? "")
+        && !/^(?:normal|pre-wrap|pre-line)$/i.test(styles["white-space"] ?? "")) {
+        text = `<span class="note-excel-fit"><span>${text}</span></span>`;
+      }
+      const horizontal = cellStyles["text-align"]?.toLowerCase() ?? "";
+      const extendsLeft = horizontal === "center" || horizontal === "right";
+      const rightLimit = horizontal === "right" ? 0
+        : horizontal === "center" ? width - x - 1
+        : /^(?:general|left|start)?$/.test(horizontal) ? cell.overflowRight ?? 0 : 0;
+      if (hasColumnWidths && (extendsLeft || rightLimit) && rowSpan === 1 && colSpan === 1 && displayText.trim()
+        && cell.value?.type !== "number" && !/[\r\n]/.test(displayText) && !textControl && !Number(rotation) && !layout
+        && !/^(?:vertical|tb)/i.test(styles["writing-mode"] ?? "")
+        && !/^(?:normal|pre-wrap|pre-line)$/i.test(styles["white-space"] ?? "")) {
+        const spillInset = (direction, limit) => {
+          const spillWidths = [];
+          for (let step = 1; step <= limit; step++) {
+            const next = x + direction * step;
+            if (covered[y * width + next] || blocksExcelOverflow(row.cells[next])) break;
+            spillWidths.push(widths[next]);
+          }
+          return spillWidths.length ? `calc(0px - ${spillWidths.join(" - ")})` : "0px";
+        };
+        const left = spillInset(-1, extendsLeft ? x : 0);
+        const right = spillInset(1, Math.min(rightLimit, width - x - 1));
+        if (extendsLeft || right !== "0px") {
+          const clip = `inset(0 ${right} 0 ${left})`;
+          const align = extendsLeft ? horizontal : undefined;
+          const content = align ? `<span>${text}</span>` : text;
+          text = `<span class="note-excel-overflow"${align ? ` data-align="${align}"` : ""}${excelStyle({ "clip-path": clip })}>${content}</span>`;
+        }
+      }
+      return `<td ${location} rowspan="${rowSpan}" colspan="${colSpan}"${excelStyle({ ...dimensions, ...cellStyles })}>${text}${excelResizeHandle}</td>`;
     }).join("");
     return `<tr${excelStyle({ height: excelLength(row.height) })}>${cells}</tr>`;
   }).join("");
-  return `<table class="note-excel-grid" aria-label="Excel 표" hidden><colgroup>${columns}</colgroup><tbody>${rows}</tbody></table>`;
+  return `<table class="note-excel-grid" aria-label="Excel 표"${layout} hidden><colgroup>${columns}</colgroup><tbody>${rows}</tbody></table>`;
 }
 
 /** A column renders independently, but ID uniqueness is checked across the mounted document. */

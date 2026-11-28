@@ -20,9 +20,20 @@
 .note-editor [data-raw] table { border-collapse: collapse; }
 .note-editor [data-raw] :is(th, td) { padding: 2px 8px; border: 1px solid var(--line); }
 .note-editor [data-raw] .rb-plain { white-space: pre-wrap; }
-.note-editor [data-excel-visible] { padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; }
+.note-editor [data-excel-visible] { padding: 0; border: 1px solid var(--line); border-radius: 8px; background: transparent; position: relative; }
 .note-editor .note-excel-grid { width: max-content; }
-.note-editor .note-excel-grid td { white-space: pre-wrap; vertical-align: bottom; }
+.note-editor .note-excel-grid td { white-space: pre-wrap; vertical-align: bottom; position: relative; }
+.note-editor .note-excel-grid[data-excel-fixed] { table-layout: fixed; }
+.note-editor .note-excel-grid[data-excel-fixed] td { overflow: clip; overflow-wrap: anywhere; }
+.note-editor .note-excel-grid[data-excel-fixed] td:has(> .note-excel-overflow) { overflow: visible; }
+.note-excel-overflow { display: block; position: relative; z-index: 1; white-space: pre; pointer-events: none; }
+.note-excel-overflow[data-align] { display: flex; overflow-wrap: normal; }
+.note-excel-overflow[data-align="center"] { justify-content: unsafe center; }
+.note-excel-overflow[data-align="right"] { justify-content: unsafe flex-end; }
+.note-excel-overflow[data-align] > span { flex: none; }
+.note-excel-fit { display: block; }
+.note-excel-fit > span { display: inline-block; white-space: pre; overflow-wrap: normal; text-indent: 0; }
+.note-excel-width-probe { position: fixed; inset: 0 auto auto 0; visibility: hidden; width: max-content; white-space: pre; text-indent: 0; pointer-events: none; }
 .note-excel-oriented { display: inline-block; }
 .note-excel-grid td:has(> .note-excel-oriented) { overflow: clip; }
 .note-editor .note-excel-grid td:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -210,13 +221,20 @@
 .note-table-view mark { color: #1f2430; border-radius: 3px; padding: 0 1px; }
 .note-editor .note-table-grid :is(th, td) { position: relative; }
 .note-editor .note-table-grid [data-selected] { --et: 0px; --eb: 0px; --el: 0px; --er: 0px; box-shadow: inset 0 var(--et) 0 0 var(--accent), inset 0 calc(var(--eb) * -1) 0 0 var(--accent), inset var(--el) 0 0 0 var(--accent), inset calc(var(--er) * -1) 0 0 0 var(--accent); }
-.note-table-grid [data-edge*="t"] { --et: 1.5px; }
-.note-table-grid [data-edge*="b"] { --eb: 1.5px; }
-.note-table-grid [data-edge*="l"] { --el: 1.5px; }
-.note-table-grid [data-edge*="r"] { --er: 1.5px; }
-.note-table-resize { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 2; width: 7px; cursor: col-resize; touch-action: none; }
-.note-table-resize::after { content: ""; position: absolute; inset: 3px 3px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity .12s; }
-.note-table-resize:hover::after, .note-table-resize[data-active]::after { opacity: .8; }
+.note-editor .note-excel-grid:focus-within [aria-selected="true"] {
+  box-shadow: inset 0 var(--et, 0px) 0 var(--accent), inset 0 calc(var(--eb, 0px) * -1) 0 var(--accent),
+    inset var(--el, 0px) 0 var(--accent), inset calc(var(--er, 0px) * -1) 0 0 var(--accent);
+}
+:is(.note-table-grid, .note-excel-grid) [data-edge*="t"] { --et: 1.5px; }
+:is(.note-table-grid, .note-excel-grid) [data-edge*="b"] { --eb: 1.5px; }
+:is(.note-table-grid, .note-excel-grid) [data-edge*="l"] { --el: 1.5px; }
+:is(.note-table-grid, .note-excel-grid) [data-edge*="r"] { --er: 1.5px; }
+.note-excel-resize { display: none; }
+.note-editor [data-excel-visible] .note-excel-resize { display: block; right: 0; width: min(7px, 33%); }
+.note-editor .note-excel-resize-guide { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--accent); pointer-events: none; z-index: 3; }
+:is(.note-table-resize, .note-excel-resize) { position: absolute; top: 0; right: -3px; bottom: 0; z-index: 2; width: 7px; cursor: col-resize; touch-action: none; }
+:is(.note-table-resize, .note-excel-resize)::after { content: ""; position: absolute; inset: 3px 3px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity .12s; }
+:is(.note-table-resize, .note-excel-resize):hover::after, .note-table-resize[data-active]::after { opacity: .8; }
 .paste-chip { position: fixed; left: 50%; bottom: 26px; z-index: 89; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px 12px; max-width: min(640px, 94vw); padding: 10px 12px 10px 16px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--pop-bg); box-shadow: var(--shadow-pop); font-size: 13px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .32s var(--ease); }
 .paste-chip.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .paste-chip-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 200px; }
@@ -225,4 +243,4 @@
 .paste-chip-group { display: inline-flex; gap: 4px; }
 .paste-chip .chip { min-height: 28px; font-size: 12px; }
 .paste-chip .chip[aria-pressed="true"] { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bd); }
-@media (prefers-reduced-motion: reduce) { .paste-chip, .note-table-resize::after { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .paste-chip, :is(.note-table-resize, .note-excel-resize)::after { transition: none; } }

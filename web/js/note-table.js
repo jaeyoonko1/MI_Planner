@@ -13,7 +13,7 @@ import { mdToHtml, refreshExcelTableViews } from "./mdconv.js";
 import { hidePasteChip, showPasteChip } from "./paste-chip.js";
 import { toast } from "./toast.js";
 import { inMenu, pasteClipboard, registerContext } from "./contextmenu.js";
-import { mountNoteExcel } from "./note-excel.js";
+import { fitExcelText, mountNoteExcel } from "./note-excel.js";
 
 // Inside a table cell the innermost scope wins: these keys edit the table, not the note columns (V-008).
 export const TABLE_KEY_HELP = [
@@ -928,6 +928,11 @@ function mountTable(block, table, host) {
 export function bindNoteTables(editor, changed, excel) {
   const mounted = new WeakSet();
   const undoStack = [];
+  const excelLayout = new ResizeObserver(entries => {
+    for (const { target, contentRect } of entries) {
+      if (contentRect.width > 0 && target.hasAttribute("data-excel-fixed")) fitExcelText(target);
+    }
+  });
 
   function refresh() {
     for (const block of editor.querySelectorAll(":scope > [data-raw][data-k='table']")) {
@@ -938,10 +943,15 @@ export function bindNoteTables(editor, changed, excel) {
         mounted.add(block);
       }
     }
+    excelLayout.disconnect();
     for (const block of editor.querySelectorAll(":scope > [data-excel-id][data-raw]")) {
-      if (mounted.has(block) || !block.querySelector(":scope > .note-excel-grid")) continue;
-      mountNoteExcel(block, { ...excel, changed });
-      mounted.add(block);
+      const grid = block.querySelector(":scope > .note-excel-grid");
+      if (!grid) continue;
+      excelLayout.observe(grid);
+      if (!mounted.has(block)) {
+        mountNoteExcel(block, { ...excel, changed });
+        mounted.add(block);
+      }
     }
   }
 
@@ -1185,5 +1195,5 @@ export function bindNoteTables(editor, changed, excel) {
     if (index >= 0) undoStack.splice(index, 1);
   }
 
-  return { refresh, insert, pasteBlock, remember, forget };
+  return { refresh, insert, pasteBlock, remember, forget, destroy: () => excelLayout.disconnect() };
 }

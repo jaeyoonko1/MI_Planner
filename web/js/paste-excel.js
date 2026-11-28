@@ -30,6 +30,7 @@ const cellProperties = {
   "padding-right": /^(?:\d+(?:\.\d+)?|\.\d+)(?:px|pt)$/i,
   "writing-mode": /^(?:horizontal-tb|vertical-rl|vertical-lr|tb-rl|tb-lr|lr-tb)$/i,
   "mso-rotate": /^-?\d{1,3}$/,
+  "mso-text-control": /^shrinktofit$/i,
   "layout-flow": /^vertical-ideographic$/i,
 };
 

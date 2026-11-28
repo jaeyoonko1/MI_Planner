@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
-  copyExcelTable, editExcelCell, pasteExcelRange, pasteExcelTextRange, readExcelTable, reorderExcelRows, replaceExcelTable, serializeExcelTable,
+  clearExcelRange, copyExcelRange, copyExcelTable, editExcelCell, fillExcelRange, pasteCopiedExcelRange,
+  pasteExcelRange, pasteExcelTextRange, readExcelTable, reorderExcelRows, replaceExcelTable, serializeExcelTable,
 } from "../js/excel-table-block.js";
 import { joinBlocks, segment } from "../js/mdblocks.js";
 import { planPaste } from "../js/paste-doc.js";
@@ -22,6 +23,20 @@ const source = serializeExcelTable(table, "\r\n");
 assert.ok(source);
 assert.deepEqual(readExcelTable(source, table.id), table);
 assert.ok(source.includes("\r\n") && !source.replaceAll("\r\n", "").includes("\n"));
+
+const clearSelection = { r0: 0, r1: 1, c0: 0, c1: 1 };
+const clearSource = structuredClone(table);
+const formatted = clearSource.rows[0].cells[0];
+formatted.displayText = "검사";
+formatted.richText = [[{ text: formatted.displayText, styles: { "font-weight": "bold" } }]];
+formatted.styles = { "background-color": "#ffffff" };
+const clearedSelection = clearExcelRange(clearSource, clearSelection);
+assert.deepEqual(clearedSelection.rows[0].cells, [{ displayText: "", value: null, colSpan: 2, styles: formatted.styles }, null]);
+assert.deepEqual(clearedSelection.rows[1].cells[1], { displayText: "", value: null, numberFormat: "0.0%" });
+assert.equal(formatted.richText[0][0].text, "검사");
+assert.equal(clearExcelRange(clearedSelection, clearSelection), clearedSelection, "repeated Delete records no change");
+assert.equal(clearExcelRange(table, { ...clearSelection, r1: 2 }), null);
+assert.equal(clearExcelRange(table, { r0: 0, r1: 0, c0: 1, c1: 1 }), table, "covered coordinate has no extra value");
 
 const ordered = structuredClone(table);
 ordered.rows.reverse();
@@ -80,6 +95,7 @@ for (const invalidate of [
   data => { data.rows[0].cells[1] = text("overlap"); },
   data => { data.rows[0].cells[0].html = "<b>현황</b>"; },
   data => { data.rows[0].cells[0].styles = { color: "red; background: green" }; },
+  data => { data.rows[0].cells[0].styles = { "mso-text-control": "shrinktofit; color: red" }; },
   data => { data.rows[0].cells[0].richText = [[{ text: "검사", styles: { position: "fixed" } }]]; },
   data => { data.rows[0].cells[0].fillPattern = { pattern: "diag-cross", foreground: "url(local)" }; },
   data => { data.rows[0].height = "10vh"; },
@@ -155,7 +171,7 @@ const clipboardRange = rows => planPaste({
   keepSingleExcelCell: true,
 }).block;
 const range = clipboardRange(`<tr><td rowspan="2" x:str>001</td>
-  <td x:num="0.125" style="background-color:#ffc144;mso-number-format:0.0%">12.5%</td></tr>
+  <td x:num="0.125" style="background-color:#ffc144;mso-number-format:0.0%;mso-text-control:shrinktofit">12.5%</td></tr>
   <tr><td></td></tr>`);
 const targetSnapshot = structuredClone(withMerge);
 const rangeResult = pasteExcelRange(withMerge, "header", "lot", range).table;
@@ -169,8 +185,8 @@ assert.deepEqual(rangeResult.rows[0].cells[0].value, { type: "text", raw: "001" 
 assert.equal(rangeResult.rows[1].cells[0], null);
 assert.equal(rangeResult.rows[1].cells[1].displayText, "");
 const rate = rangeResult.rows[0].cells[1];
-assert.deepEqual([rate.displayText, rate.value.raw, rate.numberFormat, rate.styles["background-color"]],
-  ["12.5%", "0.125", "0.0%", "#ffc144"]);
+assert.deepEqual([rate.displayText, rate.value.raw, rate.numberFormat, rate.styles["background-color"], rate.styles["mso-text-control"]],
+  ["12.5%", "0.125", "0.0%", "#ffc144", "shrinktofit"]);
 assert.deepEqual(rangeResult.rows[2], withMerge.rows[2]);
 assert.deepEqual(readExcelTable(serializeExcelTable(rangeResult), withMerge.id), JSON.parse(JSON.stringify(rangeResult)));
 
@@ -226,5 +242,54 @@ assert.deepEqual(pasteExcelTextRange(withMerge, "header", "lot", "a\tb\na\tb"), 
 assert.deepEqual(pasteExcelTextRange(withMerge, "header", "lot", "a\t"), { error: "merge" });
 assert.deepEqual(pasteExcelTextRange(unmerged, "header", "lot", "a\tb\nc"), { error: "source" });
 assert.deepEqual(pasteExcelTextRange(unmerged, "blank", "rate", "a\tb"), { error: "bounds" });
+const singleColumn = pasteExcelTextRange(unmerged, "header", "rate", '001\r\n"12.5%\nsecond line"\r\n');
+assert.deepEqual(singleColumn.table.rows.slice(0, 2).map(row => row.cells[1].displayText), ["001", "12.5%\nsecond line"]);
+assert.deepEqual(singleColumn.table.rows[2], unmerged.rows[2]);
+assert.deepEqual(singleColumn.table.rows[0].cells[1].styles, { color: "red" });
+assert.equal(singleColumn.table.rows[0].cells[1].value, null);
+assert.deepEqual(pasteExcelTextRange(unmerged, "header", "rate", '"one\ncell"\r\n'), { error: "single-cell" });
+assert.deepEqual(pasteExcelTextRange(unmerged, "blank", "rate", "one\r\ntwo"), { error: "bounds" });
 assert.deepEqual(pasteExcelTextRange(unmerged, "blank", "rate", "\t".repeat(10000)), { error: "source" });
+const copied = copyExcelRange(rangeResult, { r0: 0, r1: 1, c0: 0, c1: 1 });
+assert.equal(copied.text, "001\t12.5%\r\n\t");
+assert.equal(copyExcelRange(rangeResult, { r0: 1, r1: 1, c0: 0, c1: 1 }), null);
+const pasted = pasteCopiedExcelRange(unmerged, "header", "lot", copied.data).table;
+assert.deepEqual(pasted.rows.slice(0, 2).map(row => row.cells),
+  JSON.parse(JSON.stringify(rangeResult.rows.slice(0, 2).map(row => row.cells))));
+assert.deepEqual(pasted.rows[2], unmerged.rows[2]);
+assert.deepEqual(pasteCopiedExcelRange(withMerge, "sample", "lot", copied.data), { error: "merge" });
+assert.deepEqual(pasteCopiedExcelRange(withMerge, "header", "lot", copied.data, valuesOnly), { error: "merge" });
+for (const invalid of ["{", '{"version":2,"cells":[]}', '{"version":1,"cells":[[null],null]}',
+  '{"version":1,"cells":[[{"displayText":"x","value":null,"colSpan":2}]]}']) {
+  assert.deepEqual(pasteCopiedExcelRange(unmerged, "header", "lot", invalid), { error: "source" });
+}
+
+const format = { ...rate, overflowRight: 1, richText: [[{ text: rate.displayText, styles: { color: "red" } }]] };
+const forFill = {
+  ...table,
+  columns: ["a", "b", "c"],
+  rows: [
+    { id: "first", cells: [{ ...format, colSpan: 2 }, null, text("stop")] },
+    { id: "second", height: "18pt", cells: [{ ...text("old"), colSpan: 2 }, null, text("outside")] },
+  ],
+};
+const beforeFill = structuredClone(forFill);
+const down = fillExcelRange(forFill, { r0: 0, r1: 1, c0: 0, c1: 1 }, "down").table;
+assert.deepEqual(down.rows[1], { ...forFill.rows[1], cells: [forFill.rows[0].cells[0], null, text("outside")] });
+assert.deepEqual(forFill, beforeFill);
+assert.deepEqual(fillExcelRange(forFill, { r0: 0, r1: 1, c0: 0, c1: 2 }, "right"), { error: "merge" });
+const rightSource = { ...forFill, rows: [
+  { id: "first", cells: [{ ...format, rowSpan: 2 }, { ...text("old"), rowSpan: 2 }, null] },
+  { id: "second", cells: [null, null, text("outside")] },
+] };
+const filledRight = fillExcelRange(rightSource, { r0: 0, r1: 1, c0: 0, c1: 1 }, "right").table;
+assert.deepEqual(filledRight.rows[0].cells, [rightSource.rows[0].cells[0], rightSource.rows[0].cells[0], null]);
+assert.deepEqual(filledRight.rows[1], rightSource.rows[1]);
+assert.deepEqual(readExcelTable(serializeExcelTable(filledRight), table.id), JSON.parse(JSON.stringify(filledRight)));
+const overflow = { ...text('긴 값\n"검사"'), overflowRight: 2 };
+const withOverflow = { ...table, columns: ["a", "b", "c"], rows: [{ id: "r1", cells: [overflow, null, null] }] };
+const copiedOverflow = copyExcelRange(withOverflow, { r0: 0, r1: 0, c0: 0, c1: 1 });
+assert.equal(copiedOverflow.text, '"긴 값\n""검사"""\t');
+assert.deepEqual(JSON.parse(copiedOverflow.data).cells, [[overflow, null]]);
+assert.equal(copyExcelRange(withOverflow, { r0: 0, r1: 0, c0: 1, c1: 2 }).text, "\t");
 console.log("Excel table block storage cases passed");
