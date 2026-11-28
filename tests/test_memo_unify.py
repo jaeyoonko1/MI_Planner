@@ -344,3 +344,67 @@ def test_rejected_patch_leaves_page_issue_and_revision_untouched(env) -> None:
     assert ok.status_code == 200 and ok.json()["note"] == "새 본문"
     assert page_text(tmp / "vault", rel) == "새 본문"
     assert ok.json()["note_revision"] != revision
+
+
+def test_failed_patch_never_removes_a_body_saved_by_another_app(tmp_path: Path, monkeypatch) -> None:
+    """Two apps share one DB/vault. A writes the page, then its DB step fails; B saved the page in between.
+    A's rollback is conditional on the page still being A's text, so B's body and revision survive."""
+    from app.repositories import tasks as repo
+
+    app_a = create_app(tmp_path / "t.db", tmp_path / "vault")
+    app_b = create_app(tmp_path / "t.db", tmp_path / "vault")
+    with TestClient(app_a, raise_server_exceptions=False) as a, TestClient(app_b, raise_server_exceptions=False) as b:
+        tid = issue(a, note="처음")["id"]
+        rel = expand(a, tid)
+        url = f"/api/todos/{tid}"
+        revision = a.get(url).json()["note_revision"]
+        seen: dict = {}
+        real = repo.update
+
+        def stalled(conn, task_id, data):
+            if "note" in data and "b" not in seen:  # A stands here after its page write and before its DB write
+                params = {"path": rel}
+                assert page_text(tmp_path / "vault", rel) == "A 본문"
+                cur = b.get("/api/pages", params=params).json()
+                put = b.put("/api/pages", params=params, json={"content": "B 본문", "content_revision": cur["content_revision"]})
+                seen["b"] = put
+                raise repo.TaskError("DB 단계 실패", 500)
+            return real(conn, task_id, data)
+
+        monkeypatch.setattr(repo, "update", stalled)
+        failed = a.patch(url, json={"note": "A 본문", "note_revision": revision})
+        assert failed.status_code == 500 and "error" in failed.json()
+        assert seen["b"].status_code == 200
+        assert page_text(tmp_path / "vault", rel) == "B 본문"
+        assert b.get("/api/pages", params={"path": rel}).json()["content_revision"] == seen["b"].json()["content_revision"]
+        monkeypatch.setattr(repo, "update", real)
+        fresh = b.get("/api/pages", params={"path": rel}).json()
+        again = b.put("/api/pages", params={"path": rel}, json={"content": "B 본문 2", "content_revision": fresh["content_revision"]})
+        assert again.status_code == 200
+
+
+def test_page_metadata_write_failure_does_not_leave_the_new_body(env, monkeypatch) -> None:
+    """If the page meta write raises OSError after the body was replaced, the PATCH is a 500 and the old body is restored."""
+    from app.vault import Vault
+
+    c, tmp = env
+    tid = issue(c, note="처음")["id"]
+    url = f"/api/todos/{tid}"
+    rel = expand(c, tid)
+    revision = c.get(url).json()["note_revision"]
+    real = Vault._write_meta
+    calls = {"n": 0}
+
+    def flaky(self, page, meta):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("injected")
+        return real(self, page, meta)
+
+    monkeypatch.setattr(Vault, "_write_meta", flaky)
+    failed = c.patch(url, json={"note": "새 본문", "note_revision": revision})
+    assert failed.status_code == 500
+    monkeypatch.setattr(Vault, "_write_meta", real)
+    assert page_text(tmp / "vault", rel) == "처음"
+    assert c.get(url).json()["note"] == "처음" and c.get(url).json()["note_revision"] == revision
+    assert c.patch(url, json={"note": "새 본문", "note_revision": revision}).status_code == 200

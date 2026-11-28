@@ -631,8 +631,22 @@ export function mountNoteColumns(mountEditor, cfg) {
       // Focus alone is not "busy": only a save in flight or unsaved text (getMd() !== last) blocks a sync,
       // so a focused but untouched cell still gets the newest revision and never fails with a false 409.
       if (pending > 0 || conflict || getMd() !== last || !nextRevision) return;
-      if (md !== last) setMd(md, nextRevision, meta);
-      else revision = nextRevision;
+      if (md === last) { revision = nextRevision; return; }
+      // The rebuild replaces every editor node. Remember where the caret/selected cell was and put it back on the
+      // matching cell of the new body; if that cell no longer exists, land in the same column's editor, never on BODY.
+      const here = document.activeElement;
+      const cell = here instanceof Element ? here.closest("td[data-excel-row]") : null;
+      const index = here instanceof Element && root.contains(here) ? columns.findIndex(({ cell: c }) => c.contains(here)) : -1;
+      const where = cell ? {
+        table: cell.closest("[data-excel-id]")?.dataset.excelId, row: cell.dataset.excelRow, column: cell.dataset.excelColumn,
+      } : null;
+      setMd(md, nextRevision, meta);
+      if (index < 0) return;
+      const next = columns[Math.min(index, columns.length - 1)];
+      const same = where && [...next.cell.querySelectorAll("[data-excel-id]")].find((b) => b.dataset.excelId === where.table)
+        ?.querySelector(`td[data-excel-row="${CSS.escape(where.row)}"][data-excel-column="${CSS.escape(where.column)}"]`);
+      if (same) same.focus({ preventScroll: true });
+      else next.editor.focus();
     },
     isBusy,
     contains: node => root.contains(node),

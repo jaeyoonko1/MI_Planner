@@ -7,7 +7,7 @@ from pydantic import BaseModel, StrictInt
 
 from app import db, journal, journal_links, memo, placement, search
 from app.repositories import structure_free, tasks as repo
-from app.vault import content_revision
+from app.vault import VaultError, content_revision
 
 router = APIRouter(prefix="/api/todos")
 
@@ -158,6 +158,17 @@ def get_todo(request: Request, task_id: int, conn=Depends(get_conn)) -> dict:
         return memo.read(conn, vault, task_id)
 
 
+def _restore_page(vault, rel: str, old_body: str, written: str) -> None:
+    """Undo this request's page write after a later step failed. The write is conditional on the page still being
+    exactly what this request wrote (checked under the vault's cross-process content lock), so a body another app
+    saved in the meantime is never removed; in that case the other app's text simply stays."""
+    try:
+        if vault.read(rel)["content"] != old_body:
+            vault.write(rel, old_body, content_revision(written))
+    except (VaultError, OSError):
+        pass  # changed by someone else (409) or unwritable: keep what is there, the original error is raised
+
+
 @router.patch("/{task_id}")
 def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get_conn)) -> dict:
     # fields_set lets clients clear a field by sending null explicitly
@@ -166,15 +177,17 @@ def patch_todo(request: Request, task_id: int, body: TodoPatch, conn=Depends(get
     with vault.page_lock:
         before = repo.get(conn, task_id)
         repo.validate_update(conn, task_id, data)  # a doomed request must not touch the page body
+        rel = old_body = None
         if "note" in data:
             rel = placement.existing_page(vault, before)
             old_body = vault.read(rel)["content"] if rel else None
-            memo.write_note(conn, vault, before, data["note"], body.note_revision)
         try:
+            if "note" in data:
+                memo.write_note(conn, vault, before, data["note"], body.note_revision)
             task = repo.update(conn, task_id, data)
         except Exception:
-            if "note" in data and old_body is not None and vault.read(rel)["content"] != old_body:
-                vault.write(rel, old_body, None)  # roll the page back to what it was
+            if old_body is not None:
+                _restore_page(vault, rel, old_body, data["note"] or "")
             raise
         if "note" in data:
             task["note_revision"] = content_revision(task.get("note"))
